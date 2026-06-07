@@ -1,5 +1,5 @@
 //
-//  CIZZLE.cpp
+//  C1ZZL3.cpp
 //
 //  Fixed + Optimised Phase Distortion Synth for Workshop Computer
 //
@@ -7,10 +7,10 @@
 #include "ComputerCard.h"
 #include <math.h>
 
-class CIZZLE : public ComputerCard
+class C1ZZL3 : public ComputerCard
 {
 public:
-    CIZZLE()
+    C1ZZL3()
     {
         phase1 = 0;
         phase2 = 0;
@@ -25,7 +25,7 @@ public:
         family = 0;
         noise = 1;
 
-        // build sine LUT (do once at boot)
+        // Build sine LUT once at boot
         for (int i = 0; i < LUT_SIZE; i++)
         {
             float p = (float)i / (float)LUT_SIZE;
@@ -61,20 +61,15 @@ public:
         {
             bool alt = (mode == Switch::Down);
 
-            // ---- safe modulation scaling (critical fix) ----
             int32_t pitch = mainKnob + (in1 >> 1) + (cv1 >> 1);
             int32_t pdAmt = xKnob    + (in2 >> 1) + (cv2 >> 1);
             int32_t famCV = yKnob;
 
             family = (famCV >> 9) & 7;
 
-            // Osc1 = Phase Distortion (core voice)
             int32_t osc1 = oscPD(phase1, pitch, pdAmt);
-
-            // Osc2 = Option B wavetable oscillator (stable reference)
             int32_t osc2 = oscWT(phase2, pitch + ((mainKnob - 2048) >> 4));
 
-            // ALT MODE (Down switch)
             if (alt)
             {
                 int32_t detune   = (mainKnob - 2048) >> 4;
@@ -90,9 +85,8 @@ public:
                 osc1 = mix(osc1, noiseSig, noiseAmt >> 4);
             }
 
-            // HARD SYNC (safe)
             if (sync)
-                phase1 = phase2;
+                phase1 = phase2 & 0xFFFFFFFF;
 
             AudioOut1(clip(osc1));
             AudioOut2(clip(osc2));
@@ -152,17 +146,15 @@ private:
     int16_t sineLUT[LUT_SIZE];
 
     // ============================================================
-    // PHASE DISTORTION ENGINE (FIXED CZ-STYLE)
+    // PHASE DISTORTION ENGINE
     // ============================================================
     inline uint16_t phaseDistort(uint16_t phase, uint16_t amount)
     {
         int32_t p = (int32_t)phase - 2048;
         int32_t a = (int32_t)amount - 2048;
 
-        // smooth curvature warp (CZ-style behaviour)
         p += (p * a) >> 12;
 
-        // soft limiting (prevents fold explosion)
         if (p > 2048)  p = 2048 + ((p - 2048) >> 1);
         if (p < -2048) p = -2048 + ((p + 2048) >> 1);
 
@@ -174,7 +166,6 @@ private:
         return sineLUT[phase & (LUT_SIZE - 1)];
     }
 
-    // Osc1 = Phase Distortion synth
     inline int32_t oscPD(uint32_t &phase, int32_t pitch, int32_t pd)
     {
         phase += (pitch << 5);
@@ -185,7 +176,6 @@ private:
         return fastSin(warped);
     }
 
-    // Osc2 = Option B wavetable oscillator (stable)
     inline int32_t oscWT(uint32_t &phase, int32_t pitch)
     {
         phase += (pitch << 5);
@@ -266,11 +256,7 @@ private:
     uint32_t noise;
 };
 
-// ENTRY POINT (REMOVE FOR FINAL BUILD IF EMBEDDED)
-CIZZLE card;
+// NOTE: No main() here (Workshop Computer handles runtime)
 
-int main()
-{
-    card.EnableNormalisationProbe();
-    card.Run();
-}
+// Optional external instance if needed by build system
+C1ZZL3 card;
