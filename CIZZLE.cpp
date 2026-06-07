@@ -30,7 +30,7 @@ public:
     // =========================
     // MAIN AUDIO CALLBACK
     // =========================
-    void ProcessSample() override
+    void ProcessSample() override final
     {
         // -------------------------
         // INPUTS
@@ -81,7 +81,7 @@ public:
 
                 osc2 = oscPD(phase2, pitch + (detune >> 3), pdAmt >> 1, family);
 
-                int32_t ring = (osc1 * osc2) >> 11;
+                int32_t ring = (osc1 * osc2) >> 12;
                 osc1 = mix(osc1, ring, ringAmt >> 6);
 
                 int32_t noise = ((int32_t)fastNoise() - 128) << 4;
@@ -90,7 +90,7 @@ public:
 
             // Hard sync from Osc2 → Osc1
             if (sync)
-                phase1 = phase2;
+                phase1 = phase2 & PHASE_MASK;
 
             AudioOut1(clip(osc1));
             AudioOut2(clip(osc2));
@@ -154,46 +154,53 @@ private:
     // =========================
     // PHASE DISTORTION ENGINE
     // =========================
-    int32_t oscPD(uint32_t &phase, int32_t pitch, int32_t pd, int32_t family)
+    static constexpr int32_t PHASE_BITS = 32;
+    static constexpr uint32_t PHASE_MASK = 0xFFFFFFFF;
+
+    // 4096-entry sine LUT (recommended static table)
+    // but here we keep placeholder assumption:
+    // sinLUT[x] returns -2048..2047
+
+    int32_t sinLUT(uint16_t i)
     {
-        phase += (pitch << 4);
-
-        uint32_t ph = phase >> 20; // 12-bit phase
-
-        // base sine approximation
-        int32_t s = sinApprox(ph);
-
-        // phase warp (core CZ concept)
-        int32_t warped = phaseWarp(ph, pd, family);
-
-        return (s * warped) >> 11;
+        // Replace with real LUT in production build
+        // (kept simple here for clarity)
+        int32_t x = (i & 1023);
+        int32_t s = (x < 512) ? x : (1024 - x);
+        return (s << 2) - 1024;
     }
-
-    int32_t phaseWarp(uint32_t ph, int32_t amt, int32_t family)
+    
+    inline uint32_t phaseDistort(uint32_t phase, uint32_t amount)
     {
-        amt >>= 4;
+        uint32_t p = phase >> 20; // 0–4095
 
-        switch (family)
-        {
-            case 0: return ph; // sine
-            case 1: return (ph * ph) >> 12;
-            case 2: return (ph < 2048) ? ph : (4096 - ph); // triangle fold
-            case 3: return (ph * (4096 - ph)) >> 11;
-            case 4: return ph + ((ph * amt) >> 10);
-            case 5: return ph ^ (ph >> (3 + (amt >> 8)));
-            case 6: return (ph << 1) & 4095;
-            case 7: return (ph < 1024) ? 0 : ph;
-        }
+        // normalize
+        int32_t x = (int32_t)p - 2048;
 
-        return ph;
+        // amount scaling
+        int32_t a = amount - 2048;
+
+        // nonlinear warp (CZ-style curvature)
+        x += (x * a) >> 12;
+
+        // fold back
+        uint32_t out = (uint32_t)(x + 2048);
+
+        return out & 4095;
     }
-
-    int32_t sinApprox(uint32_t x)
+    
+    inline int32_t oscWT(uint32_t &phase, int32_t pitch)
     {
-        // cheap triangle-based sine approximation
-        x &= 4095;
-        if (x < 2048) return x - 1024;
-        return 1024 - (x - 2048);
+        phase += (pitch << 5);
+
+        uint16_t idx = phase >> 20; // 12-bit table index
+
+        // simple triangle-sine hybrid approximation (cheap + stable)
+        uint16_t x = idx & 1023;
+
+        int32_t v = (x < 512) ? x : (1024 - x);
+
+        return (v - 256) << 3;
     }
 
     // =========================
@@ -273,9 +280,5 @@ private:
 // ENTRY POINT
 // =========================
 CIZZLE card;
-
-int main()
-{
-    card.EnableNormalisationProbe();
-    card.Run();
+Run();
 }
