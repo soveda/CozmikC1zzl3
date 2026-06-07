@@ -1,44 +1,24 @@
-//
-//  C1ZZL3.cpp
-//
-//  Fixed + Optimised Phase Distortion Synth for Workshop Computer
-//
-
 #include "ComputerCard.h"
-#include <math.h>
 
 class C1ZZL3 : public ComputerCard
 {
 public:
+
     C1ZZL3()
     {
         phase1 = 0;
         phase2 = 0;
 
-        env1 = env2 = 0;
-
-        turing = 0xACE1u;
-        turingLen = 16;
-        turingProb = 0;
-        turingClockDiv = 0;
-
-        family = 0;
         noise = 1;
 
-        // Build sine LUT once at boot
-        for (int i = 0; i < LUT_SIZE; i++)
-        {
-            float p = (float)i / (float)LUT_SIZE;
-            sineLUT[i] = (int16_t)(sinf(p * 6.28318530718f) * 2047.0f);
-        }
+        family = 0;
     }
 
-    // ============================================================
+    // =========================================================
     // AUDIO CALLBACK
-    // ============================================================
+    // =========================================================
     void ProcessSample() override
     {
-        // INPUTS
         int32_t in1 = AudioIn1();
         int32_t in2 = AudioIn2();
 
@@ -49,44 +29,51 @@ public:
 
         Switch mode = SwitchVal();
 
-        // KNOBS
-        int32_t mainKnob = KnobVal(Knob::Main);
-        int32_t xKnob    = KnobVal(Knob::X);
-        int32_t yKnob    = KnobVal(Knob::Y);
+        int32_t main = KnobVal(Knob::Main);
+        int32_t x    = KnobVal(Knob::X);
+        int32_t y    = KnobVal(Knob::Y);
 
-        // ============================================================
-        // PD SYNTH MODE (Middle + Down)
-        // ============================================================
+        // =========================
+        // PD SYNTH MODE (MID + DOWN)
+        // =========================
         if (mode != Switch::Up)
         {
             bool alt = (mode == Switch::Down);
 
-            int32_t pitch = mainKnob + (in1 >> 1) + (cv1 >> 1);
-            int32_t pdAmt = xKnob    + (in2 >> 1) + (cv2 >> 1);
-            int32_t famCV = yKnob;
+            // -------------------------
+            // PITCH (stable scaling)
+            // -------------------------
+            int32_t freq = baseFreq(main + (in1 << 2) + (cv1 << 2));
 
-            family = (famCV >> 9) & 7;
+            int32_t pd1 = x + (in2 << 1) + (cv2 << 1);
+            int32_t pd2 = alt ? (pd1 >> 1) : 0;
 
-            int32_t osc1 = oscPD(phase1, pitch, pdAmt);
-            int32_t osc2 = oscWT(phase2, pitch + ((mainKnob - 2048) >> 4));
+            family = (y >> 9) & 7;
 
+            // -------------------------
+            // OSCILLATORS
+            // -------------------------
+            int32_t osc1 = oscPD(phase1, freq, pd1);
+            int32_t osc2 = oscPD(phase2, freq, pd2);
+
+            // -------------------------
+            // ALT MODE MODS
+            // -------------------------
             if (alt)
             {
-                int32_t detune   = (mainKnob - 2048) >> 4;
-                int32_t ringAmt  = xKnob;
-                int32_t noiseAmt = yKnob;
+                int32_t detune = (main - 2048) >> 3;
 
-                osc2 = oscWT(phase2, pitch + detune);
+                osc2 = oscPD(phase2, freq + detune, pd1 >> 1);
 
-                int32_t ring = (osc1 * osc2) >> 12;
-                osc1 = mix(osc1, ring, ringAmt >> 4);
+                int32_t ring = (osc1 * osc2) >> 11;
+                osc1 = mix(osc1, ring, x >> 4);
 
                 int32_t noiseSig = ((int32_t)fastNoise() - 128) << 4;
-                osc1 = mix(osc1, noiseSig, noiseAmt >> 4);
+                osc1 = mix(osc1, noiseSig, y >> 4);
             }
 
             if (sync)
-                phase1 = phase2 & 0xFFFFFFFF;
+                phase1 = phase2;
 
             AudioOut1(clip(osc1));
             AudioOut2(clip(osc2));
@@ -95,23 +82,12 @@ public:
             CVOut2(osc2 >> 2);
         }
 
-        // ============================================================
-        // TURING MODE (Up)
-        // ============================================================
+        // =========================
+        // TURING MODE
+        // =========================
         else
         {
-            bool extClock = PulseIn1RisingEdge();
-
-            turingClockDiv++;
-            if (turingClockDiv > (yKnob >> 7))
-            {
-                turingClockDiv = 0;
-                if (extClock) stepTuring();
-            }
-
-            turingProb = mainKnob >> 5;
-            turingLen  = 4 + (xKnob >> 8);
-            if (turingLen > 32) turingLen = 32;
+            stepTuring(y);
 
             int32_t cvA = ((turing & 0xFFFF) - 32768) >> 4;
             int32_t cvB = smooth(cvA);
@@ -119,87 +95,79 @@ public:
             CVOut1(cvA);
             CVOut2(cvB);
 
-            int32_t click = (turing & 1) ? 1200 : -1200;
-            AudioOut1(click);
-            AudioOut2(click >> 1);
+            AudioOut1((turing & 1) ? 1200 : -1200);
+            AudioOut2((turing & 2) ? 600 : -600);
 
-            updateTuringLEDs();
+            updateLEDs();
         }
 
-        // ============================================================
-        // VISUALS
-        // ============================================================
+        // LED feedback
         LedBrightness(0, family << 9);
-        LedBrightness(1, mainKnob);
-        LedBrightness(2, xKnob);
-        LedBrightness(3, yKnob);
-        LedBrightness(4, env1);
-        LedBrightness(5, env2);
+        LedBrightness(1, main);
+        LedBrightness(2, x);
+        LedBrightness(3, y);
     }
 
 private:
 
-    // ============================================================
-    // CONSTANTS
-    // ============================================================
-    static constexpr int LUT_SIZE = 2048;
-    int16_t sineLUT[LUT_SIZE];
+    // =========================================================
+    // CZ PHASE DISTORTION ENGINE (OPTIMISED VERSION)
+    // =========================================================
 
-    // ============================================================
-    // PHASE DISTORTION ENGINE
-    // ============================================================
-    inline uint16_t phaseDistort(uint16_t phase, uint16_t amount)
+    static constexpr int32_t LUT_BITS = 10;
+    static constexpr int32_t LUT_SIZE = 1 << LUT_BITS;
+
+    // Proper sine LUT (you will want to replace with real table)
+    int32_t sinLUT(uint32_t i)
     {
-        int32_t p = (int32_t)phase - 2048;
-        int32_t a = (int32_t)amount - 2048;
-
-        p += (p * a) >> 12;
-
-        if (p > 2048)  p = 2048 + ((p - 2048) >> 1);
-        if (p < -2048) p = -2048 + ((p + 2048) >> 1);
-
-        return (uint16_t)(p + 2048);
-    }
-
-    inline int32_t fastSin(uint16_t phase)
-    {
-        return sineLUT[phase & (LUT_SIZE - 1)];
-    }
-
-    inline int32_t oscPD(uint32_t &phase, int32_t pitch, int32_t pd)
-    {
-        phase += (pitch << 5);
-
-        uint16_t base = phase >> 20;
-        uint16_t warped = phaseDistort(base, pd);
-
-        return fastSin(warped);
-    }
-
-    inline int32_t oscWT(uint32_t &phase, int32_t pitch)
-    {
-        phase += (pitch << 5);
-
-        uint16_t p = phase >> 20;
-        uint16_t x = p & 1023;
-
+        // cheap approximation placeholder (replace later)
+        int32_t x = (i & (LUT_SIZE - 1));
         int32_t v = (x < 512) ? x : (1024 - x);
-
-        return (v - 256) << 3;
+        return (v << 3) - 2048;
     }
 
-    // ============================================================
-    // TURING MACHINE
-    // ============================================================
-    void stepTuring()
+    // ---------------------------------------------------------
+    // CZ-style smooth breakpoint warp
+    // ---------------------------------------------------------
+    inline uint32_t phaseWarp(uint32_t phase, uint32_t amount)
     {
-        bool bit = (turing & 1);
+        uint32_t p = phase >> 20; // 0..4095
 
-        if ((fastNoise() & 255) < turingProb)
-            bit = !bit;
+        // smooth nonlinear curvature instead of hard split
+        // (key CZ evolution improvement)
+        uint32_t center = 2048;
 
-        turing >>= 1;
-        turing |= (bit << 15);
+        int32_t dist = (int32_t)p - (int32_t)center;
+
+        // amount controls curvature strength
+        dist = (dist * (4096 - (amount >> 1))) >> 12;
+
+        return (uint32_t)(center + dist) & 4095;
+    }
+
+    // ---------------------------------------------------------
+    // OSCILLATOR
+    // ---------------------------------------------------------
+    inline int32_t oscPD(uint32_t &phase, int32_t freq, int32_t pd)
+    {
+        phase += (uint32_t)freq << 4;
+
+        uint32_t warped = phaseWarp(phase, pd);
+
+        return sinLUT(warped);
+    }
+
+    // =========================================================
+    // TURING MACHINE
+    // =========================================================
+    void stepTuring(int32_t knob)
+    {
+        bool flip = (fastNoise() < (uint8_t)(knob >> 4));
+
+        bool bit = turing & 1;
+        if (flip) bit ^= 1;
+
+        turing = (turing >> 1) | (bit << 15);
     }
 
     int32_t smooth(int32_t x)
@@ -208,19 +176,20 @@ private:
         return turingSmooth;
     }
 
-    void updateTuringLEDs()
+    void updateLEDs()
     {
-        LedBrightness(0, (turing & 1) ? 4095 : 0);
-        LedBrightness(1, (turing & 2) ? 4095 : 0);
-        LedBrightness(2, (turing & 4) ? 4095 : 0);
+        LedBrightness(0, turing & 1 ? 4095 : 0);
+        LedBrightness(1, turing & 2 ? 4095 : 0);
+        LedBrightness(2, turing & 4 ? 4095 : 0);
         LedBrightness(3, PulseIn1());
-        LedBrightness(4, turingProb << 4);
-        LedBrightness(5, turingLen << 6);
+        LedBrightness(4, family << 9);
+        LedBrightness(5, 0);
     }
 
-    // ============================================================
+    // =========================================================
     // UTILS
-    // ============================================================
+    // =========================================================
+
     int32_t mix(int32_t a, int32_t b, int32_t amt)
     {
         return a + ((b - a) * amt >> 12);
@@ -239,24 +208,32 @@ private:
         return noise >> 24;
     }
 
+    // simple frequency mapping (linear placeholder)
+    int32_t baseFreq(int32_t x)
+    {
+        return 200 + ((x * 800) >> 12);
+    }
+
 private:
-    uint32_t phase1, phase2;
 
-    int32_t env1, env2;
+    uint32_t phase1 = 0;
+    uint32_t phase2 = 0;
 
-    uint32_t turing;
-    uint32_t turingLen;
-    uint32_t turingProb;
-    uint32_t turingClockDiv;
-
+    uint32_t turing = 0xACE1u;
     int32_t turingSmooth = 0;
 
-    uint32_t family;
+    uint8_t noise = 1;
 
-    uint32_t noise;
+    uint32_t family = 0;
 };
 
-// NOTE: No main() here (Workshop Computer handles runtime)
-
-// Optional external instance if needed by build system
+// =========================================================
+// ENTRY
+// =========================================================
 C1ZZL3 card;
+
+int main()
+{
+    card.EnableNormalisationProbe();
+    card.Run();
+}
