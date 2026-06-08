@@ -119,6 +119,11 @@ private:
     {
         return sineLUT[(phase >> 22) & 1023];
     }
+    
+    inline uint16_t getCosWarp(uint32_t index)
+    {
+        return cosineWarpLUT[index & 1023];
+    }
 
     // ---------------------------------------------------------
     // CZ-style smooth breakpoint warp
