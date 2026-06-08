@@ -1,17 +1,17 @@
 
-ComputerCard  - by Chris Johnson
+//ComputerCard  - by Chris Johnson
 
-version 0.3.0   -  12 May 2026
+//version 0.3.0   -  12 May 2026
 
-ComputerCard is a header-only C++ library, providing a class that
-manages the hardware aspects of the Music Thing Modular Workshop
-System Computer.
+/* ComputerCard is a header-only C++ library, providing a class that
+//manages the hardware aspects of the Music Thing Modular Workshop
+//System Computer.
+//
+//It aims to present a very simple C++ interface for card programmers
+//to use the jacks, knobs, switch and LEDs, for programs running at
+//a fixed 48kHz audio sample rate.
 
-It aims to present a very simple C++ interface for card programmers
-to use the jacks, knobs, switch and LEDs, for programs running at
-a fixed 48kHz audio sample rate.
-
-See examples/ directory
+//See examples/ directory
 */
 
 

@@ -29,6 +29,7 @@ pico_sdk_init()
 
 add_executable(C1ZZL3
     C1ZZL3.cpp
+    C1ZZL3_LUT
 )
 
 # ============================================================
