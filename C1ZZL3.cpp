@@ -54,8 +54,8 @@ public:
             int32_t pd = clamp12(x + (in2 << 1));
             int32_t wave = clamp12(y + (cv1 << 1));
 
-            int32_t ring = clamp12(osc2Ring + (cv2 > 0 ? cv2 << 1 : 0));
-            int32_t noiseAmt = clamp12(osc2Noise + (cv2 < 0 ? (-cv2) << 1 : 0));
+            int32_t ring = alt ? clamp12(osc2Ring + (cv2 > 0 ? cv2 << 1 : 0)) : 0;
+            int32_t noiseAmt = alt ? clamp12(osc2Noise + (cv2 < 0 ? (-cv2) << 1 : 0)) : 0;
 
             // -------------------------
             // OSCILLATORS
@@ -411,15 +411,20 @@ private:
         return noise >> 24;
     }
 
-    // simple frequency mapping (linear placeholder)
+    // Simple audible pitch mapping.
+    //
+    // A 32-bit phase increment of about 9 million is roughly 100 Hz
+    // at the ComputerCard 48 kHz sample rate. The earlier placeholder
+    // was much smaller, so the oscillator clicked at sub-audio speeds.
     int32_t baseFreq(int32_t x)
     {
         if (x < 0) x = 0;
         if (x > 4095) x = 4095;
 
-        // Temporary audible test range.
-        // Not 1V/oct yet, just enough to prove the oscillator.
-        return 20000 + ((x * 500000) >> 12);
+        int32_t coarse = (x * 70000000) >> 12;
+        int32_t fine = ((x * x) >> 12) * 30000;
+
+        return 6000000 + coarse + fine;
     }
 private:
 
