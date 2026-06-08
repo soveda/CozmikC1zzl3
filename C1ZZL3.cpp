@@ -49,7 +49,7 @@ public:
             // -------------------------
             // PITCH (stable scaling)
             // -------------------------
-            int32_t freq = baseFreq(pitchControl + (in1 << 1));
+            int32_t freq = smoothPitch(baseFreq(pitchControl + (in1 << 1)));
 
             int32_t pd = clamp12(x + (in2 << 1));
             int32_t wave = clamp12(y + (cv1 << 1));
@@ -428,6 +428,16 @@ private:
         return 6000000 + coarse + fine;
     }
 
+    int32_t smoothPitch(int32_t target)
+    {
+        if (smoothedFreq == 0)
+            smoothedFreq = target;
+
+        smoothedFreq += (target - smoothedFreq) >> 7;
+
+        return smoothedFreq;
+    }
+
     int32_t responseCurve(int32_t x)
     {
         uint32_t ux = (uint32_t)clamp12(x);
@@ -464,6 +474,7 @@ private:
     uint32_t noise = 1;
 
     int32_t pitchControl = 2048;
+    int32_t smoothedFreq = 0;
     int32_t osc2Detune = 0;
     int32_t osc2Level = 0;
     int32_t osc2Ring = 0;
