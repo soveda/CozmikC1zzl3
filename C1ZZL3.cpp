@@ -203,11 +203,8 @@ private:
 
         int32_t pdCurve = responseCurve(pd);
 
-        uint32_t warped =
-            czPhaseWarp(phase, pdCurve);
-
         int32_t sine = getSine(phase);
-        int32_t target = morphWave(warped << 20, wave);
+        int32_t target = morphWave(phase, wave);
 
         return mix(sine, target, pdCurve);
     }
