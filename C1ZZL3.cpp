@@ -44,7 +44,7 @@ public:
             // -------------------------
             // PITCH (stable scaling)
             // -------------------------
-            //int32_t freq = baseFreq(main + (in1 << 2) + (cv1 << 2));
+            int32_t freq = baseFreq(main + (in1 << 2) + (cv1 << 2));
 
             int32_t pd1 = x + (in2 << 1) + (cv2 << 1);
             int32_t pd2 = alt ? (pd1 >> 1) : 0;
@@ -60,34 +60,21 @@ public:
             // -------------------------
             // OSCILLATORS
             // -------------------------
-            //int32_t osc1 =
-            //    oscCZ(phase1, freq, pd1);
+            int32_t osc1 =
+                oscCZ(phase1, freq, pd1);
 
-            //int32_t osc2 =
-            //    oscCZ(phase2, freq, pd2);
-            
-            int32_t osc1 = oscTestSquare(phase1);
-            int32_t osc2 = osc2;
-            AudioOut1(osc1);
-            AudioOut2(osc1);
+            int32_t freq2 = freq;
+            if (alt)
+                freq2 += (main - 2048) >> 3;
 
-            CVOut1(0);
-            CVOut2(0);
-            
+            int32_t osc2 =
+                oscCZ(phase2, freq2, pd2);
             
             // -------------------------
             // ALT MODE MODS
             // -------------------------
-            //if (alt)
-            //{
-            //    int32_t detune = (main - 2048) >> 3;
-
-            //    osc2 =
-            //        oscCZ(
-            //            phase2,
-                        //freq + detune,
-            //            pd1 >> 1);
-
+            if (alt)
+            {
                 int32_t ring = (osc1 * osc2) >> 11;
                 osc1 = mix(osc1, ring, x >> 4);
 
@@ -137,25 +124,18 @@ private:
     // CZ OSCILLATOR
     // =========================================================
 
-    //inline int32_t getSine(uint32_t phase)
-    //{
+    inline int32_t getSine(uint32_t phase)
+    {
         // 1024-entry full-cycle sine table.
         // Top 10 bits select the table index.
         // Next 10 bits interpolate between adjacent samples.
-        //uint32_t index = (phase >> 22) & 1023;
-        //uint32_t frac  = (phase >> 12) & 1023;
+        uint32_t index = (phase >> 22) & 1023;
+        uint32_t frac  = (phase >> 12) & 1023;
 
-        //int32_t a = sineLUT[index];
-        //int32_t b = sineLUT[(index + 1) & 1023];
+        int32_t a = sineLUT[index];
+        int32_t b = sineLUT[(index + 1) & 1023];
 
-        //return a + (((b - a) * (int32_t)frac) >> 10);
-    //}
-    
-    inline int32_t oscTestSquare(uint32_t& phase)
-    {
-        phase += 90000000u; // fixed audible pitch
-
-        return (phase & 0x80000000u) ? 1500 : -1500;
+        return a + (((b - a) * (int32_t)frac) >> 10);
     }
     
     inline uint16_t getCosWarp(uint32_t index)
@@ -213,7 +193,7 @@ private:
         uint32_t warped =
             czPhaseWarp(phase, pd);
 
-        //return getSine(warped << 20);
+        return getSine(warped << 20);
     }
     // =========================================================
     // TURING MACHINE

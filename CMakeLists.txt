@@ -29,7 +29,7 @@ pico_sdk_init()
 
 add_executable(C1ZZL3
     C1ZZL3.cpp
-    C1ZZL3_LUT
+    C1ZZL3_LUT.cpp
 )
 
 # ============================================================
@@ -58,12 +58,31 @@ target_link_libraries(C1ZZL3
 )
 
 # ============================================================
+# Workshop Computer hardware settings
+# ============================================================
+
+target_compile_definitions(C1ZZL3 PRIVATE
+    PICO_XOSC_STARTUP_DELAY_MULTIPLIER=64
+)
+
+pico_enable_stdio_usb(C1ZZL3 0)
+pico_set_binary_type(C1ZZL3 copy_to_ram)
+
+# ============================================================
 # Optimisation
 # ============================================================
 
 target_compile_options(C1ZZL3 PRIVATE
     -O3
     -ffast-math
+    -Wdouble-promotion
+    -Wfloat-conversion
+    -Wall
+    -Wextra
+)
+
+target_link_options(C1ZZL3 PRIVATE
+    -Wl,--print-memory-usage
 )
 
 # ============================================================
