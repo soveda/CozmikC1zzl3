@@ -225,7 +225,7 @@ private:
     {
         int32_t saw = ((int32_t)(phase >> 20) & 4095) - 2048;
         int32_t square = (phase & 0x80000000u) ? 2047 : -2048;
-        int32_t pulse = ((phase >> 29) & 7) < 2 ? 2047 : -2048;
+        int32_t pulse = ((phase >> 29) & 7) < 1 ? 2047 : -2048;
         int32_t doubleSine = getSine(phase << 1);
 
         switch (wave)
@@ -243,10 +243,12 @@ private:
 
     inline int32_t resonantWave(uint32_t phase, uint32_t harmonic)
     {
-        int32_t fundamental = getSine(phase);
+        uint32_t p = (phase >> 20) & 4095;
+        int32_t envelope = (int32_t)(4095 - p);
         int32_t overtone = getSine(phase * (harmonic + 2));
+        int32_t body = getSine(phase) >> (harmonic + 1);
 
-        return clip((fundamental >> 1) + overtone);
+        return clip(body + ((overtone * envelope) >> 12));
     }
 
     // =========================================================
@@ -410,24 +412,20 @@ private:
         return noise >> 24;
     }
 
-    // Musical-but-simple pitch mapping.
+    // Simple audible pitch mapping.
     //
-    // The knob covers about five octaves, from A1-ish to A6-ish.
-    // Each octave is interpolated in fixed point, which feels much
-    // more natural than the earlier linear test sweep.
+    // This deliberately uses a smooth test range rather than octave
+    // zones. It is not calibrated 1V/oct yet, but it feels continuous
+    // on the hardware.
     int32_t baseFreq(int32_t x)
     {
         if (x < 0) x = 0;
         if (x > 4095) x = 4095;
 
-        uint32_t scaled = (uint32_t)x * 5u;
-        uint32_t octave = scaled >> 12;
-        uint32_t frac = smoothStep12(scaled & 4095);
+        int32_t coarse = (x * 70000000) >> 12;
+        int32_t fine = ((x * x) >> 12) * 30000;
 
-        uint32_t freq = 4920000u << octave;
-        uint32_t next = freq << 1;
-
-        return freq + (((next - freq) * frac) >> 12);
+        return 6000000 + coarse + fine;
     }
 
     int32_t responseCurve(int32_t x)
