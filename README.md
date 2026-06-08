@@ -11,13 +11,13 @@ Creator: Adrian Vos
 
 CIZZLE is a CZ-inspired phase-distortion oscillator card with a second mirrored oscillator for detune, ring modulation, and noise modulation. The switch also opens a Turing machine mode, turning the card into a clocked CV and pulse source.
 
-This is still a hardware-tuning build. The oscillator now produces a clean audible tone, Main and X have been tuned on hardware, and Y waveform morphing is under active testing.
+This is still a hardware-tuning build. The oscillator now produces a clean audible tone, Main and X have been tuned on hardware, and Y waveform morphing is now audible but still being refined for clearer contrast between every position.
 
 ## Current Modes
 
 ### Switch Middle: PD Synth
 
-Main controls oscillator pitch.
+Main controls oscillator pitch using the current smooth hardware-test range. This is intentionally playable and continuous, but it is not calibrated 1V/oct yet.
 
 X controls phase-distortion amount. Fully counter-clockwise is closest to a clean sine. Turning X up introduces the selected CZ-style target waveform.
 
@@ -25,12 +25,12 @@ Y morphs across eight CZ-inspired waveform families:
 
 1. Saw
 2. Square
-3. Pulse
+3. Narrow pulse
 4. Double sine
 5. Saw/pulse blend
-6. Resonant 1
-7. Resonant 2
-8. Resonant 3
+6. Decaying resonant harmonic 1
+7. Decaying resonant harmonic 2
+8. Decaying resonant harmonic 3
 
 Audio out 1 carries oscillator 1.
 
@@ -151,14 +151,15 @@ Confirmed on hardware:
 
 Recently tuned:
 
-- Main now uses semitone-ratio interpolation across roughly five octaves.
+- Main has been restored to the smoother continuous pitch sweep after the semitone-ratio version proved too steppy on hardware.
 - X has a gentler response curve for more usable low-to-mid settings.
-- Y waveform morphing has been made more audible but still needs further hardware evaluation.
+- Y waveform morphing now uses a direct waveform target so it is audible, and the pulse/resonant positions have been made more distinct.
 
 ## WIP / Not Yet Implemented
 
 - 1V/oct-calibrated pitch response.
 - Final CZ-accurate waveform set.
+- Final Y waveform spacing and contrast.
 - Final musical tuning of oscillator 2 detune range.
 - Pulse in 2 behaviour.
 - Alternate 16-page envelope editing mode from the original concept.
