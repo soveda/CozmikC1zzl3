@@ -204,10 +204,10 @@ private:
         int32_t pdCurve = responseCurve(pd);
 
         uint32_t warped =
-            czPhaseWarp(phase, pdCurve);
+            czPhaseWarp(phase, pdCurve) << 20;
 
         int32_t sine = getSine(phase);
-        int32_t target = morphWave(warped << 20, wave);
+        int32_t target = morphWave(warped, wave);
 
         return mix(sine, target, pdCurve);
     }
@@ -416,28 +416,34 @@ private:
     // Musical-but-simple pitch mapping.
     //
     // The knob covers about five octaves, from A1-ish to A6-ish.
-    // Each octave is interpolated in fixed point, which feels much
-    // more natural than the earlier linear test sweep.
+    // Semitone ratios are interpolated in fixed point, which avoids
+    // the obvious octave zones of the earlier octave-only mapping.
     int32_t baseFreq(int32_t x)
     {
         if (x < 0) x = 0;
         if (x > 4095) x = 4095;
 
-        uint32_t scaled = (uint32_t)x * 5u;
-        uint32_t octave = scaled >> 12;
-        uint32_t frac = smoothStep12(scaled & 4095);
+        uint32_t scaled = (uint32_t)x * 60u;
+        uint32_t semitone = scaled >> 12;
+        uint32_t frac = scaled & 4095;
 
-        uint32_t freq = 4920000u << octave;
-        uint32_t next = freq << 1;
+        if (semitone > 59u) semitone = 59u;
 
-        return freq + (((next - freq) * frac) >> 12);
+        uint32_t octave = semitone / 12u;
+        uint32_t note = semitone - (octave * 12u);
+
+        uint32_t ratio = semitoneRatios[note];
+        uint32_t nextRatio = semitoneRatios[note + 1u];
+        ratio += ((nextRatio - ratio) * frac) >> 12;
+
+        return (int32_t)((4920000u * ratio) >> (12 - octave));
     }
 
     int32_t responseCurve(int32_t x)
     {
         uint32_t ux = (uint32_t)clamp12(x);
 
-        return (ux * ux) >> 12;
+        return (ux + ((ux * ux) >> 12)) >> 1;
     }
 
     uint32_t smoothStep12(uint32_t x)
@@ -447,6 +453,12 @@ private:
 
         return (3u * x2) - (2u * x3);
     }
+
+    static constexpr uint32_t semitoneRatios[13] =
+    {
+        4096, 4339, 4598, 4871, 5161, 5468, 5793,
+        6137, 6502, 6889, 7298, 7732, 8192
+    };
 private:
 
     uint32_t phase1 = 0;
