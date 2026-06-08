@@ -25,12 +25,12 @@ Y morphs across eight CZ-inspired waveform families:
 
 1. Saw
 2. Square
-3. Narrow pulse
+3. Needle pulse
 4. Double sine
 5. Saw/pulse blend
-6. Decaying resonant harmonic 1
-7. Decaying resonant harmonic 2
-8. Decaying resonant harmonic 3
+6. Plucked resonant harmonic 5
+7. Decaying resonant harmonic 4
+8. Decaying resonant harmonic 7
 
 Audio out 1 carries oscillator 1.
 
@@ -86,7 +86,7 @@ CV in 2: positive voltage increases ring modulation while holding the switch dow
 
 Pulse in 1: external Turing clock.
 
-Pulse in 2: currently unused.
+Pulse in 2: oscillator sync in PD synth mode.
 
 ### Outputs
 
@@ -153,7 +153,7 @@ Recently tuned:
 
 - Main has been restored to the smoother continuous pitch sweep after the semitone-ratio version proved too steppy on hardware.
 - X has a gentler response curve for more usable low-to-mid settings.
-- Y waveform morphing now uses a direct waveform target so it is audible, and the pulse/resonant positions have been made more distinct.
+- Y waveform morphing now uses a direct waveform target, with a needle-pulse third position and a plucked sixth position for clearer contrast from the saw.
 
 ## WIP / Not Yet Implemented
 
@@ -161,7 +161,6 @@ Recently tuned:
 - Final CZ-accurate waveform set.
 - Final Y waveform spacing and contrast.
 - Final musical tuning of oscillator 2 detune range.
-- Pulse in 2 behaviour.
 - Alternate 16-page envelope editing mode from the original concept.
 - Flash persistence for complex envelope or preset data.
 - Release packaging with `info.yaml`, `.uf2`, and final docs.

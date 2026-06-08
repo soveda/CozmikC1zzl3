@@ -57,6 +57,9 @@ public:
             int32_t ring = alt ? clamp12(osc2Ring + (cv2 > 0 ? cv2 << 1 : 0)) : 0;
             int32_t noiseAmt = alt ? clamp12(osc2Noise + (cv2 < 0 ? (-cv2) << 1 : 0)) : 0;
 
+            if (PulseIn2RisingEdge())
+                syncOscillators();
+
             // -------------------------
             // OSCILLATORS
             // -------------------------
@@ -225,7 +228,7 @@ private:
     {
         int32_t saw = ((int32_t)(phase >> 20) & 4095) - 2048;
         int32_t square = (phase & 0x80000000u) ? 2047 : -2048;
-        int32_t pulse = ((phase >> 29) & 7) < 1 ? 2047 : -2048;
+        int32_t pulse = narrowPulseWave(phase);
         int32_t doubleSine = getSine(phase << 1);
 
         switch (wave)
@@ -234,19 +237,50 @@ private:
             case 1: return square;
             case 2: return pulse;
             case 3: return doubleSine;
-            case 4: return mix(saw, pulse, 2048);
-            case 5: return resonantWave(phase, 1);
-            case 6: return resonantWave(phase, 2);
-            default: return resonantWave(phase, 3);
+            case 4: return mix(saw, pulse, 3072);
+            case 5: return pluckedResonantWave(phase, 5);
+            case 6: return resonantWave(phase, 4, 2);
+            default: return resonantWave(phase, 7, 3);
         }
     }
 
-    inline int32_t resonantWave(uint32_t phase, uint32_t harmonic)
+    inline int32_t narrowPulseWave(uint32_t phase)
+    {
+        uint32_t p = (phase >> 20) & 4095;
+
+        if (p < 128)
+            return 2047;
+
+        if (p >= 2048 && p < 2176)
+            return -2048;
+
+        return getSine(phase) >> 3;
+    }
+
+    inline int32_t pluckedResonantWave(uint32_t phase, uint32_t harmonic)
     {
         uint32_t p = (phase >> 20) & 4095;
         int32_t envelope = (int32_t)(4095 - p);
-        int32_t overtone = getSine(phase * (harmonic + 2));
-        int32_t body = getSine(phase) >> (harmonic + 1);
+
+        envelope = (envelope * envelope) >> 12;
+        envelope = (envelope * envelope) >> 12;
+
+        int32_t overtone = getSine(phase * harmonic);
+        int32_t click = p < 96 ? 2047 : 0;
+
+        return clip(((overtone * envelope) >> 12) + click - 256);
+    }
+
+    inline int32_t resonantWave(uint32_t phase, uint32_t harmonic, uint32_t decay)
+    {
+        uint32_t p = (phase >> 20) & 4095;
+        int32_t envelope = (int32_t)(4095 - p);
+
+        for (uint32_t i = 0; i < decay; ++i)
+            envelope = (envelope * envelope) >> 12;
+
+        int32_t overtone = getSine(phase * harmonic);
+        int32_t body = getSine(phase) >> (decay + 1);
 
         return clip(body + ((overtone * envelope) >> 12));
     }
@@ -404,6 +438,12 @@ private:
             return freq - offset;
 
         return freq + offset;
+    }
+
+    void syncOscillators()
+    {
+        phase1 = 0;
+        phase2 = 0;
     }
 
     uint8_t fastNoise()
