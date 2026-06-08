@@ -49,7 +49,7 @@ public:
             // -------------------------
             // PITCH (stable scaling)
             // -------------------------
-            int32_t freq = baseFreq(pitchControl + (in1 << 2));
+            int32_t freq = baseFreq(pitchControl + (in1 << 1));
 
             int32_t pd = clamp12(x + (in2 << 1));
             int32_t wave = clamp12(y + (cv1 << 1));
@@ -201,20 +201,22 @@ private:
     {
         phase += (uint32_t)freq;
 
+        int32_t pdCurve = responseCurve(pd);
+
         uint32_t warped =
-            czPhaseWarp(phase, pd);
+            czPhaseWarp(phase, pdCurve);
 
         int32_t sine = getSine(phase);
         int32_t target = morphWave(warped << 20, wave);
 
-        return mix(sine, target, pd);
+        return mix(sine, target, pdCurve);
     }
 
     inline int32_t morphWave(uint32_t phase, int32_t wave)
     {
         uint32_t scaled = ((uint32_t)wave * 7u);
         uint32_t index = scaled >> 12;
-        uint32_t frac = scaled & 4095;
+        uint32_t frac = smoothStep12(scaled & 4095);
 
         int32_t a = czWave(phase, index);
         int32_t b = czWave(phase, index < 7 ? index + 1 : 7);
@@ -411,20 +413,39 @@ private:
         return noise >> 24;
     }
 
-    // Simple audible pitch mapping.
+    // Musical-but-simple pitch mapping.
     //
-    // A 32-bit phase increment of about 9 million is roughly 100 Hz
-    // at the ComputerCard 48 kHz sample rate. The earlier placeholder
-    // was much smaller, so the oscillator clicked at sub-audio speeds.
+    // The knob covers about five octaves, from A1-ish to A6-ish.
+    // Each octave is interpolated in fixed point, which feels much
+    // more natural than the earlier linear test sweep.
     int32_t baseFreq(int32_t x)
     {
         if (x < 0) x = 0;
         if (x > 4095) x = 4095;
 
-        int32_t coarse = (x * 70000000) >> 12;
-        int32_t fine = ((x * x) >> 12) * 30000;
+        uint32_t scaled = (uint32_t)x * 5u;
+        uint32_t octave = scaled >> 12;
+        uint32_t frac = smoothStep12(scaled & 4095);
 
-        return 6000000 + coarse + fine;
+        uint32_t freq = 4920000u << octave;
+        uint32_t next = freq << 1;
+
+        return freq + (((next - freq) * frac) >> 12);
+    }
+
+    int32_t responseCurve(int32_t x)
+    {
+        uint32_t ux = (uint32_t)clamp12(x);
+
+        return (ux * ux) >> 12;
+    }
+
+    uint32_t smoothStep12(uint32_t x)
+    {
+        uint32_t x2 = (x * x) >> 12;
+        uint32_t x3 = (x2 * x) >> 12;
+
+        return (3u * x2) - (2u * x3);
     }
 private:
 
