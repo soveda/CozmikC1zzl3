@@ -1,4 +1,4 @@
-# CIZZLE
+# C1ZZL3
 
 Dual phase-distortion synthesiser and probabilistic Turing machine program card for the Music Thing Modular Workshop Computer.
 
@@ -9,7 +9,7 @@ Creator: Adrian Vos
 
 ## Overview
 
-CIZZLE is a CZ-inspired phase-distortion oscillator card with a second mirrored oscillator for detune, ring modulation, and noise modulation. The switch also opens a Turing machine mode, turning the card into a clocked CV and pulse source.
+C1ZZL3 is a CZ-inspired phase-distortion oscillator card with a second mirrored oscillator for detune, ring modulation, and noise modulation. The switch also opens a Turing machine mode, turning the card into a clocked CV and pulse source.
 
 This is still a hardware-tuning build. The oscillator now produces a clean audible tone, Main and X have been tuned on hardware, and Y waveform morphing is now audible but still being refined for clearer contrast between every position.
 
@@ -42,13 +42,13 @@ Pulse out 1 and pulse out 2 carry the Turing pulse.
 
 ### Hold Switch Down: Performance Edit
 
-Holding the switch down temporarily edits the second oscillator and modulation amounts:
+Holding the switch down edits the latched second oscillator and modulation amounts:
 
 Main controls oscillator 2 detune and level from the centre point. Around 12 o'clock, oscillator 2 is off. Turning left detunes down; turning right detunes up. The further from centre, the louder oscillator 2 becomes.
 
-X controls ring modulation amount.
+X controls ring modulation amount. The setting remains active after the switch is released.
 
-Y controls noise modulation amount.
+Y controls noise modulation amount. The setting remains active after the switch is released.
 
 Oscillator 2 mirrors oscillator 1's phase-distortion shape and selected waveform family.
 
@@ -82,7 +82,7 @@ Audio/CV in 2: phase-distortion shape modulation in PD synth mode.
 
 CV in 1: waveform morph modulation in PD synth mode.
 
-CV in 2: positive voltage increases ring modulation while holding the switch down; negative voltage increases noise modulation while holding the switch down.
+CV in 2: positive voltage increases ring modulation while holding the switch down; negative voltage increases CZ-style noise modulation while holding the switch down.
 
 Pulse in 1: external Turing clock.
 
@@ -154,6 +154,7 @@ Recently tuned:
 - Main has been restored to the smoother continuous pitch sweep after the semitone-ratio version proved too steppy on hardware.
 - X has a gentler response curve for more usable low-to-mid settings.
 - Y waveform morphing now uses a direct waveform target, with a needle-pulse third position and a plucked sixth position for clearer contrast from the saw.
+- Held-switch Y now adds CZ-style digital grit by jittering phase distortion and oscillator phase instead of crossfading in plain audio noise.
 
 ## WIP / Not Yet Implemented
 
@@ -167,6 +168,6 @@ Recently tuned:
 
 ## Design Notes
 
-CIZZLE is intended as a playable, characterful program card rather than an exact Casio CZ clone. The code uses fixed-point integer arithmetic and lookup tables to stay inside the Workshop Computer's 48 kHz audio interrupt budget.
+C1ZZL3 is intended as a playable, characterful program card rather than an exact Casio CZ clone. The code uses fixed-point integer arithmetic and lookup tables to stay inside the Workshop Computer's 48 kHz audio interrupt budget.
 
 The current implementation favours hardware-testable musical behaviour over completeness. Each major behaviour should be tested on the physical card before more complex UI layers, such as the envelope editor, are added.

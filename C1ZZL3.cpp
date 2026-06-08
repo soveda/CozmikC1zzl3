@@ -54,8 +54,10 @@ public:
             int32_t pd = clamp12(x + (in2 << 1));
             int32_t wave = clamp12(y + (cv1 << 1));
 
-            int32_t ring = alt ? clamp12(osc2Ring + (cv2 > 0 ? cv2 << 1 : 0)) : 0;
-            int32_t noiseAmt = alt ? clamp12(osc2Noise + (cv2 < 0 ? (-cv2) << 1 : 0)) : 0;
+            int32_t ring =
+                clamp12(osc2Ring + (alt && cv2 > 0 ? cv2 << 1 : 0));
+            int32_t noiseAmt =
+                clamp12(osc2Noise + (alt && cv2 < 0 ? (-cv2) << 1 : 0));
 
             if (PulseIn2RisingEdge())
                 syncOscillators();
@@ -64,21 +66,18 @@ public:
             // OSCILLATORS
             // -------------------------
             int32_t osc1 =
-                oscCZ(phase1, freq, pd, wave);
+                oscCZ(phase1, freq, pd, wave, noiseAmt);
 
             int32_t freq2 =
                 applyDetune(freq, osc2Detune);
 
             int32_t osc2 =
-                oscCZ(phase2, freq2, pd, wave);
+                oscCZ(phase2, freq2, pd, wave, noiseAmt);
 
             osc2 = (osc2 * osc2Level) >> 12;
 
             int32_t ringSig = (osc1 * osc2) >> 11;
             osc1 = mix(osc1, ringSig, ring);
-
-            int32_t noiseSig = ((int32_t)fastNoise() - 128) << 4;
-            osc1 = mix(osc1, noiseSig, noiseAmt);
 
             AudioOut1(clip(osc1));
             AudioOut2(clip(osc2));
@@ -200,16 +199,33 @@ private:
         uint32_t& phase,
         int32_t freq,
         int32_t pd,
-        int32_t wave)
+        int32_t wave,
+        int32_t noiseAmt)
     {
         phase += (uint32_t)freq;
 
-        int32_t pdCurve = responseCurve(pd);
+        uint32_t renderPhase = phase;
+        int32_t noisyPd = pd;
 
-        int32_t sine = getSine(phase);
-        int32_t target = morphWave(phase, wave);
+        if (noiseAmt > 0)
+            applyCZNoise(renderPhase, noisyPd, noiseAmt);
+
+        int32_t pdCurve = responseCurve(noisyPd);
+
+        int32_t sine = getSine(renderPhase);
+        int32_t target = morphWave(renderPhase, wave);
 
         return mix(sine, target, pdCurve);
+    }
+
+    inline void applyCZNoise(uint32_t& phase, int32_t& pd, int32_t amount)
+    {
+        int32_t noiseCurve = responseCurve(amount);
+        int32_t pdJitter = (((int32_t)fastNoise() - 128) * noiseCurve) >> 8;
+        int32_t phaseJitter = (((int32_t)fastNoise() - 128) * noiseCurve) * 256;
+
+        pd = clamp12(pd + pdJitter);
+        phase += (uint32_t)phaseJitter;
     }
 
     inline int32_t morphWave(uint32_t phase, int32_t wave)
