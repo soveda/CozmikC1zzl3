@@ -152,9 +152,11 @@ Confirmed on hardware:
 Recently tuned:
 
 - Main has been restored to the smoother continuous pitch sweep after the semitone-ratio version proved too steppy on hardware.
+- Main pitch smoothing has been increased slightly to reduce remaining knob stepping.
 - X has a gentler response curve for more usable low-to-mid settings.
 - Y waveform morphing now uses a direct waveform target, with a needle-pulse third position and a plucked sixth position for clearer contrast from the saw.
 - Held-switch Y now adds CZ-style digital grit by jittering phase distortion and oscillator phase instead of crossfading in plain audio noise.
+- Turing internal clock range has been slowed down for a more usable musical sweep.
 
 ## WIP / Not Yet Implemented
 

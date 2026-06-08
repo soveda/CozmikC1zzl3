@@ -342,8 +342,8 @@ private:
             useTappedClock = false;
         lastClockSpeed = speed;
 
-        uint32_t period = 48000u - (((uint32_t)speed * 47400u) >> 12);
-        if (period < 600u) period = 600u;
+        uint32_t period = 384000u - (((uint32_t)speed * 381000u) >> 12);
+        if (period < 3000u) period = 3000u;
 
         if (!useTappedClock)
             turingClockPeriod = period;
@@ -489,7 +489,13 @@ private:
         if (smoothedFreq == 0)
             smoothedFreq = target;
 
-        smoothedFreq += (target - smoothedFreq) >> 7;
+        int32_t delta = target - smoothedFreq;
+        int32_t step = delta >> 9;
+
+        if (step == 0 && delta != 0)
+            step = delta > 0 ? 1 : -1;
+
+        smoothedFreq += step;
 
         return smoothedFreq;
     }
