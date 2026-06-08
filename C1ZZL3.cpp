@@ -11,8 +11,6 @@ public:
         phase2 = 0;
 
         noise = 1;
-
-        family = 0;
     }
 
     // =========================================================
@@ -26,13 +24,15 @@ public:
         int32_t cv1 = CVIn1();
         int32_t cv2 = CVIn2();
 
-        bool sync = PulseIn2RisingEdge();
-
         Switch mode = SwitchVal();
 
         int32_t main = KnobVal(Knob::Main);
         int32_t x    = KnobVal(Knob::X);
         int32_t y    = KnobVal(Knob::Y);
+
+        if (lastMode == Switch::Up && mode == Switch::Down)
+            tapTuringClock();
+        lastMode = mode;
 
         // =========================
         // PD SYNTH MODE (MID + DOWN)
@@ -41,55 +41,51 @@ public:
         {
             bool alt = (mode == Switch::Down);
 
+            if (!alt)
+                pitchControl = main;
+            else
+                updateAltControls(main, x, y);
+
             // -------------------------
             // PITCH (stable scaling)
             // -------------------------
-            int32_t freq = baseFreq(main + (in1 << 2) + (cv1 << 2));
+            int32_t freq = baseFreq(pitchControl + (in1 << 2));
 
-            int32_t pd1 = x + (in2 << 1) + (cv2 << 1);
-            int32_t pd2 = alt ? (pd1 >> 1) : 0;
-            
-            if (pd1 < 0) pd1 = 0;
-            if (pd1 > 4095) pd1 = 4095;
+            int32_t pd = clamp12(x + (in2 << 1));
+            int32_t wave = clamp12(y + (cv1 << 1));
 
-            if (pd2 < 0) pd2 = 0;
-            if (pd2 > 4095) pd2 = 4095;
-
-            family = 0;
+            int32_t ring = clamp12(osc2Ring + (cv2 > 0 ? cv2 << 1 : 0));
+            int32_t noiseAmt = clamp12(osc2Noise + (cv2 < 0 ? (-cv2) << 1 : 0));
 
             // -------------------------
             // OSCILLATORS
             // -------------------------
             int32_t osc1 =
-                oscCZ(phase1, freq, pd1);
+                oscCZ(phase1, freq, pd, wave);
 
-            int32_t freq2 = freq;
-            if (alt)
-                freq2 += (main - 2048) >> 3;
+            int32_t freq2 =
+                applyDetune(freq, osc2Detune);
 
             int32_t osc2 =
-                oscCZ(phase2, freq2, pd2);
-            
-            // -------------------------
-            // ALT MODE MODS
-            // -------------------------
-            if (alt)
-            {
-                int32_t ring = (osc1 * osc2) >> 11;
-                osc1 = mix(osc1, ring, x >> 4);
+                oscCZ(phase2, freq2, pd, wave);
 
-                int32_t noiseSig = ((int32_t)fastNoise() - 128) << 4;
-                osc1 = mix(osc1, noiseSig, y >> 4);
-            }
+            osc2 = (osc2 * osc2Level) >> 12;
 
-            if (sync)
-                phase1 = phase2;
+            int32_t ringSig = (osc1 * osc2) >> 11;
+            osc1 = mix(osc1, ringSig, ring);
+
+            int32_t noiseSig = ((int32_t)fastNoise() - 128) << 4;
+            osc1 = mix(osc1, noiseSig, noiseAmt);
 
             AudioOut1(clip(osc1));
             AudioOut2(clip(osc2));
 
-            CVOut1(osc1 >> 2);
-            CVOut2(osc2 >> 2);
+            CVOut1(turingCv);
+            CVOut2(turingModCv);
+            PulseOut1(turingPulse);
+            PulseOut2(turingPulse);
+
+            updateSynthLEDs(alt, pd, wave);
         }
 
         // =========================
@@ -97,25 +93,39 @@ public:
         // =========================
         else
         {
-            stepTuring(y);
+            turingLength = 2 + ((x * 14) >> 12);
+            if (turingLength > 16) turingLength = 16;
 
-            int32_t cvA = ((turing & 0xFFFF) - 32768) >> 4;
-            int32_t cvB = smooth(cvA);
+            bool externalClock = PulseIn1RisingEdge();
+            bool clocked = false;
 
-            CVOut1(cvA);
-            CVOut2(cvB);
+            if (externalClock)
+            {
+                externalClockAge = 0;
+                clocked = true;
+            }
+            else
+            {
+                if (externalClockAge < 96000u)
+                    externalClockAge++;
+                else
+                    clocked = internalTuringClock(y);
+            }
 
-            AudioOut1((turing & 1) ? 1200 : -1200);
+            if (clocked)
+                stepTuring(main);
+
+            CVOut1(turingCv);
+            CVOut2(turingModCv);
+
+            AudioOut1(turingPulse ? 1200 : -1200);
             AudioOut2((turing & 2) ? 600 : -600);
 
-            updateLEDs();
-        }
+            PulseOut1(turingPulse);
+            PulseOut2(turingPulse);
 
-        // LED feedback
-        LedBrightness(0, family << 9);
-        LedBrightness(1, main);
-        LedBrightness(2, x);
-        LedBrightness(3, y);
+            updateTuringLEDs();
+        }
     }
 
 private:
@@ -186,26 +196,129 @@ private:
     inline int32_t oscCZ(
         uint32_t& phase,
         int32_t freq,
-        int32_t pd)
+        int32_t pd,
+        int32_t wave)
     {
         phase += (uint32_t)freq;
 
         uint32_t warped =
             czPhaseWarp(phase, pd);
 
-        return getSine(warped << 20);
+        int32_t sine = getSine(phase);
+        int32_t target = morphWave(warped << 20, wave);
+
+        return mix(sine, target, pd);
     }
+
+    inline int32_t morphWave(uint32_t phase, int32_t wave)
+    {
+        uint32_t scaled = ((uint32_t)wave * 7u);
+        uint32_t index = scaled >> 12;
+        uint32_t frac = scaled & 4095;
+
+        int32_t a = czWave(phase, index);
+        int32_t b = czWave(phase, index < 7 ? index + 1 : 7);
+
+        return a + (((b - a) * (int32_t)frac) >> 12);
+    }
+
+    inline int32_t czWave(uint32_t phase, uint32_t wave)
+    {
+        int32_t saw = ((int32_t)(phase >> 20) & 4095) - 2048;
+        int32_t square = (phase & 0x80000000u) ? 2047 : -2048;
+        int32_t pulse = ((phase >> 29) & 7) < 2 ? 2047 : -2048;
+        int32_t doubleSine = getSine(phase << 1);
+
+        switch (wave)
+        {
+            case 0: return saw;
+            case 1: return square;
+            case 2: return pulse;
+            case 3: return doubleSine;
+            case 4: return mix(saw, pulse, 2048);
+            case 5: return resonantWave(phase, 1);
+            case 6: return resonantWave(phase, 2);
+            default: return resonantWave(phase, 3);
+        }
+    }
+
+    inline int32_t resonantWave(uint32_t phase, uint32_t harmonic)
+    {
+        int32_t fundamental = getSine(phase);
+        int32_t overtone = getSine(phase * (harmonic + 2));
+
+        return clip((fundamental >> 1) + overtone);
+    }
+
     // =========================================================
     // TURING MACHINE
     // =========================================================
     void stepTuring(int32_t knob)
     {
-        bool flip = (fastNoise() < (uint8_t)(knob >> 4));
+        uint32_t mask = (1u << turingLength) - 1u;
+        uint8_t chance = turingMutationChance(knob);
 
         bool bit = turing & 1;
-        if (flip) bit ^= 1;
+        if (fastNoise() < chance) bit ^= 1;
 
-        turing = (turing >> 1) | (bit << 15);
+        turing = ((turing >> 1) | ((uint32_t)bit << (turingLength - 1))) & mask;
+
+        turingPulse = bit;
+        turingPulseAge = 0;
+
+        int32_t unipolar = (int32_t)((turing * 4095u) / mask);
+        turingCv = unipolar - 2048;
+        turingModCv = smooth(turingCv);
+    }
+
+    uint8_t turingMutationChance(int32_t knob)
+    {
+        int32_t distance = knob - 2048;
+        if (distance < 0) distance = -distance;
+
+        int32_t chance = 255 - (distance >> 3);
+        if (chance < 0) chance = 0;
+        if (chance > 255) chance = 255;
+
+        return (uint8_t)chance;
+    }
+
+    bool internalTuringClock(int32_t speed)
+    {
+        int32_t moved = speed - lastClockSpeed;
+        if (moved < 0) moved = -moved;
+        if (moved > 64)
+            useTappedClock = false;
+        lastClockSpeed = speed;
+
+        uint32_t period = 48000u - (((uint32_t)speed * 47400u) >> 12);
+        if (period < 600u) period = 600u;
+
+        if (!useTappedClock)
+            turingClockPeriod = period;
+
+        if (++turingClock >= turingClockPeriod)
+        {
+            turingClock = 0;
+            return true;
+        }
+
+        if (turingPulse && ++turingPulseAge > 1200)
+            turingPulse = false;
+
+        return false;
+    }
+
+    void tapTuringClock()
+    {
+        if (turingClock > 2400u && turingClock < 96000u)
+        {
+            tappedClockPeriod = turingClock;
+            turingClockPeriod = tappedClockPeriod;
+            useTappedClock = true;
+        }
+
+        turingClock = 0;
     }
 
     int32_t smooth(int32_t x)
@@ -214,14 +327,24 @@ private:
         return turingSmooth;
     }
 
-    void updateLEDs()
+    void updateTuringLEDs()
     {
         LedBrightness(0, turing & 1 ? 4095 : 0);
         LedBrightness(1, turing & 2 ? 4095 : 0);
         LedBrightness(2, turing & 4 ? 4095 : 0);
         LedBrightness(3, PulseIn1());
-        LedBrightness(4, family << 9);
-        LedBrightness(5, 0);
+        LedBrightness(4, (turingLength * 4095) >> 4);
+        LedBrightness(5, turingPulse ? 4095 : 0);
+    }
+
+    void updateSynthLEDs(bool alt, int32_t pd, int32_t wave)
+    {
+        LedBrightness(0, pd);
+        LedBrightness(1, wave);
+        LedBrightness(2, osc2Level);
+        LedBrightness(3, osc2Ring);
+        LedBrightness(4, osc2Noise);
+        LedBrightness(5, alt ? 4095 : 0);
     }
 
     // =========================================================
@@ -238,6 +361,48 @@ private:
         if (x > 2047) return 2047;
         if (x < -2048) return -2048;
         return x;
+    }
+
+    int32_t clamp12(int32_t x)
+    {
+        if (x < 0) return 0;
+        if (x > 4095) return 4095;
+        return x;
+    }
+
+    void updateAltControls(int32_t main, int32_t x, int32_t y)
+    {
+        osc2Detune = main - 2048;
+        if (osc2Detune > -32 && osc2Detune < 32)
+            osc2Detune = 0;
+
+        osc2Level = osc2Detune < 0 ? -osc2Detune : osc2Detune;
+        osc2Level <<= 1;
+        if (osc2Level > 4095) osc2Level = 4095;
+
+        osc2Ring = x;
+        osc2Noise = y;
+    }
+
+    int32_t applyDetune(int32_t freq, int32_t detune)
+    {
+        int32_t bend = detune;
+        int32_t sign = 1;
+
+        if (bend < 0)
+        {
+            sign = -1;
+            bend = -bend;
+        }
+
+        // Small movements give fine beating; the far ends reach wide offsets.
+        int32_t fine = (bend * bend) >> 11;
+        int32_t offset = (freq * fine) >> 12;
+
+        if (sign < 0)
+            return freq - offset;
+
+        return freq + offset;
     }
 
     uint8_t fastNoise()
@@ -263,10 +428,26 @@ private:
 
     uint32_t turing = 0xACE1u;
     int32_t turingSmooth = 0;
+    int32_t turingCv = 0;
+    int32_t turingModCv = 0;
+    uint32_t turingClock = 0;
+    uint32_t turingClockPeriod = 12000;
+    uint32_t tappedClockPeriod = 12000;
+    int32_t lastClockSpeed = 2048;
+    uint32_t turingPulseAge = 0;
+    uint32_t turingLength = 16;
+    uint32_t externalClockAge = 96000u;
+    bool turingPulse = false;
+    bool useTappedClock = false;
 
     uint32_t noise = 1;
 
-    uint32_t family = 0;
+    int32_t pitchControl = 2048;
+    int32_t osc2Detune = 0;
+    int32_t osc2Level = 0;
+    int32_t osc2Ring = 0;
+    int32_t osc2Noise = 0;
+    Switch lastMode = Switch::Middle;
 };
 
 // =========================================================
