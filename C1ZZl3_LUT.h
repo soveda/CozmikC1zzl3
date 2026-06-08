@@ -14,3 +14,4 @@
 constexpr int SINE_SIZE = 1024;
 
 extern const int16_t sineLUT[SINE_SIZE];
+extern const int16_t phaseWarpLUT[SINE_SIZE];

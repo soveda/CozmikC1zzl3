@@ -1,0 +1,4 @@
+getSine()
+cosineWarp()
+czPhaseWarp()
+oscCZ()

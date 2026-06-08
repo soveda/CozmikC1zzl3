@@ -1,4 +1,5 @@
 #include "ComputerCard.h"
+#include "C1ZZL3_LUT.h"
 
 class C1ZZL3 : public ComputerCard
 {
@@ -48,7 +49,7 @@ public:
             int32_t pd1 = x + (in2 << 1) + (cv2 << 1);
             int32_t pd2 = alt ? (pd1 >> 1) : 0;
 
-            family = (y >> 9) & 7;
+            family = 0
 
             // -------------------------
             // OSCILLATORS
@@ -114,16 +115,9 @@ private:
     // CZ PHASE DISTORTION ENGINE (OPTIMISED VERSION)
     // =========================================================
 
-    static constexpr int32_t LUT_BITS = 10;
-    static constexpr int32_t LUT_SIZE = 1 << LUT_BITS;
-
-    // Proper sine LUT (you will want to replace with real table)
-    int32_t sinLUT(uint32_t i)
+    inline int32_t getSine(uint32_t phase)
     {
-        // cheap approximation placeholder (replace later)
-        int32_t x = (i & (LUT_SIZE - 1));
-        int32_t v = (x < 512) ? x : (1024 - x);
-        return (v << 3) - 2048;
+        return sineLUT[(phase >> 22) & 1023];
     }
 
     // ---------------------------------------------------------
