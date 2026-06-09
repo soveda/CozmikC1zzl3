@@ -1,5 +1,6 @@
 #include "ComputerCard.h"
 #include "C1ZZL3_LUT.h"
+#include "hardware/sync.h"
 
 class C1ZZL3 : public ComputerCard
 {
@@ -11,6 +12,8 @@ public:
         phase2 = 0;
 
         noise = 1;
+
+        loadPerformanceState();
     }
 
     // =========================================================
@@ -30,7 +33,9 @@ public:
         int32_t x    = KnobVal(Knob::X);
         int32_t y    = KnobVal(Knob::Y);
 
-        if (lastMode == Switch::Up && mode == Switch::Down)
+        Switch previousMode = lastMode;
+
+        if (previousMode == Switch::Up && mode == Switch::Down)
             tapTuringClock();
         lastMode = mode;
 
@@ -42,17 +47,29 @@ public:
             bool alt = (mode == Switch::Down);
 
             if (!alt)
+            {
                 pitchControl = main;
+                pdControl = x;
+                waveControl = y;
+            }
             else
+            {
+                if (previousMode != Switch::Down)
+                {
+                    saveHoldCanSave = (previousMode == Switch::Middle);
+                    resetAltPickup(main, x, y);
+                }
+
                 updateAltControls(main, x, y);
+            }
 
             // -------------------------
             // PITCH (stable scaling)
             // -------------------------
             int32_t freq = smoothPitch(baseFreq(pitchControl + (in1 << 1)));
 
-            int32_t pd = clamp12(x + (in2 << 1));
-            int32_t wave = clamp12(y + (cv1 << 1));
+            int32_t pd = clamp12(pdControl + (in2 << 1));
+            int32_t wave = clamp12(waveControl + (cv1 << 1));
 
             int32_t ring =
                 clamp12(osc2Ring + (alt && cv2 > 0 ? cv2 << 1 : 0));
@@ -74,10 +91,16 @@ public:
             int32_t osc2 =
                 oscCZ(phase2, freq2, pd, wave, noiseAmt);
 
-            osc2 = (osc2 * osc2Level) >> 12;
+            int32_t osc2Raw = osc2;
+            osc2 = (osc2Raw * osc2Level) >> 12;
 
-            int32_t ringSig = (osc1 * osc2) >> 11;
-            osc1 = mix(osc1, ringSig, ring);
+            int32_t ringDrive = osc2Level;
+            if (ringDrive < 2048)
+                ringDrive = 2048;
+            int32_t ringCarrier = (osc2Raw * ringDrive) >> 12;
+            int32_t ringSig = clip((osc1 * ringCarrier) >> 10);
+            int32_t ringMix = (ring * 3840) >> 12;
+            osc1 = mix(osc1, ringSig, ringMix);
 
             AudioOut1(clip(osc1));
             AudioOut2(clip(osc2));
@@ -85,9 +108,10 @@ public:
             CVOut1(turingCv);
             CVOut2(turingModCv);
             PulseOut1(turingPulse);
-            PulseOut2(turingPulse);
+            PulseOut2(turingAltPulse);
 
             updateSynthLEDs(alt, pd, wave);
+            updateSaveGesture(alt);
         }
 
         // =========================
@@ -95,6 +119,8 @@ public:
         // =========================
         else
         {
+            resetSaveGesture();
+
             turingLength = 2 + ((x * 14) >> 12);
             if (turingLength > 16) turingLength = 16;
 
@@ -117,6 +143,8 @@ public:
             if (clocked)
                 stepTuring(main);
 
+            updateTuringPulseAge();
+
             CVOut1(turingCv);
             CVOut2(turingModCv);
 
@@ -124,13 +152,34 @@ public:
             AudioOut2((turing & 2) ? 600 : -600);
 
             PulseOut1(turingPulse);
-            PulseOut2(turingPulse);
+            PulseOut2(turingAltPulse);
 
             updateTuringLEDs();
         }
     }
 
 private:
+    static constexpr int32_t TuringCvScale = 3072;
+    static constexpr int32_t TuringCvOffset = 512;
+    static constexpr uint32_t SaveMagic = 0x43315A33u; // C1Z3
+    static constexpr uint16_t SaveVersion = 1;
+    static constexpr uint32_t SaveFlashOffset =
+        (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE) &
+        ~(FLASH_SECTOR_SIZE - 1u);
+    static constexpr uint32_t SaveHoldSamples = 336000u;
+    static constexpr uint32_t SaveConfirmSamples = 48000u;
+
+    struct SavedPerformanceState
+    {
+        uint32_t magic;
+        uint16_t version;
+        uint16_t size;
+        int32_t osc2Detune;
+        int32_t osc2Level;
+        int32_t osc2Ring;
+        int32_t osc2Noise;
+        uint32_t checksum;
+    };
 
     // =========================================================
     // CZ OSCILLATOR
@@ -220,9 +269,16 @@ private:
 
     inline void applyCZNoise(uint32_t& phase, int32_t& pd, int32_t amount)
     {
+        if (++noiseHoldCounter >= 512)
+        {
+            noiseHoldCounter = 0;
+            heldPdNoise = ((int32_t)fastNoise() - 128);
+            heldPhaseNoise = ((int32_t)fastNoise() - 128);
+        }
+
         int32_t noiseCurve = responseCurve(amount);
-        int32_t pdJitter = (((int32_t)fastNoise() - 128) * noiseCurve) >> 8;
-        int32_t phaseJitter = (((int32_t)fastNoise() - 128) * noiseCurve) * 256;
+        int32_t pdJitter = (heldPdNoise * noiseCurve) >> 7;
+        int32_t phaseJitter = heldPhaseNoise * (noiseCurve >> 3);
 
         pd = clamp12(pd + pdJitter);
         phase += (uint32_t)phaseJitter;
@@ -315,10 +371,11 @@ private:
         turing = ((turing >> 1) | ((uint32_t)bit << (turingLength - 1))) & mask;
 
         turingPulse = bit;
+        turingAltPulse = (turing >> 1) & 1u;
         turingPulseAge = 0;
 
         int32_t unipolar = (int32_t)((turing * 4095u) / mask);
-        turingCv = unipolar - 2048;
+        turingCv = clip((((unipolar - 2048) * TuringCvScale) >> 12) + TuringCvOffset);
         turingModCv = smooth(turingCv);
     }
 
@@ -342,7 +399,10 @@ private:
             useTappedClock = false;
         lastClockSpeed = speed;
 
-        uint32_t period = 384000u - (((uint32_t)speed * 381000u) >> 12);
+        uint32_t inverseSpeed = 4095u - (uint32_t)clamp12(speed);
+        uint32_t period =
+            3000u +
+            (((inverseSpeed * inverseSpeed) >> 12) * 57000u >> 12);
         if (period < 3000u) period = 3000u;
 
         if (!useTappedClock)
@@ -354,10 +414,16 @@ private:
             return true;
         }
 
-        if (turingPulse && ++turingPulseAge > 1200)
-            turingPulse = false;
-
         return false;
+    }
+
+    void updateTuringPulseAge()
+    {
+        if ((turingPulse || turingAltPulse) && ++turingPulseAge > 1200)
+        {
+            turingPulse = false;
+            turingAltPulse = false;
+        }
     }
 
     void tapTuringClock()
@@ -398,6 +464,50 @@ private:
         LedBrightness(5, alt ? 4095 : 0);
     }
 
+    void updateSaveGesture(bool alt)
+    {
+        if (!alt)
+        {
+            resetSaveGesture();
+            updateSaveFeedback();
+            return;
+        }
+
+        if (saveHoldCanSave)
+        {
+            if (saveHoldSamples < SaveHoldSamples)
+                saveHoldSamples++;
+
+            if (saveHoldSamples >= SaveHoldSamples && !saveCompletedThisHold)
+            {
+                savePerformanceStateIfChanged();
+                saveCompletedThisHold = true;
+                saveConfirmSamples = SaveConfirmSamples;
+            }
+        }
+
+        updateSaveFeedback();
+    }
+
+    void updateSaveFeedback()
+    {
+        if (saveConfirmSamples == 0)
+            return;
+
+        saveConfirmSamples--;
+
+        bool on = (saveConfirmSamples & 4096u) != 0;
+        for (uint32_t i = 0; i < 6; ++i)
+            LedBrightness(i, on ? 4095 : 0);
+    }
+
+    void resetSaveGesture()
+    {
+        saveHoldSamples = 0;
+        saveCompletedThisHold = false;
+        saveHoldCanSave = false;
+    }
+
     // =========================================================
     // UTILS
     // =========================================================
@@ -423,16 +533,139 @@ private:
 
     void updateAltControls(int32_t main, int32_t x, int32_t y)
     {
-        osc2Detune = main - 2048;
-        if (osc2Detune > -32 && osc2Detune < 32)
-            osc2Detune = 0;
+        if (altMainPickedUp ||
+            pickupAltControl(main, altMainEntry, clamp12(osc2Detune + 2048), altMainPickedUp))
+        {
+            osc2Detune = main - 2048;
+            if (osc2Detune > -32 && osc2Detune < 32)
+                osc2Detune = 0;
 
-        osc2Level = osc2Detune < 0 ? -osc2Detune : osc2Detune;
-        osc2Level <<= 1;
-        if (osc2Level > 4095) osc2Level = 4095;
+            osc2Level = osc2Detune < 0 ? -osc2Detune : osc2Detune;
+            osc2Level <<= 1;
+            if (osc2Level > 4095) osc2Level = 4095;
+        }
 
-        osc2Ring = x;
-        osc2Noise = y;
+        if (altXPickedUp ||
+            pickupAltControl(x, altXEntry, osc2Ring, altXPickedUp))
+            osc2Ring = x;
+
+        if (altYPickedUp ||
+            pickupAltControl(y, altYEntry, osc2Noise, altYPickedUp))
+            osc2Noise = y;
+    }
+
+    void resetAltPickup(int32_t main, int32_t x, int32_t y)
+    {
+        altMainPickedUp = false;
+        altXPickedUp = false;
+        altYPickedUp = false;
+        altMainEntry = main;
+        altXEntry = x;
+        altYEntry = y;
+    }
+
+    bool pickupAltControl(int32_t knob, int32_t entry, int32_t target, bool& pickedUp)
+    {
+        int32_t moved = knob - entry;
+        if (moved < 0)
+            moved = -moved;
+
+        int32_t distance = knob - target;
+        if (distance < 0)
+            distance = -distance;
+
+        if (moved >= 64 && distance <= 96)
+            pickedUp = true;
+
+        return pickedUp;
+    }
+
+    SavedPerformanceState currentPerformanceState()
+    {
+        SavedPerformanceState state;
+        state.magic = SaveMagic;
+        state.version = SaveVersion;
+        state.size = sizeof(SavedPerformanceState);
+        state.osc2Detune = osc2Detune;
+        state.osc2Level = osc2Level;
+        state.osc2Ring = osc2Ring;
+        state.osc2Noise = osc2Noise;
+        state.checksum = 0;
+        state.checksum = checksumState(state);
+
+        return state;
+    }
+
+    uint32_t checksumState(const SavedPerformanceState& state)
+    {
+        const uint8_t* bytes = reinterpret_cast<const uint8_t*>(&state);
+        uint32_t checksum = 2166136261u;
+
+        for (uint32_t i = 0; i < sizeof(SavedPerformanceState) - sizeof(uint32_t); ++i)
+        {
+            checksum ^= bytes[i];
+            checksum *= 16777619u;
+        }
+
+        return checksum;
+    }
+
+    const SavedPerformanceState& flashPerformanceState()
+    {
+        return *reinterpret_cast<const SavedPerformanceState*>(
+            XIP_BASE + SaveFlashOffset);
+    }
+
+    bool isValidSavedState(const SavedPerformanceState& state)
+    {
+        return
+            state.magic == SaveMagic &&
+            state.version == SaveVersion &&
+            state.size == sizeof(SavedPerformanceState) &&
+            state.checksum == checksumState(state);
+    }
+
+    bool savedStateMatches(const SavedPerformanceState& a, const SavedPerformanceState& b)
+    {
+        return
+            a.osc2Detune == b.osc2Detune &&
+            a.osc2Level == b.osc2Level &&
+            a.osc2Ring == b.osc2Ring &&
+            a.osc2Noise == b.osc2Noise;
+    }
+
+    void loadPerformanceState()
+    {
+        const SavedPerformanceState& state = flashPerformanceState();
+        if (!isValidSavedState(state))
+            return;
+
+        osc2Detune = state.osc2Detune;
+        osc2Level = clamp12(state.osc2Level);
+        osc2Ring = clamp12(state.osc2Ring);
+        osc2Noise = clamp12(state.osc2Noise);
+    }
+
+    void savePerformanceStateIfChanged()
+    {
+        SavedPerformanceState state = currentPerformanceState();
+        const SavedPerformanceState& saved = flashPerformanceState();
+
+        if (isValidSavedState(saved) && savedStateMatches(state, saved))
+            return;
+
+        uint8_t page[FLASH_PAGE_SIZE];
+        for (uint32_t i = 0; i < FLASH_PAGE_SIZE; ++i)
+            page[i] = 0xFF;
+
+        const uint8_t* stateBytes = reinterpret_cast<const uint8_t*>(&state);
+        for (uint32_t i = 0; i < sizeof(SavedPerformanceState); ++i)
+            page[i] = stateBytes[i];
+
+        uint32_t interrupts = save_and_disable_interrupts();
+        flash_range_erase(SaveFlashOffset, FLASH_SECTOR_SIZE);
+        flash_range_program(SaveFlashOffset, page, FLASH_PAGE_SIZE);
+        restore_interrupts(interrupts);
     }
 
     int32_t applyDetune(int32_t freq, int32_t detune)
@@ -531,16 +764,32 @@ private:
     uint32_t turingLength = 16;
     uint32_t externalClockAge = 96000u;
     bool turingPulse = false;
+    bool turingAltPulse = false;
     bool useTappedClock = false;
 
     uint32_t noise = 1;
+    uint32_t noiseHoldCounter = 0;
+    int32_t heldPdNoise = 0;
+    int32_t heldPhaseNoise = 0;
 
     int32_t pitchControl = 2048;
+    int32_t pdControl = 0;
+    int32_t waveControl = 0;
     int32_t smoothedFreq = 0;
     int32_t osc2Detune = 0;
     int32_t osc2Level = 0;
     int32_t osc2Ring = 0;
     int32_t osc2Noise = 0;
+    int32_t altMainEntry = 2048;
+    int32_t altXEntry = 0;
+    int32_t altYEntry = 0;
+    bool altMainPickedUp = false;
+    bool altXPickedUp = false;
+    bool altYPickedUp = false;
+    uint32_t saveHoldSamples = 0;
+    uint32_t saveConfirmSamples = 0;
+    bool saveHoldCanSave = false;
+    bool saveCompletedThisHold = false;
     Switch lastMode = Switch::Middle;
 };
 

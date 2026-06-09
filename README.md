@@ -42,7 +42,7 @@ Pulse out 1 and pulse out 2 carry the Turing pulse.
 
 ### Hold Switch Down: Performance Edit
 
-Holding the switch down edits the latched second oscillator and modulation amounts:
+Holding the switch down edits the latched second oscillator and modulation amounts. The normal Main, X, and Y synth controls are held at their last middle-position values while editing, and the held controls must move after the switch is pressed before soft pickup can edit a latched value.
 
 Main controls oscillator 2 detune and level from the centre point. Around 12 o'clock, oscillator 2 is off. Turning left detunes down; turning right detunes up. The further from centre, the louder oscillator 2 becomes.
 
@@ -51,6 +51,8 @@ X controls ring modulation amount. The setting remains active after the switch i
 Y controls noise modulation amount. The setting remains active after the switch is released.
 
 Oscillator 2 mirrors oscillator 1's phase-distortion shape and selected waveform family.
+
+Holding the switch down from middle synth mode for 7 seconds saves the current latched detune, ring, and noise settings to flash. Saved settings load automatically on startup. There is no autosave.
 
 ### Switch Up: Turing Machine
 
@@ -64,11 +66,11 @@ Pulse in 1 acts as an external clock. When an external clock is present, it take
 
 Flicking the switch down from Turing mode taps the internal clock tempo.
 
-CV out 1 carries the stepped Turing CV.
+CV out 1 carries the scaled stepped Turing CV.
 
-CV out 2 carries a smoothed version of the Turing CV.
+CV out 2 carries a smoothed version of the scaled Turing CV.
 
-Pulse out 1 and pulse out 2 output the Turing pulse.
+Pulse out 1 outputs the main Turing pulse. Pulse out 2 outputs an alternate Turing bit pulse.
 
 Audio out 1 and audio out 2 provide simple audio-rate monitor signals from the Turing state in this mode.
 
@@ -94,13 +96,13 @@ Audio out 1: oscillator 1 in PD synth mode; Turing monitor signal in Turing mode
 
 Audio out 2: oscillator 2 in PD synth mode; Turing monitor signal in Turing mode.
 
-CV out 1: stepped Turing CV.
+CV out 1: scaled stepped Turing CV.
 
-CV out 2: smoothed Turing CV.
+CV out 2: smoothed scaled Turing CV.
 
 Pulse out 1: Turing pulse.
 
-Pulse out 2: duplicate Turing pulse.
+Pulse out 2: alternate Turing bit pulse.
 
 ## LED Feedback
 
@@ -155,8 +157,12 @@ Recently tuned:
 - Main pitch smoothing has been increased slightly to reduce remaining knob stepping.
 - X has a gentler response curve for more usable low-to-mid settings.
 - Y waveform morphing now uses a direct waveform target, with a needle-pulse third position and a plucked sixth position for clearer contrast from the saw.
-- Held-switch Y now adds CZ-style digital grit by jittering phase distortion and oscillator phase instead of crossfading in plain audio noise.
-- Turing internal clock range has been slowed down for a more usable musical sweep.
+- Held-switch Y now adds sample-held CZ-style grit by jittering phase distortion and oscillator phase instead of crossfading in plain audio noise.
+- Turing internal clock range uses a faster curved response for a more useful minimum and middle setting.
+- Turing CV outputs are scaled to three-quarter range with a slight upward bias for pitch-friendly modulation depth.
+- Ring modulation now uses a stronger internal carrier while keeping some dry signal at the maximum setting to avoid full signal loss.
+- Held-switch performance controls now require movement before soft pickup, and Main/X/Y no longer change pitch, PD amount, or waveform while editing detune/ring/noise.
+- Manual flash persistence saves latched performance settings after a 7-second held-switch gesture; autosave is intentionally avoided.
 
 ## WIP / Not Yet Implemented
 
