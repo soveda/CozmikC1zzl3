@@ -29,10 +29,10 @@ Y morphs across eight CZ-inspired waveform families:
 2. Square
 3. Needle pulse
 4. Double sine
-5. Saw/pulse blend
-6. Plucked resonant harmonic 5
-7. Decaying resonant harmonic 4
-8. Decaying resonant harmonic 7
+5. Saw-pulse curve
+6. Resonance I, saw window
+7. Resonance II, triangle window
+8. Resonance III, trapezoid window
 
 Audio out 1 carries oscillator 1.
 
@@ -136,12 +136,12 @@ Preset numbers:
 
 0. Off
 1. Pluck
-2. Bell
-3. Brass
-4. Strings
-5. Bounce
-6. Reverse swell
-7. Double pluck
+2. Double pluck
+3. Bounce
+4. Bell
+5. Brass
+6. Strings
+7. Reverse swell
 8. Evolving digital
 
 ## Build
@@ -173,6 +173,7 @@ Confirmed on hardware:
 - Main pitch control uses an octave-based range.
 - Audio/CV in 1 tracks at 1V/oct using the Workshop Computer 12V-over-4096-count input convention used by Chord Blimey.
 - X phase-distortion control and Y waveform morphing are responsive across the usable range.
+- All eight waveform positions have distinct character, including the CZ-style resonance-window shapes at positions 6-8.
 - Held-switch soft pickup, latched detune/ring/noise controls, and 8-second manual save work as intended.
 - Envelope preset select, binary LED display, triggering, and persistence work as intended.
 - Turing mode clocks correctly from internal clock, tap tempo, and Pulse in 1.
@@ -182,7 +183,7 @@ Recently tuned:
 
 - Pitch now uses an octave-based frequency map, with Audio/CV in 1 scaled from the Workshop Computer 12V-over-4096-count input convention used by Chord Blimey.
 - X has a gentler response curve for more usable low-to-mid settings.
-- Y waveform morphing now uses a direct waveform target, with a needle-pulse third position and a plucked sixth position for clearer contrast from the saw.
+- Y waveform morphing now uses a direct waveform target, with CZ-style saw, square, pulse, double sine, saw-pulse curve, and three distinct resonance-window positions.
 - Held-switch Y now adds restrained sample-held CZ-style grit by gently jittering phase distortion and oscillator phase instead of crossfading in plain audio noise.
 - Turing internal clock range uses a faster curved response for a more useful minimum and middle setting.
 - Turing CV outputs are scaled to three-quarter range with a slight upward bias for pitch-friendly modulation depth.
@@ -192,11 +193,12 @@ Recently tuned:
 - Held-switch performance controls now require movement before soft pickup, and Main/X/Y no longer change pitch, PD amount, or waveform while editing detune/ring/noise.
 - Manual flash persistence saves latched performance settings after an 8-second held-switch gesture; autosave is intentionally avoided.
 - Brass envelope decay has been lengthened, oscillator sync now uses a very short fade, and preset 0 ignores Pulse in 2 for clean free-running oscillator use.
-- Strings, Bounce, Reverse Swell, Double Pluck, and Evolving Digital use 8-stage amp and PD envelope shapes for multi-step rise/drop movement.
+- Envelope presets are ordered by musical family: short percussive shapes, tonal/instrument-like shapes, then unusual/special shapes.
+- Reordering envelope presets changes the meaning of saved preset numbers; re-save the preferred preset after flashing this build.
 
 ## Future Work
 
-- Final CZ-accurate waveform set.
+- Further waveform tuning if hardware feedback suggests it.
 - Further envelope preset tuning and possible envelope editing mode.
 - Optional flash persistence expansion for future complex envelope data.
 - Release packaging with `info.yaml`, `.uf2`, and final docs.

@@ -82,7 +82,7 @@ controls:
         description: Phase-distortion amount
       y:
         name: Y
-        description: Waveform morph across 8 CZ-inspired waveforms
+        description: Waveform morph across saw, square, pulse, double sine, saw-pulse curve, and three CZ-style resonance-window waveforms
 
     - when: { z: down, gesture: hold }
       main:
@@ -187,6 +187,32 @@ controls:
           description: Envelope preset binary bit 5
 
 presets:
+  waveforms:
+    - id: 1
+      name: Saw
+      description: Saw-tooth phase-distortion target
+    - id: 2
+      name: Square
+      description: Square phase-distortion target
+    - id: 3
+      name: Needle pulse
+      description: Narrow pulse phase-distortion target
+    - id: 4
+      name: Double sine
+      description: Double-sine phase-distortion target
+    - id: 5
+      name: Saw-pulse curve
+      description: Curved saw-pulse phase-distortion target
+    - id: 6
+      name: Resonance I, saw window
+      description: Saw-windowed resonant waveform
+    - id: 7
+      name: Resonance II, triangle window
+      description: Triangle-windowed resonant waveform
+    - id: 8
+      name: Resonance III, trapezoid window
+      description: Trapezoid-windowed resonant waveform
+
   envelopes:
     - id: 0
       name: Off
@@ -195,23 +221,23 @@ presets:
       name: Pluck
       description: Fast plucked envelope
     - id: 2
-      name: Bell
-      description: Bright bell-like envelope
-    - id: 3
-      name: Brass
-      description: Slower brass-style envelope
-    - id: 4
-      name: Strings
-      description: Multi-stage strings-style envelope
-    - id: 5
-      name: Bounce
-      description: Multi-stage bouncing drop-and-rise envelope
-    - id: 6
-      name: Reverse swell
-      description: Reverse swell with late peak
-    - id: 7
       name: Double pluck
       description: Two plucked attacks in one envelope
+    - id: 3
+      name: Bounce
+      description: Multi-stage bouncing drop-and-rise envelope
+    - id: 4
+      name: Bell
+      description: Bright bell-like envelope
+    - id: 5
+      name: Brass
+      description: Slower brass-style envelope
+    - id: 6
+      name: Strings
+      description: Multi-stage strings-style envelope
+    - id: 7
+      name: Reverse swell
+      description: Reverse swell with late peak
     - id: 8
       name: Evolving digital
       description: Multi-stage amp and phase-distortion movement

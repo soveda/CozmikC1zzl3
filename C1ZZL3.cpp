@@ -157,12 +157,12 @@ private:
     {
         Off,
         Pluck,
+        DoublePluck,
+        Bounce,
         Bell,
         Brass,
         Strings,
-        Bounce,
         ReverseSwell,
-        DoublePluck,
         EvolvingDigital
     };
 
@@ -451,6 +451,22 @@ private:
                     {1024, 480}, {0, 12000}, {0, 1}, {0, 1},
                     {0, 1}, {0, 1}, {0, 1}, {0, 1}
                 }};
+            case EnvelopePreset::DoublePluck:
+                return {{
+                    {4095, 180}, {700, 4800}, {0, 2400}, {3600, 180},
+                    {900, 6000}, {350, 6000}, {120, 6000}, {0, 12000}
+                }, {
+                    {1600, 180}, {500, 4800}, {0, 2400}, {2200, 180},
+                    {700, 6000}, {300, 6000}, {120, 6000}, {0, 12000}
+                }};
+            case EnvelopePreset::Bounce:
+                return {{
+                    {4095, 120}, {1200, 3600}, {3300, 3600}, {1700, 4800},
+                    {2600, 4800}, {900, 7200}, {1600, 7200}, {0, 12000}
+                }, {
+                    {2500, 120}, {800, 3600}, {2200, 3600}, {700, 4800},
+                    {1600, 4800}, {500, 7200}, {1200, 7200}, {0, 12000}
+                }};
             case EnvelopePreset::Bell:
                 return {{
                     {4095, 240}, {2600, 12000}, {1200, 24000}, {0, 36000},
@@ -475,14 +491,6 @@ private:
                     {400, 12000}, {900, 36000}, {1200, 36000}, {900, 48000},
                     {700, 48000}, {500, 48000}, {400, 48000}, {300, 96000}
                 }};
-            case EnvelopePreset::Bounce:
-                return {{
-                    {4095, 120}, {1200, 3600}, {3300, 3600}, {1700, 4800},
-                    {2600, 4800}, {900, 7200}, {1600, 7200}, {0, 12000}
-                }, {
-                    {2500, 120}, {800, 3600}, {2200, 3600}, {700, 4800},
-                    {1600, 4800}, {500, 7200}, {1200, 7200}, {0, 12000}
-                }};
             case EnvelopePreset::ReverseSwell:
                 return {{
                     {200, 12000}, {900, 18000}, {1800, 18000}, {3000, 18000},
@@ -490,14 +498,6 @@ private:
                 }, {
                     {200, 12000}, {500, 18000}, {1000, 18000}, {1800, 18000},
                     {2600, 12000}, {1300, 2400}, {500, 2400}, {0, 4800}
-                }};
-            case EnvelopePreset::DoublePluck:
-                return {{
-                    {4095, 180}, {700, 4800}, {0, 2400}, {3600, 180},
-                    {900, 6000}, {350, 6000}, {120, 6000}, {0, 12000}
-                }, {
-                    {1600, 180}, {500, 4800}, {0, 2400}, {2200, 180},
-                    {700, 6000}, {300, 6000}, {120, 6000}, {0, 12000}
                 }};
             case EnvelopePreset::EvolvingDigital:
                 return {{
@@ -573,10 +573,10 @@ private:
             case 1: return square;
             case 2: return pulse;
             case 3: return doubleSine;
-            case 4: return mix(saw, pulse, 3072);
-            case 5: return pluckedResonantWave(phase, 5);
-            case 6: return resonantWave(phase, 4, 2);
-            default: return resonantWave(phase, 7, 3);
+            case 4: return sawPulseWave(phase);
+            case 5: return resonantSawWindowWave(phase);
+            case 6: return resonantTriangleWindowWave(phase);
+            default: return resonantTrapezoidWindowWave(phase);
         }
     }
 
@@ -593,30 +593,59 @@ private:
         return getSine(phase) >> 3;
     }
 
-    inline int32_t pluckedResonantWave(uint32_t phase, uint32_t harmonic)
+    inline int32_t sawPulseWave(uint32_t phase)
     {
         uint32_t p = (phase >> 20) & 4095;
-        int32_t envelope = (int32_t)(4095 - p);
 
-        envelope = (envelope * envelope) >> 12;
-        envelope = (envelope * envelope) >> 12;
+        if (p < 2304)
+        {
+            int32_t rise = ((int32_t)p * 4095) / 2304;
+            int32_t curve = 4095 - (((4095 - rise) * (4095 - rise)) >> 12);
+            return curve - 2048;
+        }
 
-        int32_t overtone = getSine(phase * harmonic);
-        int32_t click = p < 96 ? 2047 : 0;
-
-        return clip(((overtone * envelope) >> 12) + click - 256);
+        return -2048;
     }
 
-    inline int32_t resonantWave(uint32_t phase, uint32_t harmonic, uint32_t decay)
+    inline int32_t resonantSawWindowWave(uint32_t phase)
     {
         uint32_t p = (phase >> 20) & 4095;
         int32_t envelope = (int32_t)(4095 - p);
+        int32_t overtone = getSine(phase * 6);
+        int32_t body = (((int32_t)p - 2048) * envelope) >> 13;
 
-        for (uint32_t i = 0; i < decay; ++i)
-            envelope = (envelope * envelope) >> 12;
+        return clip(body + ((overtone * envelope) >> 12));
+    }
 
-        int32_t overtone = getSine(phase * harmonic);
-        int32_t body = getSine(phase) >> (decay + 1);
+    inline int32_t resonantTriangleWindowWave(uint32_t phase)
+    {
+        uint32_t p = (phase >> 20) & 4095;
+        int32_t envelope =
+            p < 2048 ? (int32_t)p << 1 : (int32_t)(4095 - p) << 1;
+        int32_t triangle = p < 2048 ?
+            ((int32_t)p << 1) - 2048 :
+            6143 - ((int32_t)p << 1);
+        int32_t overtone = getSine(phase * 5);
+        int32_t body = (triangle * envelope) >> 14;
+
+        return clip(body + ((overtone * envelope) >> 12));
+    }
+
+    inline int32_t resonantTrapezoidWindowWave(uint32_t phase)
+    {
+        uint32_t p = (phase >> 20) & 4095;
+        int32_t envelope;
+
+        if (p < 768)
+            envelope = ((int32_t)p * 4095) / 768;
+        else if (p < 3072)
+            envelope = 4095;
+        else
+            envelope = ((int32_t)(4095 - p) * 4095) / 1023;
+
+        int32_t overtone =
+            (getSine(phase * 7) + (getSine(phase * 8) >> 1)) >> 1;
+        int32_t body = envelope >> 4;
 
         return clip(body + ((overtone * envelope) >> 12));
     }

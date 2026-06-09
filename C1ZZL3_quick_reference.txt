@@ -15,12 +15,12 @@ Long down hold: save selected preset to flash
 Presets:
 0: Off
 1: Pluck
-2: Bell
-3: Brass
-4: Strings
-5: Bounce
-6: Reverse swell
-7: Double pluck
+2: Double pluck
+3: Bounce
+4: Bell
+5: Brass
+6: Strings
+7: Reverse swell
 8: Evolving digital
 
 Switch Middle: PD Synth
@@ -29,6 +29,16 @@ Controls:
 Main: oscillator pitch, octave-based range
 X: phase-distortion amount
 Y: waveform morph across 8 CZ-inspired waveforms
+
+Waveforms:
+1: Saw
+2: Square
+3: Needle pulse
+4: Double sine
+5: Saw-pulse curve
+6: Resonance I, saw window
+7: Resonance II, triangle window
+8: Resonance III, trapezoid window
 
 Inputs:
 Audio/CV in 1: pitch modulation, hardware-tested 1V/oct scale
