@@ -1,6 +1,6 @@
-Description: "Dual phase-distortion synthesiser with CZ-style oscillator engine and probabilistic Turing machine sequencer. Oscillator 2 is fully independent for cross-modulation and chaotic interaction."
-Name: CIZZLE
+Description: "Dual phase-distortion synthesiser with CZ-style oscillator engine, latched performance controls, manual flash persistence, and probabilistic Turing machine sequencer."
+Name: C1ZZL3
 Language: C++ (Pico SDK)
 Creator: Adrian Vos
-Version: 0.1
-Status: WIP
+Version: 0.2
+Status: Hardware-tested v1

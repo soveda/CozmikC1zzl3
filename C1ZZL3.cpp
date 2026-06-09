@@ -76,8 +76,15 @@ public:
             int32_t noiseAmt =
                 clamp12(osc2Noise + (alt && cv2 < 0 ? (-cv2) << 1 : 0));
 
-            if (PulseIn2RisingEdge())
+            bool pulse2Trigger = PulseIn2RisingEdge();
+            if (pulse2Trigger)
+            {
                 syncOscillators();
+                triggerEnvelope();
+            }
+
+            int32_t envelopeLevel = updateEnvelope();
+            pd = applyEnvelopeToPd(pd, envelopeLevel);
 
             // -------------------------
             // OSCILLATORS
@@ -101,6 +108,10 @@ public:
             int32_t ringSig = clip((osc1 * ringCarrier) >> 10);
             int32_t ringMix = (ring * 3840) >> 12;
             osc1 = mix(osc1, ringSig, ringMix);
+
+            int32_t ampScale = envelopeAmpScale(envelopeLevel);
+            osc1 = (osc1 * ampScale) >> 12;
+            osc2 = (osc2 * ampScale) >> 12;
 
             AudioOut1(clip(osc1));
             AudioOut2(clip(osc2));
@@ -159,8 +170,25 @@ public:
     }
 
 private:
+    enum class EnvelopePreset : uint8_t
+    {
+        Off,
+        Pluck,
+        Swell,
+        Bell
+    };
+
+    struct EnvelopeShape
+    {
+        uint32_t attackSamples;
+        uint32_t decaySamples;
+        int32_t ampDepth;
+        int32_t pdDepth;
+    };
+
     static constexpr int32_t TuringCvScale = 3072;
     static constexpr int32_t TuringCvOffset = 512;
+    static constexpr EnvelopePreset ActiveEnvelopePreset = EnvelopePreset::Off;
     static constexpr uint32_t SaveMagic = 0x43315A33u; // C1Z3
     static constexpr uint16_t SaveVersion = 1;
     static constexpr uint32_t SaveFlashOffset =
@@ -276,12 +304,90 @@ private:
             heldPhaseNoise = ((int32_t)fastNoise() - 128);
         }
 
-        int32_t noiseCurve = responseCurve(amount);
-        int32_t pdJitter = (heldPdNoise * noiseCurve) >> 7;
-        int32_t phaseJitter = heldPhaseNoise * (noiseCurve >> 3);
+        int32_t noiseCurve = responseCurve(amount) >> 1;
+        int32_t pdJitter = (heldPdNoise * noiseCurve) >> 10;
+        int32_t phaseJitter = heldPhaseNoise * (noiseCurve >> 6);
 
         pd = clamp12(pd + pdJitter);
         phase += (uint32_t)phaseJitter;
+    }
+
+    EnvelopeShape envelopeShape()
+    {
+        switch (ActiveEnvelopePreset)
+        {
+            case EnvelopePreset::Pluck:
+                return {480u, 12000u, 3072, 1024};
+            case EnvelopePreset::Swell:
+                return {24000u, 48000u, 2048, 1536};
+            case EnvelopePreset::Bell:
+                return {240u, 36000u, 3072, 2048};
+            case EnvelopePreset::Off:
+            default:
+                return {1u, 1u, 0, 0};
+        }
+    }
+
+    void triggerEnvelope()
+    {
+        if (ActiveEnvelopePreset == EnvelopePreset::Off)
+            return;
+
+        envelopeStage = 1;
+        envelopeSample = 0;
+        envelopeLevel = 0;
+    }
+
+    int32_t updateEnvelope()
+    {
+        if (ActiveEnvelopePreset == EnvelopePreset::Off || envelopeStage == 0)
+            return 0;
+
+        EnvelopeShape shape = envelopeShape();
+
+        if (envelopeStage == 1)
+        {
+            envelopeSample++;
+            envelopeLevel = (int32_t)((envelopeSample * 4095u) / shape.attackSamples);
+
+            if (envelopeSample >= shape.attackSamples)
+            {
+                envelopeStage = 2;
+                envelopeSample = 0;
+                envelopeLevel = 4095;
+            }
+        }
+        else
+        {
+            envelopeSample++;
+
+            if (envelopeSample >= shape.decaySamples)
+            {
+                envelopeStage = 0;
+                envelopeSample = 0;
+                envelopeLevel = 0;
+            }
+            else
+            {
+                envelopeLevel = 4095 -
+                    (int32_t)((envelopeSample * 4095u) / shape.decaySamples);
+            }
+        }
+
+        return clamp12(envelopeLevel);
+    }
+
+    int32_t applyEnvelopeToPd(int32_t pd, int32_t level)
+    {
+        EnvelopeShape shape = envelopeShape();
+        return clamp12(pd + ((level * shape.pdDepth) >> 12));
+    }
+
+    int32_t envelopeAmpScale(int32_t level)
+    {
+        EnvelopeShape shape = envelopeShape();
+        int32_t reduction = ((4095 - level) * shape.ampDepth) >> 12;
+        return clamp12(4095 - reduction);
     }
 
     inline int32_t morphWave(uint32_t phase, int32_t wave)
@@ -771,6 +877,9 @@ private:
     uint32_t noiseHoldCounter = 0;
     int32_t heldPdNoise = 0;
     int32_t heldPhaseNoise = 0;
+    uint32_t envelopeSample = 0;
+    int32_t envelopeLevel = 0;
+    uint8_t envelopeStage = 0;
 
     int32_t pitchControl = 2048;
     int32_t pdControl = 0;

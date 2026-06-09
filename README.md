@@ -2,7 +2,7 @@
 
 Dual phase-distortion synthesiser and probabilistic Turing machine program card for the Music Thing Modular Workshop Computer.
 
-Status: WIP  
+Status: Hardware-tested v1  
 Language: C++ / Pico SDK  
 Framework: ComputerCard  
 Creator: Adrian Vos
@@ -11,7 +11,7 @@ Creator: Adrian Vos
 
 C1ZZL3 is a CZ-inspired phase-distortion oscillator card with a second mirrored oscillator for detune, ring modulation, and noise modulation. The switch also opens a Turing machine mode, turning the card into a clocked CV and pulse source.
 
-This is still a hardware-tuning build. The oscillator now produces a clean audible tone, Main and X have been tuned on hardware, and Y waveform morphing is now audible but still being refined for clearer contrast between every position.
+The current v1 build has passed hardware tests for the core oscillator, held-switch performance controls, Turing machine outputs, oscillator sync, restrained CZ-style grit, and manual flash persistence.
 
 ## Current Modes
 
@@ -36,9 +36,9 @@ Audio out 1 carries oscillator 1.
 
 Audio out 2 carries oscillator 2. In normal middle position, oscillator 2 is silent until it has been introduced with the held-switch controls.
 
-CV out 1 and CV out 2 continue to carry the Turing machine CV signals, so the sequencer can modulate other modules while the synth voice is playing.
+CV out 1 and CV out 2 continue to carry the scaled Turing machine CV signals, so the sequencer can modulate other modules while the synth voice is playing.
 
-Pulse out 1 and pulse out 2 carry the Turing pulse.
+Pulse out 1 carries the main Turing pulse. Pulse out 2 carries an alternate Turing bit pulse.
 
 ### Hold Switch Down: Performance Edit
 
@@ -157,25 +157,23 @@ Recently tuned:
 - Main pitch smoothing has been increased slightly to reduce remaining knob stepping.
 - X has a gentler response curve for more usable low-to-mid settings.
 - Y waveform morphing now uses a direct waveform target, with a needle-pulse third position and a plucked sixth position for clearer contrast from the saw.
-- Held-switch Y now adds sample-held CZ-style grit by jittering phase distortion and oscillator phase instead of crossfading in plain audio noise.
+- Held-switch Y now adds restrained sample-held CZ-style grit by gently jittering phase distortion and oscillator phase instead of crossfading in plain audio noise.
 - Turing internal clock range uses a faster curved response for a more useful minimum and middle setting.
 - Turing CV outputs are scaled to three-quarter range with a slight upward bias for pitch-friendly modulation depth.
 - Ring modulation now uses a stronger internal carrier while keeping some dry signal at the maximum setting to avoid full signal loss.
 - Held-switch performance controls now require movement before soft pickup, and Main/X/Y no longer change pitch, PD amount, or waveform while editing detune/ring/noise.
 - Manual flash persistence saves latched performance settings after an 8-second held-switch gesture; autosave is intentionally avoided.
 
-## WIP / Not Yet Implemented
+## Future Work
 
 - 1V/oct-calibrated pitch response.
 - Final CZ-accurate waveform set.
-- Final Y waveform spacing and contrast.
-- Final musical tuning of oscillator 2 detune range.
-- Alternate 16-page envelope editing mode from the original concept.
-- Flash persistence for complex envelope or preset data.
+- Envelope preset selection UI. A small triggerable envelope engine is scaffolded in code, but the active preset is currently Off so the hardware-tested v1 behavior is unchanged.
+- Flash persistence for envelope preset selection or complex envelope data.
 - Release packaging with `info.yaml`, `.uf2`, and final docs.
 
 ## Design Notes
 
 C1ZZL3 is intended as a playable, characterful program card rather than an exact Casio CZ clone. The code uses fixed-point integer arithmetic and lookup tables to stay inside the Workshop Computer's 48 kHz audio interrupt budget.
 
-The current implementation favours hardware-testable musical behaviour over completeness. Each major behaviour should be tested on the physical card before more complex UI layers, such as the envelope editor, are added.
+The current implementation favours hardware-tested musical behaviour over completeness. More complex UI layers, such as envelope presets or editing, should be added in small testable steps so the validated v1 performance controls remain dependable.
