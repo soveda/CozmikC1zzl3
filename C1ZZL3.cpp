@@ -73,9 +73,9 @@ public:
             }
 
             // -------------------------
-            // PITCH (stable scaling)
+            // PITCH (octave map with hardware-tested 1V/oct input scale)
             // -------------------------
-            int32_t freq = smoothPitch(baseFreq(pitchControl + (in1 << 1)));
+            int32_t freq = smoothPitch(pitchFrequency(pitchUnits(pitchControl, in1)));
 
             int32_t pd = clamp12(pdControl + (in2 << 1));
             int32_t wave = clamp12(waveControl + (cv1 << 1));
@@ -181,6 +181,13 @@ private:
     static constexpr int32_t TuringCvScale = 3072;
     static constexpr int32_t TuringCvOffset = 512;
     static constexpr int32_t TuringAudioPitchDepth = 2048;
+    static constexpr uint32_t TuringClockLedSamples = 1200u;
+    static constexpr int32_t PitchUnitsPerOctave = 4096;
+    static constexpr int32_t MainPitchOctaves = 5;
+    static constexpr int32_t PitchInputCountsPerVolt = 341;
+    static constexpr int32_t MinPitchUnits = -2 * PitchUnitsPerOctave;
+    static constexpr int32_t MaxPitchUnits = 7 * PitchUnitsPerOctave;
+    static constexpr uint32_t C2PhaseIncrement = 5852465u;
     static constexpr uint8_t EnvelopePresetCount = 9;
     static constexpr uint32_t StartupSelectDelaySamples = 12000u;
     static constexpr uint32_t StartupSelectWindowSamples = 24000u;
@@ -271,7 +278,7 @@ private:
     // ---------------------------------------------------------
     void outputSynthVoice()
     {
-        int32_t freq = smoothPitch(baseFreq(pitchControl));
+        int32_t freq = smoothPitch(pitchFrequency(pitchUnits(pitchControl, 0)));
         int32_t pd = clamp12(pdControl);
         int32_t wave = clamp12(waveControl);
 
@@ -280,8 +287,10 @@ private:
 
     void outputTuringSynthVoice()
     {
-        int32_t pitchOffset = (turingCv * TuringAudioPitchDepth) >> 12;
-        int32_t freq = smoothPitch(baseFreq(pitchControl + pitchOffset));
+        int32_t pitchOffset =
+            (turingCv * TuringAudioPitchDepth * MainPitchOctaves) >> 12;
+        int32_t freq = smoothPitch(
+            pitchFrequency(pitchUnits(pitchControl, 0) + pitchOffset));
         int32_t pd = clamp12(pdControl);
         int32_t wave = clamp12(waveControl);
 
@@ -359,7 +368,7 @@ private:
             heldPhaseNoise = ((int32_t)fastNoise() - 128);
         }
 
-        int32_t noiseCurve = responseCurve(amount) >> 1;
+        int32_t noiseCurve = (responseCurve(amount) * 11) / 20;
         int32_t pdJitter = (heldPdNoise * noiseCurve) >> 10;
         int32_t phaseJitter = heldPhaseNoise * (noiseCurve >> 6);
 
@@ -628,6 +637,7 @@ private:
         turingPulse = bit;
         turingAltPulse = (turing >> 1) & 1u;
         turingPulseAge = 0;
+        turingClockLedAge = 0;
 
         int32_t unipolar = (int32_t)((turing * 4095u) / mask);
         turingCv = clip((((unipolar - 2048) * TuringCvScale) >> 12) + TuringCvOffset);
@@ -674,6 +684,9 @@ private:
 
     void updateTuringPulseAge()
     {
+        if (turingClockLedAge < TuringClockLedSamples)
+            turingClockLedAge++;
+
         if ((turingPulse || turingAltPulse) && ++turingPulseAge > 1200)
         {
             turingPulse = false;
@@ -706,7 +719,7 @@ private:
         LedBrightness(2, turing & 4 ? 4095 : 0);
         LedBrightness(3, PulseIn1());
         LedBrightness(4, (turingLength * 4095) >> 4);
-        LedBrightness(5, turingPulse ? 4095 : 0);
+        LedBrightness(5, turingClockLedAge < TuringClockLedSamples ? 4095 : 0);
     }
 
     void updateSynthLEDs(bool alt, int32_t pd, int32_t wave)
@@ -1066,20 +1079,54 @@ private:
         return noise >> 24;
     }
 
-    // Simple audible pitch mapping.
-    //
-    // This deliberately uses a smooth test range rather than octave
-    // zones. It is not calibrated 1V/oct yet, but it feels continuous
-    // on the hardware.
-    int32_t baseFreq(int32_t x)
+    int32_t pitchUnits(int32_t knob, int32_t pitchInput)
     {
-        if (x < 0) x = 0;
-        if (x > 4095) x = 4095;
+        int32_t mainUnits =
+            (clamp12(knob) * MainPitchOctaves * PitchUnitsPerOctave) / 4095;
+        int32_t inputUnits =
+            (pitchInput * PitchUnitsPerOctave) / PitchInputCountsPerVolt;
 
-        int32_t coarse = (x * 70000000) >> 12;
-        int32_t fine = ((x * x) >> 12) * 30000;
+        return mainUnits + inputUnits;
+    }
 
-        return 6000000 + coarse + fine;
+    int32_t pitchFrequency(int32_t units)
+    {
+        static constexpr uint32_t SemitoneRatioQ15[13] = {
+            32768, 34716, 36781, 38968, 41285, 43740, 46341,
+            49097, 52016, 55109, 58386, 61858, 65536
+        };
+
+        if (units < MinPitchUnits) units = MinPitchUnits;
+        if (units > MaxPitchUnits) units = MaxPitchUnits;
+
+        int32_t octaves = units / PitchUnitsPerOctave;
+        int32_t octaveRemainder = units % PitchUnitsPerOctave;
+        if (octaveRemainder < 0)
+        {
+            octaveRemainder += PitchUnitsPerOctave;
+            octaves--;
+        }
+
+        int32_t semitone = (octaveRemainder * 12) / PitchUnitsPerOctave;
+        int32_t semitoneStart = (semitone * PitchUnitsPerOctave) / 12;
+        int32_t semitoneEnd = ((semitone + 1) * PitchUnitsPerOctave) / 12;
+        int32_t frac =
+            ((octaveRemainder - semitoneStart) << 15) /
+            (semitoneEnd - semitoneStart);
+
+        uint32_t ratio =
+            SemitoneRatioQ15[semitone] +
+            (((int32_t)SemitoneRatioQ15[semitone + 1] -
+              (int32_t)SemitoneRatioQ15[semitone]) * frac >> 15);
+
+        uint32_t freq = (uint32_t)(((uint64_t)C2PhaseIncrement * ratio) >> 15);
+
+        if (octaves >= 0)
+            freq <<= octaves;
+        else
+            freq >>= -octaves;
+
+        return (int32_t)freq;
     }
 
     int32_t smoothPitch(int32_t target)
@@ -1127,6 +1174,7 @@ private:
     uint32_t tappedClockPeriod = 12000;
     int32_t lastClockSpeed = 2048;
     uint32_t turingPulseAge = 0;
+    uint32_t turingClockLedAge = TuringClockLedSamples;
     uint32_t turingLength = 16;
     uint32_t externalClockAge = 96000u;
     bool turingPulse = false;

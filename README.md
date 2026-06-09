@@ -9,9 +9,9 @@ Creator: Adrian Vos
 
 ## Overview
 
-C1ZZL3 is a CZ-inspired phase-distortion oscillator card with a second mirrored oscillator for detune, ring modulation, and noise modulation. The switch also opens a Turing machine mode, turning the card into a clocked CV and pulse source.
+C1ZZL3 is a CZ-inspired phase-distortion oscillator card with a second mirrored oscillator for detune, ring modulation, and noise modulation. The switch also opens a Turing machine mode, turning the card into a clocked CV and pulse source with a self-playing stepped oscillator voice.
 
-The current v1 build has passed hardware tests for the core oscillator, held-switch performance controls, Turing machine outputs, oscillator sync, restrained CZ-style grit, and manual flash persistence.
+The current v1 build has passed hardware tests for the core oscillator, held-switch performance controls, Turing machine outputs, self-playing stepped Turing voice, oscillator sync, restrained CZ-style grit, envelope presets, manual flash persistence, and 1V/oct pitch input scaling.
 
 Holding the switch down during startup enters envelope preset select. Release the startup hold, then Main chooses one of nine presets, LEDs show the preset number in binary, a short down press exits for the current session, and a long down hold saves the selected preset to flash.
 
@@ -19,7 +19,7 @@ Holding the switch down during startup enters envelope preset select. Release th
 
 ### Switch Middle: PD Synth
 
-Main controls oscillator pitch using the current smooth hardware-test range. This is intentionally playable and continuous, but it is not calibrated 1V/oct yet.
+Main controls oscillator pitch over an octave-based range. Audio/CV in 1 adds pitch at a hardware-tested 1V/oct scale.
 
 X controls phase-distortion amount. Fully counter-clockwise is closest to a clean sine. Turning X up introduces the selected CZ-style target waveform.
 
@@ -84,7 +84,7 @@ When an envelope preset is active, the main Turing pulse self-triggers the envel
 
 ### Inputs
 
-Audio/CV in 1: pitch modulation in PD synth mode.
+Audio/CV in 1: 1V/oct pitch modulation in PD synth mode.
 
 Audio/CV in 2: phase-distortion shape modulation in PD synth mode.
 
@@ -126,7 +126,7 @@ In Turing mode:
 - LEDs 0, 1, and 2 show low bits of the Turing pattern.
 - LED 3 follows pulse input 1.
 - LED 4 shows sequence length.
-- LED 5 follows the Turing pulse.
+- LED 5 flashes on every Turing clock step.
 
 In envelope preset select:
 
@@ -169,19 +169,25 @@ Normal UF2 output requires `picotool` to be installed or available to the Pico S
 
 Confirmed on hardware:
 
-- Oscillator output is now audible and clean.
-- Main pitch control works.
-- X phase-distortion control works.
+- Oscillator output is audible and clean.
+- Main pitch control uses an octave-based range.
+- Audio/CV in 1 tracks at 1V/oct using the Workshop Computer 12V-over-4096-count input convention used by Chord Blimey.
+- X phase-distortion control and Y waveform morphing are responsive across the usable range.
+- Held-switch soft pickup, latched detune/ring/noise controls, and 8-second manual save work as intended.
+- Envelope preset select, binary LED display, triggering, and persistence work as intended.
+- Turing mode clocks correctly from internal clock, tap tempo, and Pulse in 1.
+- Turing CV/pulse outputs, self-playing stepped voice, and envelope self-triggering work as intended.
 
 Recently tuned:
 
-- Main has been restored to the smoother continuous pitch sweep after the semitone-ratio version proved too steppy on hardware.
-- Main pitch smoothing has been increased slightly to reduce remaining knob stepping.
+- Pitch now uses an octave-based frequency map, with Audio/CV in 1 scaled from the Workshop Computer 12V-over-4096-count input convention used by Chord Blimey.
 - X has a gentler response curve for more usable low-to-mid settings.
 - Y waveform morphing now uses a direct waveform target, with a needle-pulse third position and a plucked sixth position for clearer contrast from the saw.
 - Held-switch Y now adds restrained sample-held CZ-style grit by gently jittering phase distortion and oscillator phase instead of crossfading in plain audio noise.
 - Turing internal clock range uses a faster curved response for a more useful minimum and middle setting.
 - Turing CV outputs are scaled to three-quarter range with a slight upward bias for pitch-friendly modulation depth.
+- Turing mode audio outs now carry a self-playing stepped oscillator voice using the last PD synth sound.
+- Active envelope presets can be self-triggered by the main Turing pulse without oscillator sync.
 - Ring modulation now uses a stronger internal carrier while keeping some dry signal at the maximum setting to avoid full signal loss.
 - Held-switch performance controls now require movement before soft pickup, and Main/X/Y no longer change pitch, PD amount, or waveform while editing detune/ring/noise.
 - Manual flash persistence saves latched performance settings after an 8-second held-switch gesture; autosave is intentionally avoided.
@@ -190,14 +196,13 @@ Recently tuned:
 
 ## Future Work
 
-- 1V/oct-calibrated pitch response.
 - Final CZ-accurate waveform set.
 - Further envelope preset tuning and possible envelope editing mode.
-- Flash persistence for envelope preset selection or complex envelope data.
+- Optional flash persistence expansion for future complex envelope data.
 - Release packaging with `info.yaml`, `.uf2`, and final docs.
 
 ## Design Notes
 
 C1ZZL3 is intended as a playable, characterful program card rather than an exact Casio CZ clone. The code uses fixed-point integer arithmetic and lookup tables to stay inside the Workshop Computer's 48 kHz audio interrupt budget.
 
-The current implementation favours hardware-tested musical behaviour over completeness. More complex UI layers, such as envelope presets or editing, should be added in small testable steps so the validated v1 performance controls remain dependable.
+The current implementation favours hardware-tested musical behaviour over completeness. More complex UI layers, such as envelope editing, should be added in small testable steps so the validated v1 performance controls remain dependable.

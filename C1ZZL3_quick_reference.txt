@@ -26,12 +26,12 @@ Presets:
 Switch Middle: PD Synth
 
 Controls:
-Main: oscillator pitch
+Main: oscillator pitch, octave-based range
 X: phase-distortion amount
 Y: waveform morph across 8 CZ-inspired waveforms
 
 Inputs:
-Audio/CV in 1: pitch modulation
+Audio/CV in 1: pitch modulation, hardware-tested 1V/oct scale
 Audio/CV in 2: phase-distortion amount modulation
 CV in 1: waveform morph modulation
 CV in 2: no normal middle-mode function
@@ -92,3 +92,4 @@ Extra:
 Flick switch down from Turing mode to tap the internal clock tempo.
 The stepped voice uses the last PD synth sound, with the Turing pattern added to pitch.
 If an envelope preset is active, the main Turing pulse self-triggers it without oscillator sync.
+LED 5 flashes on every Turing clock step.
