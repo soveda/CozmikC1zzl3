@@ -3,8 +3,8 @@ Name: C1ZZL3
 Language: C++ (Pico SDK)
 Creator: Adrian Vos
 Instagram: https://instagram.com/professeur_whom
-Version: 0.3
-Status: Hardware-tested v1
+Version: 0.4
+Status: Hardware-tested working
 
 tags:
   - synthesiser
