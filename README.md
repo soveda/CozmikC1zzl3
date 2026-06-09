@@ -13,6 +13,8 @@ C1ZZL3 is a CZ-inspired phase-distortion oscillator card with a second mirrored 
 
 The current v1 build has passed hardware tests for the core oscillator, held-switch performance controls, Turing machine outputs, oscillator sync, restrained CZ-style grit, and manual flash persistence.
 
+Holding the switch down during startup enters envelope preset select. Release the startup hold, then Main chooses one of six presets, LEDs show the preset number in binary, a short down press exits for the current session, and a long down hold saves the selected preset to flash.
+
 ## Current Modes
 
 ### Switch Middle: PD Synth
@@ -54,6 +56,8 @@ Oscillator 2 mirrors oscillator 1's phase-distortion shape and selected waveform
 
 Holding the switch down from middle synth mode for 8 seconds saves the current latched detune, ring, and noise settings to flash. Saved settings load automatically on startup. There is no autosave.
 
+Pulse in 2 triggers the selected envelope preset as well as oscillator sync. Preset 0 is Off.
+
 ### Switch Up: Turing Machine
 
 Main controls mutation/lock behaviour. The centre is most random. The extremes become more locked.
@@ -89,6 +93,7 @@ CV in 2: positive voltage increases ring modulation while holding the switch dow
 Pulse in 1: external Turing clock.
 
 Pulse in 2: oscillator sync in PD synth mode.
+If an envelope preset is selected, Pulse in 2 also triggers the envelope.
 
 ### Outputs
 
@@ -121,6 +126,19 @@ In Turing mode:
 - LED 3 follows pulse input 1.
 - LED 4 shows sequence length.
 - LED 5 follows the Turing pulse.
+
+In envelope preset select:
+
+- LEDs 0-5 show the selected preset number as a binary value.
+
+Preset numbers:
+
+0. Off
+1. Pluck
+2. Bell
+3. Brass
+4. Slow swell
+5. Click
 
 ## Build
 
@@ -168,7 +186,7 @@ Recently tuned:
 
 - 1V/oct-calibrated pitch response.
 - Final CZ-accurate waveform set.
-- Envelope preset selection UI. A small triggerable envelope engine is scaffolded in code, but the active preset is currently Off so the hardware-tested v1 behavior is unchanged.
+- Further envelope preset tuning and possible envelope editing mode.
 - Flash persistence for envelope preset selection or complex envelope data.
 - Release packaging with `info.yaml`, `.uf2`, and final docs.
 

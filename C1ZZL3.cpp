@@ -35,6 +35,15 @@ public:
 
         Switch previousMode = lastMode;
 
+        updateStartupEnvelopeSelect(mode);
+
+        if (envelopeSelectMode)
+        {
+            updateEnvelopeSelectMode(main, mode, previousMode);
+            lastMode = mode;
+            return;
+        }
+
         if (previousMode == Switch::Up && mode == Switch::Down)
             tapTuringClock();
         lastMode = mode;
@@ -174,8 +183,10 @@ private:
     {
         Off,
         Pluck,
+        Bell,
+        Brass,
         Swell,
-        Bell
+        Click
     };
 
     struct EnvelopeShape
@@ -188,9 +199,10 @@ private:
 
     static constexpr int32_t TuringCvScale = 3072;
     static constexpr int32_t TuringCvOffset = 512;
-    static constexpr EnvelopePreset ActiveEnvelopePreset = EnvelopePreset::Off;
+    static constexpr uint8_t EnvelopePresetCount = 6;
+    static constexpr uint32_t StartupSelectWindowSamples = 24000u;
     static constexpr uint32_t SaveMagic = 0x43315A33u; // C1Z3
-    static constexpr uint16_t SaveVersion = 1;
+    static constexpr uint16_t SaveVersion = 2;
     static constexpr uint32_t SaveFlashOffset =
         (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE) &
         ~(FLASH_SECTOR_SIZE - 1u);
@@ -206,6 +218,8 @@ private:
         int32_t osc2Level;
         int32_t osc2Ring;
         int32_t osc2Noise;
+        uint8_t envelopePreset;
+        uint8_t reserved[3];
         uint32_t checksum;
     };
 
@@ -314,14 +328,18 @@ private:
 
     EnvelopeShape envelopeShape()
     {
-        switch (ActiveEnvelopePreset)
+        switch ((EnvelopePreset)envelopePreset)
         {
             case EnvelopePreset::Pluck:
                 return {480u, 12000u, 3072, 1024};
-            case EnvelopePreset::Swell:
-                return {24000u, 48000u, 2048, 1536};
             case EnvelopePreset::Bell:
                 return {240u, 36000u, 3072, 2048};
+            case EnvelopePreset::Brass:
+                return {4800u, 18000u, 2048, 1792};
+            case EnvelopePreset::Swell:
+                return {24000u, 48000u, 2048, 1536};
+            case EnvelopePreset::Click:
+                return {120u, 4800u, 2048, 2560};
             case EnvelopePreset::Off:
             default:
                 return {1u, 1u, 0, 0};
@@ -330,7 +348,7 @@ private:
 
     void triggerEnvelope()
     {
-        if (ActiveEnvelopePreset == EnvelopePreset::Off)
+        if (envelopePreset == (uint8_t)EnvelopePreset::Off)
             return;
 
         envelopeStage = 1;
@@ -340,7 +358,7 @@ private:
 
     int32_t updateEnvelope()
     {
-        if (ActiveEnvelopePreset == EnvelopePreset::Off || envelopeStage == 0)
+        if (envelopePreset == (uint8_t)EnvelopePreset::Off || envelopeStage == 0)
             return 0;
 
         EnvelopeShape shape = envelopeShape();
@@ -570,6 +588,97 @@ private:
         LedBrightness(5, alt ? 4095 : 0);
     }
 
+    void updateStartupEnvelopeSelect(Switch mode)
+    {
+        if (startupSelectChecked)
+            return;
+
+        if (startupSelectSamples < StartupSelectWindowSamples)
+        {
+            startupSelectSamples++;
+            if (mode == Switch::Down)
+            {
+                envelopeSelectMode = true;
+                envelopeSelectReady = false;
+            }
+        }
+        else
+        {
+            startupSelectChecked = true;
+        }
+    }
+
+    void updateEnvelopeSelectMode(int32_t main, Switch mode, Switch previousMode)
+    {
+        AudioOut1(0);
+        AudioOut2(0);
+        CVOut1(0);
+        CVOut2(0);
+        PulseOut1(false);
+        PulseOut2(false);
+
+        uint8_t selected =
+            (uint8_t)(((uint32_t)clamp12(main) * EnvelopePresetCount) >> 12);
+        if (selected >= EnvelopePresetCount)
+            selected = EnvelopePresetCount - 1;
+
+        envelopePreset = selected;
+        showEnvelopePresetLeds(envelopePreset);
+
+        bool down = mode == Switch::Down;
+
+        if (!envelopeSelectReady)
+        {
+            if (!down)
+                envelopeSelectReady = true;
+
+            return;
+        }
+
+        if (!down)
+        {
+            if (envelopeSelectHoldActive)
+            {
+                envelopeSelectMode = false;
+                resetEnvelopeSelectHold();
+            }
+
+            return;
+        }
+
+        if (!envelopeSelectHoldActive || previousMode != Switch::Down)
+        {
+            envelopeSelectHoldActive = true;
+            envelopeSelectHoldSamples = 0;
+            envelopeSelectSaved = false;
+        }
+
+        if (envelopeSelectHoldSamples < SaveHoldSamples)
+            envelopeSelectHoldSamples++;
+
+        if (envelopeSelectHoldSamples >= SaveHoldSamples && !envelopeSelectSaved)
+        {
+            savePerformanceStateIfChanged();
+            envelopeSelectSaved = true;
+            saveConfirmSamples = SaveConfirmSamples;
+        }
+
+        updateSaveFeedback();
+    }
+
+    void showEnvelopePresetLeds(uint8_t preset)
+    {
+        for (uint32_t i = 0; i < 6; ++i)
+            LedBrightness(i, (preset & (1u << i)) ? 4095 : 0);
+    }
+
+    void resetEnvelopeSelectHold()
+    {
+        envelopeSelectHoldActive = false;
+        envelopeSelectHoldSamples = 0;
+        envelopeSelectSaved = false;
+    }
+
     void updateSaveGesture(bool alt)
     {
         if (!alt)
@@ -696,6 +805,10 @@ private:
         state.osc2Level = osc2Level;
         state.osc2Ring = osc2Ring;
         state.osc2Noise = osc2Noise;
+        state.envelopePreset = envelopePreset;
+        state.reserved[0] = 0;
+        state.reserved[1] = 0;
+        state.reserved[2] = 0;
         state.checksum = 0;
         state.checksum = checksumState(state);
 
@@ -737,7 +850,8 @@ private:
             a.osc2Detune == b.osc2Detune &&
             a.osc2Level == b.osc2Level &&
             a.osc2Ring == b.osc2Ring &&
-            a.osc2Noise == b.osc2Noise;
+            a.osc2Noise == b.osc2Noise &&
+            a.envelopePreset == b.envelopePreset;
     }
 
     void loadPerformanceState()
@@ -750,6 +864,9 @@ private:
         osc2Level = clamp12(state.osc2Level);
         osc2Ring = clamp12(state.osc2Ring);
         osc2Noise = clamp12(state.osc2Noise);
+        envelopePreset = state.envelopePreset < EnvelopePresetCount ?
+            state.envelopePreset :
+            (uint8_t)EnvelopePreset::Off;
     }
 
     void savePerformanceStateIfChanged()
@@ -880,6 +997,14 @@ private:
     uint32_t envelopeSample = 0;
     int32_t envelopeLevel = 0;
     uint8_t envelopeStage = 0;
+    uint8_t envelopePreset = 0;
+    uint32_t startupSelectSamples = 0;
+    uint32_t envelopeSelectHoldSamples = 0;
+    bool startupSelectChecked = false;
+    bool envelopeSelectMode = false;
+    bool envelopeSelectReady = false;
+    bool envelopeSelectHoldActive = false;
+    bool envelopeSelectSaved = false;
 
     int32_t pitchControl = 2048;
     int32_t pdControl = 0;

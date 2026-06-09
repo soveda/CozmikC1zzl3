@@ -1,5 +1,25 @@
 C1ZZL3 Quick Reference
 
+Startup Envelope Preset Select
+
+Enter:
+Hold switch down during startup.
+Release the startup hold before selecting or exiting.
+
+Controls:
+Main: select envelope preset
+LEDs 0-5: selected preset number in binary
+Short down press: exit preset select for this session
+Long down hold: save selected preset to flash
+
+Presets:
+0: Off
+1: Pluck
+2: Bell
+3: Brass
+4: Slow swell
+5: Click
+
 Switch Middle: PD Synth
 
 Controls:
@@ -14,6 +34,7 @@ CV in 1: waveform morph modulation
 CV in 2: no normal middle-mode function
 Pulse in 1: no synth-mode function
 Pulse in 2: oscillator sync
+Pulse in 2 also triggers the selected envelope preset if preset is not Off
 
 Outputs:
 Audio out 1: oscillator 1

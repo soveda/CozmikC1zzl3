@@ -1,4 +1,4 @@
-Description: "Dual phase-distortion synthesiser with CZ-style oscillator engine, latched performance controls, manual flash persistence, and probabilistic Turing machine sequencer."
+Description: "Dual phase-distortion synthesiser with CZ-style oscillator engine, startup-selectable envelope presets, latched performance controls, manual flash persistence, and probabilistic Turing machine sequencer."
 Name: C1ZZL3
 Language: C++ (Pico SDK)
 Creator: Adrian Vos
