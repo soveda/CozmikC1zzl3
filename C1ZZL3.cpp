@@ -88,42 +88,14 @@ public:
             bool pulse2Trigger = PulseIn2RisingEdge();
             if (pulse2Trigger)
             {
-                syncOscillators();
-                triggerEnvelope();
+                if (envelopePreset != (uint8_t)EnvelopePreset::Off)
+                {
+                    syncOscillators();
+                    triggerEnvelope();
+                }
             }
 
-            int32_t envelopeLevel = updateEnvelope();
-            pd = applyEnvelopeToPd(pd, envelopeLevel);
-
-            // -------------------------
-            // OSCILLATORS
-            // -------------------------
-            int32_t osc1 =
-                oscCZ(phase1, freq, pd, wave, noiseAmt);
-
-            int32_t freq2 =
-                applyDetune(freq, osc2Detune);
-
-            int32_t osc2 =
-                oscCZ(phase2, freq2, pd, wave, noiseAmt);
-
-            int32_t osc2Raw = osc2;
-            osc2 = (osc2Raw * osc2Level) >> 12;
-
-            int32_t ringDrive = osc2Level;
-            if (ringDrive < 2048)
-                ringDrive = 2048;
-            int32_t ringCarrier = (osc2Raw * ringDrive) >> 12;
-            int32_t ringSig = clip((osc1 * ringCarrier) >> 10);
-            int32_t ringMix = (ring * 3840) >> 12;
-            osc1 = mix(osc1, ringSig, ringMix);
-
-            int32_t ampScale = envelopeAmpScale(envelopeLevel);
-            osc1 = (osc1 * ampScale) >> 12;
-            osc2 = (osc2 * ampScale) >> 12;
-
-            AudioOut1(clip(osc1));
-            AudioOut2(clip(osc2));
+            outputSynthVoice(freq, pd, wave, ring, noiseAmt);
 
             CVOut1(turingCv);
             CVOut2(turingModCv);
@@ -161,15 +133,17 @@ public:
             }
 
             if (clocked)
+            {
                 stepTuring(main);
+                triggerTuringEnvelope();
+            }
 
             updateTuringPulseAge();
 
             CVOut1(turingCv);
             CVOut2(turingModCv);
 
-            AudioOut1(turingPulse ? 1200 : -1200);
-            AudioOut2((turing & 2) ? 600 : -600);
+            outputTuringSynthVoice();
 
             PulseOut1(turingPulse);
             PulseOut2(turingAltPulse);
@@ -185,21 +159,30 @@ private:
         Pluck,
         Bell,
         Brass,
-        Swell,
-        Click
+        Strings,
+        Bounce,
+        ReverseSwell,
+        DoublePluck,
+        EvolvingDigital
     };
 
-    struct EnvelopeShape
+    struct EnvelopeStage
     {
-        uint32_t attackSamples;
-        uint32_t decaySamples;
-        int32_t ampDepth;
-        int32_t pdDepth;
+        uint16_t level;
+        uint32_t time;
+    };
+
+    struct EnvelopeProgram
+    {
+        EnvelopeStage amp[8];
+        EnvelopeStage pd[8];
     };
 
     static constexpr int32_t TuringCvScale = 3072;
     static constexpr int32_t TuringCvOffset = 512;
-    static constexpr uint8_t EnvelopePresetCount = 6;
+    static constexpr int32_t TuringAudioPitchDepth = 2048;
+    static constexpr uint8_t EnvelopePresetCount = 9;
+    static constexpr uint32_t StartupSelectDelaySamples = 12000u;
     static constexpr uint32_t StartupSelectWindowSamples = 24000u;
     static constexpr uint32_t SaveMagic = 0x43315A33u; // C1Z3
     static constexpr uint16_t SaveVersion = 2;
@@ -286,6 +269,64 @@ private:
     // ---------------------------------------------------------
     // OSCILLATOR
     // ---------------------------------------------------------
+    void outputSynthVoice()
+    {
+        int32_t freq = smoothPitch(baseFreq(pitchControl));
+        int32_t pd = clamp12(pdControl);
+        int32_t wave = clamp12(waveControl);
+
+        outputSynthVoice(freq, pd, wave, osc2Ring, osc2Noise);
+    }
+
+    void outputTuringSynthVoice()
+    {
+        int32_t pitchOffset = (turingCv * TuringAudioPitchDepth) >> 12;
+        int32_t freq = smoothPitch(baseFreq(pitchControl + pitchOffset));
+        int32_t pd = clamp12(pdControl);
+        int32_t wave = clamp12(waveControl);
+
+        outputSynthVoice(freq, pd, wave, osc2Ring, osc2Noise);
+    }
+
+    void outputSynthVoice(
+        int32_t freq,
+        int32_t pd,
+        int32_t wave,
+        int32_t ring,
+        int32_t noiseAmt)
+    {
+        int32_t envelopeLevel = updateEnvelope();
+        pd = applyEnvelopeToPd(pd, envelopeLevel);
+
+        int32_t osc1 =
+            oscCZ(phase1, freq, pd, wave, noiseAmt);
+
+        int32_t freq2 =
+            applyDetune(freq, osc2Detune);
+
+        int32_t osc2 =
+            oscCZ(phase2, freq2, pd, wave, noiseAmt);
+
+        int32_t osc2Raw = osc2;
+        osc2 = (osc2Raw * osc2Level) >> 12;
+
+        int32_t ringDrive = osc2Level;
+        if (ringDrive < 2048)
+            ringDrive = 2048;
+        int32_t ringCarrier = (osc2Raw * ringDrive) >> 12;
+        int32_t ringSig = clip((osc1 * ringCarrier) >> 10);
+        int32_t ringMix = (ring * 3840) >> 12;
+        osc1 = mix(osc1, ringSig, ringMix);
+
+        int32_t ampScale = envelopeAmpScale(envelopeLevel);
+        ampScale = (ampScale * updateSyncFade()) >> 12;
+        osc1 = (osc1 * ampScale) >> 12;
+        osc2 = (osc2 * ampScale) >> 12;
+
+        AudioOut1(clip(osc1));
+        AudioOut2(clip(osc2));
+    }
+
     inline int32_t oscCZ(
         uint32_t& phase,
         int32_t freq,
@@ -326,86 +367,176 @@ private:
         phase += (uint32_t)phaseJitter;
     }
 
-    EnvelopeShape envelopeShape()
-    {
-        switch ((EnvelopePreset)envelopePreset)
-        {
-            case EnvelopePreset::Pluck:
-                return {480u, 12000u, 3072, 1024};
-            case EnvelopePreset::Bell:
-                return {240u, 36000u, 3072, 2048};
-            case EnvelopePreset::Brass:
-                return {4800u, 18000u, 2048, 1792};
-            case EnvelopePreset::Swell:
-                return {24000u, 48000u, 2048, 1536};
-            case EnvelopePreset::Click:
-                return {120u, 4800u, 2048, 2560};
-            case EnvelopePreset::Off:
-            default:
-                return {1u, 1u, 0, 0};
-        }
-    }
-
     void triggerEnvelope()
     {
         if (envelopePreset == (uint8_t)EnvelopePreset::Off)
             return;
 
-        envelopeStage = 1;
-        envelopeSample = 0;
-        envelopeLevel = 0;
+        ampEnvelopeStage = 0;
+        ampEnvelopeSample = 0;
+        ampEnvelopeLevel = 0;
+        ampEnvelopeStartLevel = 0;
+        pdEnvelopeStage = 0;
+        pdEnvelopeSample = 0;
+        pdEnvelopeLevel = 0;
+        pdEnvelopeStartLevel = 0;
+        envelopeActive = true;
+    }
+
+    void triggerTuringEnvelope()
+    {
+        if (turingPulse)
+            triggerEnvelope();
     }
 
     int32_t updateEnvelope()
     {
-        if (envelopePreset == (uint8_t)EnvelopePreset::Off || envelopeStage == 0)
+        if (envelopePreset == (uint8_t)EnvelopePreset::Off || !envelopeActive)
             return 0;
 
-        EnvelopeShape shape = envelopeShape();
+        EnvelopeProgram program = envelopeProgram();
 
-        if (envelopeStage == 1)
-        {
-            envelopeSample++;
-            envelopeLevel = (int32_t)((envelopeSample * 4095u) / shape.attackSamples);
+        bool ampDone = updateEnvelopeRunner(
+            program.amp,
+            ampEnvelopeStage,
+            ampEnvelopeSample,
+            ampEnvelopeLevel,
+            ampEnvelopeStartLevel);
 
-            if (envelopeSample >= shape.attackSamples)
-            {
-                envelopeStage = 2;
-                envelopeSample = 0;
-                envelopeLevel = 4095;
-            }
-        }
-        else
-        {
-            envelopeSample++;
+        bool pdDone = updateEnvelopeRunner(
+            program.pd,
+            pdEnvelopeStage,
+            pdEnvelopeSample,
+            pdEnvelopeLevel,
+            pdEnvelopeStartLevel);
 
-            if (envelopeSample >= shape.decaySamples)
-            {
-                envelopeStage = 0;
-                envelopeSample = 0;
-                envelopeLevel = 0;
-            }
-            else
-            {
-                envelopeLevel = 4095 -
-                    (int32_t)((envelopeSample * 4095u) / shape.decaySamples);
-            }
-        }
+        if (ampDone && pdDone)
+            envelopeActive = false;
 
-        return clamp12(envelopeLevel);
+        return clamp12(ampEnvelopeLevel);
     }
 
     int32_t applyEnvelopeToPd(int32_t pd, int32_t level)
     {
-        EnvelopeShape shape = envelopeShape();
-        return clamp12(pd + ((level * shape.pdDepth) >> 12));
+        (void)level;
+        return clamp12(pd + pdEnvelopeLevel);
     }
 
     int32_t envelopeAmpScale(int32_t level)
     {
-        EnvelopeShape shape = envelopeShape();
-        int32_t reduction = ((4095 - level) * shape.ampDepth) >> 12;
-        return clamp12(4095 - reduction);
+        if (envelopePreset == (uint8_t)EnvelopePreset::Off)
+            return 4095;
+
+        return clamp12(level);
+    }
+
+    EnvelopeProgram envelopeProgram()
+    {
+        switch ((EnvelopePreset)envelopePreset)
+        {
+            case EnvelopePreset::Pluck:
+                return {{
+                    {4095, 480}, {0, 12000}, {0, 1}, {0, 1},
+                    {0, 1}, {0, 1}, {0, 1}, {0, 1}
+                }, {
+                    {1024, 480}, {0, 12000}, {0, 1}, {0, 1},
+                    {0, 1}, {0, 1}, {0, 1}, {0, 1}
+                }};
+            case EnvelopePreset::Bell:
+                return {{
+                    {4095, 240}, {2600, 12000}, {1200, 24000}, {0, 36000},
+                    {0, 1}, {0, 1}, {0, 1}, {0, 1}
+                }, {
+                    {2048, 240}, {1600, 6000}, {700, 24000}, {0, 42000},
+                    {0, 1}, {0, 1}, {0, 1}, {0, 1}
+                }};
+            case EnvelopePreset::Brass:
+                return {{
+                    {4095, 4800}, {3400, 30000}, {0, 18000}, {0, 1},
+                    {0, 1}, {0, 1}, {0, 1}, {0, 1}
+                }, {
+                    {1792, 4800}, {900, 30000}, {0, 18000}, {0, 1},
+                    {0, 1}, {0, 1}, {0, 1}, {0, 1}
+                }};
+            case EnvelopePreset::Strings:
+                return {{
+                    {2200, 24000}, {3600, 24000}, {3800, 48000}, {3600, 48000},
+                    {3400, 48000}, {3000, 48000}, {1800, 48000}, {0, 96000}
+                }, {
+                    {400, 12000}, {900, 36000}, {1200, 36000}, {900, 48000},
+                    {700, 48000}, {500, 48000}, {400, 48000}, {300, 96000}
+                }};
+            case EnvelopePreset::Bounce:
+                return {{
+                    {4095, 120}, {1200, 3600}, {3300, 3600}, {1700, 4800},
+                    {2600, 4800}, {900, 7200}, {1600, 7200}, {0, 12000}
+                }, {
+                    {2500, 120}, {800, 3600}, {2200, 3600}, {700, 4800},
+                    {1600, 4800}, {500, 7200}, {1200, 7200}, {0, 12000}
+                }};
+            case EnvelopePreset::ReverseSwell:
+                return {{
+                    {200, 12000}, {900, 18000}, {1800, 18000}, {3000, 18000},
+                    {4095, 12000}, {2600, 2400}, {900, 2400}, {0, 4800}
+                }, {
+                    {200, 12000}, {500, 18000}, {1000, 18000}, {1800, 18000},
+                    {2600, 12000}, {1300, 2400}, {500, 2400}, {0, 4800}
+                }};
+            case EnvelopePreset::DoublePluck:
+                return {{
+                    {4095, 180}, {700, 4800}, {0, 2400}, {3600, 180},
+                    {900, 6000}, {350, 6000}, {120, 6000}, {0, 12000}
+                }, {
+                    {1600, 180}, {500, 4800}, {0, 2400}, {2200, 180},
+                    {700, 6000}, {300, 6000}, {120, 6000}, {0, 12000}
+                }};
+            case EnvelopePreset::EvolvingDigital:
+                return {{
+                    {4095, 480}, {3900, 12000}, {3800, 12000}, {3600, 12000},
+                    {3200, 18000}, {2600, 18000}, {1600, 24000}, {0, 36000}
+                }, {
+                    {3000, 480}, {800, 12000}, {3600, 12000}, {1200, 12000},
+                    {2600, 18000}, {600, 18000}, {1800, 24000}, {0, 36000}
+                }};
+            case EnvelopePreset::Off:
+            default:
+                return {{
+                    {0, 1}, {0, 1}, {0, 1}, {0, 1},
+                    {0, 1}, {0, 1}, {0, 1}, {0, 1}
+                }, {
+                    {0, 1}, {0, 1}, {0, 1}, {0, 1},
+                    {0, 1}, {0, 1}, {0, 1}, {0, 1}
+                }};
+        }
+    }
+
+    bool updateEnvelopeRunner(
+        const EnvelopeStage* stages,
+        uint8_t& stage,
+        uint32_t& sample,
+        int32_t& level,
+        int32_t& startLevel)
+    {
+        if (stage >= 8)
+            return true;
+
+        uint32_t time = stages[stage].time;
+        if (time == 0)
+            time = 1;
+
+        sample++;
+        int32_t target = stages[stage].level;
+        level = startLevel + (((target - startLevel) * (int32_t)sample) / (int32_t)time);
+
+        if (sample >= time)
+        {
+            level = target;
+            stage++;
+            sample = 0;
+            startLevel = level;
+        }
+
+        return stage >= 8;
     }
 
     inline int32_t morphWave(uint32_t phase, int32_t wave)
@@ -593,10 +724,11 @@ private:
         if (startupSelectChecked)
             return;
 
-        if (startupSelectSamples < StartupSelectWindowSamples)
+        if (startupSelectSamples < StartupSelectDelaySamples + StartupSelectWindowSamples)
         {
             startupSelectSamples++;
-            if (mode == Switch::Down)
+            if (startupSelectSamples >= StartupSelectDelaySamples &&
+                mode == Switch::Down)
             {
                 envelopeSelectMode = true;
                 envelopeSelectReady = false;
@@ -916,6 +1048,16 @@ private:
     {
         phase1 = 0;
         phase2 = 0;
+        syncFadeSamples = 96;
+    }
+
+    int32_t updateSyncFade()
+    {
+        if (syncFadeSamples == 0)
+            return 4095;
+
+        syncFadeSamples--;
+        return 4095 - ((syncFadeSamples * 4095) / 96);
     }
 
     uint8_t fastNoise()
@@ -974,6 +1116,7 @@ private:
 
     uint32_t phase1 = 0;
     uint32_t phase2 = 0;
+    uint32_t syncFadeSamples = 0;
 
     uint32_t turing = 0xACE1u;
     int32_t turingSmooth = 0;
@@ -994,9 +1137,15 @@ private:
     uint32_t noiseHoldCounter = 0;
     int32_t heldPdNoise = 0;
     int32_t heldPhaseNoise = 0;
-    uint32_t envelopeSample = 0;
-    int32_t envelopeLevel = 0;
-    uint8_t envelopeStage = 0;
+    uint32_t ampEnvelopeSample = 0;
+    uint32_t pdEnvelopeSample = 0;
+    int32_t ampEnvelopeLevel = 0;
+    int32_t pdEnvelopeLevel = 0;
+    int32_t ampEnvelopeStartLevel = 0;
+    int32_t pdEnvelopeStartLevel = 0;
+    uint8_t ampEnvelopeStage = 8;
+    uint8_t pdEnvelopeStage = 8;
+    bool envelopeActive = false;
     uint8_t envelopePreset = 0;
     uint32_t startupSelectSamples = 0;
     uint32_t envelopeSelectHoldSamples = 0;

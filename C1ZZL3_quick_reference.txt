@@ -17,8 +17,11 @@ Presets:
 1: Pluck
 2: Bell
 3: Brass
-4: Slow swell
-5: Click
+4: Strings
+5: Bounce
+6: Reverse swell
+7: Double pluck
+8: Evolving digital
 
 Switch Middle: PD Synth
 
@@ -33,8 +36,9 @@ Audio/CV in 2: phase-distortion amount modulation
 CV in 1: waveform morph modulation
 CV in 2: no normal middle-mode function
 Pulse in 1: no synth-mode function
-Pulse in 2: oscillator sync
-Pulse in 2 also triggers the selected envelope preset if preset is not Off
+Pulse in 2: triggers the selected envelope preset and softened oscillator sync if preset 1-8 is active
+Preset 0 ignores Pulse in 2
+Active envelope presets make the oscillator silent between triggers
 
 Outputs:
 Audio out 1: oscillator 1
@@ -81,8 +85,10 @@ CV out 1: scaled stepped Turing CV
 CV out 2: smoothed scaled Turing CV
 Pulse out 1: main Turing pulse
 Pulse out 2: alternate Turing bit pulse
-Audio out 1: Turing monitor signal
-Audio out 2: Turing monitor signal
+Audio out 1: self-playing stepped oscillator 1
+Audio out 2: self-playing stepped oscillator 2
 
 Extra:
 Flick switch down from Turing mode to tap the internal clock tempo.
+The stepped voice uses the last PD synth sound, with the Turing pattern added to pitch.
+If an envelope preset is active, the main Turing pulse self-triggers it without oscillator sync.

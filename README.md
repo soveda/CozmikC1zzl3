@@ -13,7 +13,7 @@ C1ZZL3 is a CZ-inspired phase-distortion oscillator card with a second mirrored 
 
 The current v1 build has passed hardware tests for the core oscillator, held-switch performance controls, Turing machine outputs, oscillator sync, restrained CZ-style grit, and manual flash persistence.
 
-Holding the switch down during startup enters envelope preset select. Release the startup hold, then Main chooses one of six presets, LEDs show the preset number in binary, a short down press exits for the current session, and a long down hold saves the selected preset to flash.
+Holding the switch down during startup enters envelope preset select. Release the startup hold, then Main chooses one of nine presets, LEDs show the preset number in binary, a short down press exits for the current session, and a long down hold saves the selected preset to flash.
 
 ## Current Modes
 
@@ -56,7 +56,7 @@ Oscillator 2 mirrors oscillator 1's phase-distortion shape and selected waveform
 
 Holding the switch down from middle synth mode for 8 seconds saves the current latched detune, ring, and noise settings to flash. Saved settings load automatically on startup. There is no autosave.
 
-Pulse in 2 triggers the selected envelope preset as well as oscillator sync. Preset 0 is Off.
+Pulse in 2 triggers the selected envelope preset as well as softened oscillator sync. Preset 0 is Off and ignores Pulse in 2, so the synth remains free-running. Active envelope presets gate the oscillator output, so the synth is silent between triggers.
 
 ### Switch Up: Turing Machine
 
@@ -76,7 +76,9 @@ CV out 2 carries a smoothed version of the scaled Turing CV.
 
 Pulse out 1 outputs the main Turing pulse. Pulse out 2 outputs an alternate Turing bit pulse.
 
-Audio out 1 and audio out 2 provide simple audio-rate monitor signals from the Turing state in this mode.
+Audio out 1 and audio out 2 carry a self-playing stepped oscillator voice. The last PD synth pitch, phase-distortion, waveform, detune, ring, and noise settings are used as the voice sound, with the Turing pattern added to the pitch.
+
+When an envelope preset is active, the main Turing pulse self-triggers the envelope for the stepped oscillator voice. Preset 0 is Off and leaves the Turing voice free-running. Turing envelope triggers do not reset oscillator phase.
 
 ## Inputs And Outputs
 
@@ -92,14 +94,13 @@ CV in 2: positive voltage increases ring modulation while holding the switch dow
 
 Pulse in 1: external Turing clock.
 
-Pulse in 2: oscillator sync in PD synth mode.
-If an envelope preset is selected, Pulse in 2 also triggers the envelope.
+Pulse in 2: triggers the selected envelope preset and softened oscillator sync when preset 1-8 is active. Preset 0 ignores Pulse in 2.
 
 ### Outputs
 
-Audio out 1: oscillator 1 in PD synth mode; Turing monitor signal in Turing mode.
+Audio out 1: oscillator 1 in PD synth mode; self-playing stepped oscillator 1 in Turing mode.
 
-Audio out 2: oscillator 2 in PD synth mode; Turing monitor signal in Turing mode.
+Audio out 2: oscillator 2 in PD synth mode; self-playing stepped oscillator 2 in Turing mode.
 
 CV out 1: scaled stepped Turing CV.
 
@@ -137,8 +138,11 @@ Preset numbers:
 1. Pluck
 2. Bell
 3. Brass
-4. Slow swell
-5. Click
+4. Strings
+5. Bounce
+6. Reverse swell
+7. Double pluck
+8. Evolving digital
 
 ## Build
 
@@ -181,6 +185,8 @@ Recently tuned:
 - Ring modulation now uses a stronger internal carrier while keeping some dry signal at the maximum setting to avoid full signal loss.
 - Held-switch performance controls now require movement before soft pickup, and Main/X/Y no longer change pitch, PD amount, or waveform while editing detune/ring/noise.
 - Manual flash persistence saves latched performance settings after an 8-second held-switch gesture; autosave is intentionally avoided.
+- Brass envelope decay has been lengthened, oscillator sync now uses a very short fade, and preset 0 ignores Pulse in 2 for clean free-running oscillator use.
+- Strings, Bounce, Reverse Swell, Double Pluck, and Evolving Digital use 8-stage amp and PD envelope shapes for multi-step rise/drop movement.
 
 ## Future Work
 
