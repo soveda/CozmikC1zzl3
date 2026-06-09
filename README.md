@@ -114,23 +114,23 @@ Pulse out 2: alternate Turing bit pulse.
 
 In PD synth mode:
 
-- LED 0 shows phase-distortion amount.
-- LED 1 shows waveform morph position.
-- LED 2 shows oscillator 2 level.
-- LED 3 shows ring modulation amount.
-- LED 4 shows noise modulation amount.
-- LED 5 lights while the switch is held down.
+- LED 1 shows phase-distortion amount.
+- LED 2 shows waveform morph position.
+- LED 3 shows oscillator 2 level.
+- LED 4 shows ring modulation amount.
+- LED 5 shows noise modulation amount.
+- LED 6 lights while the switch is held down.
 
 In Turing mode:
 
-- LEDs 0, 1, and 2 show low bits of the Turing pattern.
-- LED 3 follows pulse input 1.
-- LED 4 shows sequence length.
-- LED 5 flashes on every Turing clock step.
+- LEDs 1, 2, and 3 show low bits of the Turing pattern.
+- LED 4 follows pulse input 1.
+- LED 5 shows sequence length (brighter = longer).
+- LED 6 flashes on every Turing clock step.
 
 In envelope preset select:
 
-- LEDs 0-5 show the selected preset number as a binary value.
+- LEDs 1-6 show the selected preset number as a binary value.
 
 Preset numbers:
 
@@ -143,27 +143,6 @@ Preset numbers:
 6. Strings
 7. Reverse swell
 8. Evolving digital
-
-## Build
-
-This project uses the Raspberry Pi Pico SDK and the ComputerCard header-only framework.
-
-The current `CMakeLists.txt` includes Workshop Computer build settings:
-
-- `PICO_XOSC_STARTUP_DELAY_MULTIPLIER=64`
-- USB stdio disabled
-- `copy_to_ram` binary type
-- warning flags for accidental floating-point promotion
-- linker memory usage output
-
-Offline verification build:
-
-```sh
-cmake -S . -B build-verify -DPICO_NO_PICOTOOL=1
-cmake --build build-verify
-```
-
-Normal UF2 output requires `picotool` to be installed or available to the Pico SDK.
 
 ## Current Hardware Notes
 
@@ -181,7 +160,7 @@ Confirmed on hardware:
 
 Recently tuned:
 
-- Pitch now uses an octave-based frequency map, with Audio/CV in 1 scaled from the Workshop Computer 12V-over-4096-count input convention used by Chord Blimey.
+- V/Oct is accurate (enough)
 - X has a gentler response curve for more usable low-to-mid settings.
 - Y waveform morphing now uses a direct waveform target, with CZ-style saw, square, pulse, double sine, saw-pulse curve, and three distinct resonance-window positions.
 - Held-switch Y now adds restrained sample-held CZ-style grit by gently jittering phase distortion and oscillator phase instead of crossfading in plain audio noise.
@@ -201,10 +180,11 @@ Recently tuned:
 - Further waveform tuning if hardware feedback suggests it.
 - Further envelope preset tuning and possible envelope editing mode.
 - Optional flash persistence expansion for future complex envelope data.
-- Release packaging with `info.yaml`, `.uf2`, and final docs.
+- Possible web interface for custom envelopes
 
 ## Design Notes
 
 C1ZZL3 is intended as a playable, characterful program card rather than an exact Casio CZ clone. The code uses fixed-point integer arithmetic and lookup tables to stay inside the Workshop Computer's 48 kHz audio interrupt budget.
 
-The current implementation favours hardware-tested musical behaviour over completeness. More complex UI layers, such as envelope editing, should be added in small testable steps so the validated v1 performance controls remain dependable.
+The current implementation favours hardware-tested musical behaviour over completeness. 
+Full envelope shaping would need web interface.
