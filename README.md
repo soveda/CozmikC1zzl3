@@ -52,7 +52,7 @@ Y controls noise modulation amount. The setting remains active after the switch 
 
 Oscillator 2 mirrors oscillator 1's phase-distortion shape and selected waveform family.
 
-Holding the switch down from middle synth mode for 7 seconds saves the current latched detune, ring, and noise settings to flash. Saved settings load automatically on startup. There is no autosave.
+Holding the switch down from middle synth mode for 8 seconds saves the current latched detune, ring, and noise settings to flash. Saved settings load automatically on startup. There is no autosave.
 
 ### Switch Up: Turing Machine
 
@@ -162,7 +162,7 @@ Recently tuned:
 - Turing CV outputs are scaled to three-quarter range with a slight upward bias for pitch-friendly modulation depth.
 - Ring modulation now uses a stronger internal carrier while keeping some dry signal at the maximum setting to avoid full signal loss.
 - Held-switch performance controls now require movement before soft pickup, and Main/X/Y no longer change pitch, PD amount, or waveform while editing detune/ring/noise.
-- Manual flash persistence saves latched performance settings after a 7-second held-switch gesture; autosave is intentionally avoided.
+- Manual flash persistence saves latched performance settings after an 8-second held-switch gesture; autosave is intentionally avoided.
 
 ## WIP / Not Yet Implemented
 

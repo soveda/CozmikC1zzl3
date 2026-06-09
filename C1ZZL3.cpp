@@ -166,7 +166,7 @@ private:
     static constexpr uint32_t SaveFlashOffset =
         (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE) &
         ~(FLASH_SECTOR_SIZE - 1u);
-    static constexpr uint32_t SaveHoldSamples = 336000u;
+    static constexpr uint32_t SaveHoldSamples = 384000u;
     static constexpr uint32_t SaveConfirmSamples = 48000u;
 
     struct SavedPerformanceState
