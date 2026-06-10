@@ -144,6 +144,8 @@ Preset numbers:
 7. Reverse swell
 8. Evolving digital
 
+Names are conceptual and do not reflect accurate synthesis of named instruments!
+
 ## Current Hardware Notes
 
 Confirmed on hardware:
