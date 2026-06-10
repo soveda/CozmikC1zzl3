@@ -182,7 +182,7 @@ Recently tuned:
 - Further waveform tuning if hardware feedback suggests it.
 - Further envelope preset tuning and possible envelope editing mode.
 - Optional flash persistence expansion for future complex envelope data.
-- Possible web interface for custom envelopes
+- Experimental web interface for custom envelopes in `experimental/web-midi/editor/`. Run `python3 -m http.server 5173 --directory experimental/web-midi/editor`, open `http://localhost:5173`, then edit presets, audition the browser preview, connect USB MIDI input if supported by the browser, and copy the generated C++ back into `envelopeProgram()`. The page also emits a compact C1ZZL3 SysEx preview frame in the same broad style as Workshop Computer Reverb+, ready for a future firmware receiver/save path. The working card firmware in `C1ZZL3.cpp` is intentionally kept separate.
 
 ## Design Notes
 

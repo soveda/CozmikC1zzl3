@@ -1,0 +1,440 @@
+const SAMPLE_RATE = 48000;
+const MAX_LEVEL = 4095;
+const STAGES = 8;
+const SYSEX_MANUFACTURER = 0x7d;
+const SYSEX_ID = [0x43, 0x31, 0x5a, 0x33];
+const SYSEX_COMMAND_PREVIEW = 0x01;
+
+const factoryPresets = [
+  preset("Off", fill(0, 1), fill(0, 1)),
+  preset("Pluck",
+    [[4095, 480], [0, 12000], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1]],
+    [[1024, 480], [0, 12000], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1]]),
+  preset("Double pluck",
+    [[4095, 180], [700, 4800], [0, 2400], [3600, 180], [900, 6000], [350, 6000], [120, 6000], [0, 12000]],
+    [[1600, 180], [500, 4800], [0, 2400], [2200, 180], [700, 6000], [300, 6000], [120, 6000], [0, 12000]]),
+  preset("Bounce",
+    [[4095, 120], [1200, 3600], [3300, 3600], [1700, 4800], [2600, 4800], [900, 7200], [1600, 7200], [0, 12000]],
+    [[2500, 120], [800, 3600], [2200, 3600], [700, 4800], [1600, 4800], [500, 7200], [1200, 7200], [0, 12000]]),
+  preset("Bell",
+    [[4095, 240], [2600, 12000], [1200, 24000], [0, 36000], [0, 1], [0, 1], [0, 1], [0, 1]],
+    [[2048, 240], [1600, 6000], [700, 24000], [0, 42000], [0, 1], [0, 1], [0, 1], [0, 1]]),
+  preset("Brass",
+    [[4095, 4800], [3400, 30000], [0, 18000], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1]],
+    [[1792, 4800], [900, 30000], [0, 18000], [0, 1], [0, 1], [0, 1], [0, 1], [0, 1]]),
+  preset("Strings",
+    [[2200, 24000], [3600, 24000], [3800, 48000], [3600, 48000], [3400, 48000], [3000, 48000], [1800, 48000], [0, 96000]],
+    [[400, 12000], [900, 36000], [1200, 36000], [900, 48000], [700, 48000], [500, 48000], [400, 48000], [300, 96000]]),
+  preset("Reverse swell",
+    [[200, 12000], [900, 18000], [1800, 18000], [3000, 18000], [4095, 12000], [2600, 2400], [900, 2400], [0, 4800]],
+    [[200, 12000], [500, 18000], [1000, 18000], [1800, 18000], [2600, 12000], [1300, 2400], [500, 2400], [0, 4800]]),
+  preset("Evolving digital",
+    [[4095, 480], [3900, 12000], [3800, 12000], [3600, 12000], [3200, 18000], [2600, 18000], [1600, 24000], [0, 36000]],
+    [[3000, 480], [800, 12000], [3600, 12000], [1200, 12000], [2600, 18000], [600, 18000], [1800, 24000], [0, 36000]])
+];
+
+let presets = loadPresets();
+let selected = 1;
+let audioCtx;
+let activeNodes = [];
+let midiAccess;
+
+const el = {
+  presetList: document.querySelector("#presetList"),
+  addPreset: document.querySelector("#addPreset"),
+  presetName: document.querySelector("#presetName"),
+  pitchInput: document.querySelector("#pitchInput"),
+  waveSelect: document.querySelector("#waveSelect"),
+  canvas: document.querySelector("#curveCanvas"),
+  ampStages: document.querySelector("#ampStages"),
+  pdStages: document.querySelector("#pdStages"),
+  exportText: document.querySelector("#exportText"),
+  status: document.querySelector("#status"),
+  audition: document.querySelector("#audition"),
+  stop: document.querySelector("#stop"),
+  midiToggle: document.querySelector("#midiToggle"),
+  copyCpp: document.querySelector("#copyCpp"),
+  copySysex: document.querySelector("#copySysex"),
+  sendSysex: document.querySelector("#sendSysex"),
+  downloadJson: document.querySelector("#downloadJson"),
+  resetPreset: document.querySelector("#resetPreset")
+};
+
+function preset(name, amp, pd) {
+  return { name, amp: normalizeStages(amp), pd: normalizeStages(pd) };
+}
+
+function fill(level, time) {
+  return Array.from({ length: STAGES }, () => [level, time]);
+}
+
+function normalizeStages(stages) {
+  return Array.from({ length: STAGES }, (_, i) => ({
+    level: clampInt(stages[i]?.level ?? stages[i]?.[0] ?? 0, 0, MAX_LEVEL),
+    time: clampInt(stages[i]?.time ?? stages[i]?.[1] ?? 1, 1, 192000)
+  }));
+}
+
+function loadPresets() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("c1zzl3-envelope-presets"));
+    if (Array.isArray(saved) && saved.length) {
+      return saved.map((item) => preset(item.name || "Preset", item.amp, item.pd));
+    }
+  } catch {
+    /* Keep factory presets if saved data is malformed. */
+  }
+  return structuredClone(factoryPresets);
+}
+
+function savePresets() {
+  localStorage.setItem("c1zzl3-envelope-presets", JSON.stringify(presets));
+}
+
+function render() {
+  selected = Math.max(0, Math.min(selected, presets.length - 1));
+  const current = presets[selected];
+
+  renderPresetList();
+  el.presetName.value = current.name;
+  renderStages("amp", el.ampStages);
+  renderStages("pd", el.pdStages);
+  drawCurves();
+  updateExport();
+}
+
+function renderPresetList() {
+  el.presetList.innerHTML = "";
+  presets.forEach((item, index) => {
+    const button = document.createElement("button");
+    button.className = `preset-button${index === selected ? " is-active" : ""}`;
+    button.type = "button";
+    button.innerHTML = `<span>${escapeHtml(item.name)}</span><span>${index}</span>`;
+    button.addEventListener("click", () => {
+      selected = index;
+      render();
+    });
+    el.presetList.append(button);
+  });
+}
+
+function renderStages(lane, container) {
+  container.innerHTML = "";
+  presets[selected][lane].forEach((stage, index) => {
+    const row = document.createElement("div");
+    row.className = "stage-row";
+    row.innerHTML = `
+      <strong>${index + 1}</strong>
+      <input type="number" min="0" max="${MAX_LEVEL}" value="${stage.level}" aria-label="${lane} stage ${index + 1} level">
+      <input type="number" min="1" max="192000" value="${stage.time}" aria-label="${lane} stage ${index + 1} time">
+    `;
+    const [levelInput, timeInput] = row.querySelectorAll("input");
+    levelInput.addEventListener("input", () => updateStage(lane, index, "level", levelInput.value));
+    timeInput.addEventListener("input", () => updateStage(lane, index, "time", timeInput.value));
+    container.append(row);
+  });
+}
+
+function updateStage(lane, index, key, value) {
+  const max = key === "level" ? MAX_LEVEL : 192000;
+  const min = key === "level" ? 0 : 1;
+  presets[selected][lane][index][key] = clampInt(value, min, max);
+  savePresets();
+  drawCurves();
+  updateExport();
+}
+
+function drawCurves() {
+  const ctx = el.canvas.getContext("2d");
+  const dpr = window.devicePixelRatio || 1;
+  const rect = el.canvas.getBoundingClientRect();
+  el.canvas.width = Math.max(640, Math.floor(rect.width * dpr));
+  el.canvas.height = Math.max(260, Math.floor(rect.height * dpr));
+  ctx.scale(dpr, dpr);
+
+  const w = rect.width;
+  const h = rect.height;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = "#0c0e10";
+  ctx.fillRect(0, 0, w, h);
+
+  ctx.strokeStyle = "#242932";
+  ctx.lineWidth = 1;
+  for (let i = 1; i < 4; i++) {
+    const y = (h * i) / 4;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(w, y);
+    ctx.stroke();
+  }
+
+  drawLane(ctx, presets[selected].amp, "#ffcc66", w, h);
+  drawLane(ctx, presets[selected].pd, "#6ee7c8", w, h);
+
+  ctx.fillStyle = "#a5adba";
+  ctx.font = "12px system-ui";
+  ctx.fillText(`Amp`, 14, 22);
+  ctx.fillStyle = "#6ee7c8";
+  ctx.fillText(`PD`, 62, 22);
+  ctx.fillStyle = "#a5adba";
+  ctx.fillText(`${(totalSamples(presets[selected].amp) / SAMPLE_RATE).toFixed(2)}s`, w - 64, h - 16);
+}
+
+function drawLane(ctx, stages, color, w, h) {
+  const total = Math.max(1, totalSamples(stages));
+  let x = 0;
+  let y = levelY(0, h);
+
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+
+  stages.forEach((stage) => {
+    x += (stage.time / total) * w;
+    y = levelY(stage.level, h);
+    ctx.lineTo(x, y);
+  });
+
+  ctx.stroke();
+}
+
+function levelY(level, height) {
+  return 18 + (1 - level / MAX_LEVEL) * (height - 36);
+}
+
+function totalSamples(stages) {
+  return stages.reduce((sum, stage) => sum + stage.time, 0);
+}
+
+function updateExport() {
+  const current = presets[selected];
+  const className = cppName(current.name);
+  el.exportText.value = `case EnvelopePreset::${className}:\n    return {{\n${cppLane(current.amp)}\n    }, {\n${cppLane(current.pd)}\n    }};`;
+}
+
+function cppLane(stages) {
+  const rows = [];
+  for (let i = 0; i < STAGES; i += 4) {
+    rows.push("        " + stages.slice(i, i + 4).map((stage) => `{${stage.level}, ${stage.time}}`).join(", "));
+  }
+  return rows.join(",\n");
+}
+
+function cppName(name) {
+  const cleaned = name.replace(/[^a-z0-9]+/gi, " ").trim();
+  return cleaned ? cleaned.split(" ").map((part) => part[0].toUpperCase() + part.slice(1)).join("") : "CustomPreset";
+}
+
+async function audition(note = Number(el.pitchInput.value)) {
+  stopAudio();
+  audioCtx ||= new AudioContext();
+  await audioCtx.resume();
+
+  const now = audioCtx.currentTime;
+  const current = presets[selected];
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  const filter = audioCtx.createBiquadFilter();
+
+  osc.type = el.waveSelect.value;
+  osc.frequency.value = midiToHz(note);
+  filter.type = "lowpass";
+  filter.frequency.value = 220;
+  gain.gain.value = 0;
+
+  scheduleEnvelope(gain.gain, current.amp, now, 0, 0.35);
+  scheduleEnvelope(filter.frequency, current.pd, now, 220, 4200);
+
+  osc.connect(filter).connect(gain).connect(audioCtx.destination);
+  osc.start(now);
+  osc.stop(now + totalSamples(current.amp) / SAMPLE_RATE + 0.15);
+  activeNodes = [osc, gain, filter];
+  setStatus(`Auditioning ${current.name} at MIDI note ${note}.`);
+}
+
+function scheduleEnvelope(param, stages, startTime, base, depth) {
+  let t = startTime;
+  let lastValue = base;
+  param.cancelScheduledValues(startTime);
+  param.setValueAtTime(lastValue, startTime);
+
+  stages.forEach((stage) => {
+    t += stage.time / SAMPLE_RATE;
+    lastValue = base + (stage.level / MAX_LEVEL) * depth;
+    param.linearRampToValueAtTime(lastValue, t);
+  });
+}
+
+function stopAudio() {
+  activeNodes.forEach((node) => {
+    try {
+      node.stop?.();
+      node.disconnect?.();
+    } catch {
+      /* Node may already be stopped. */
+    }
+  });
+  activeNodes = [];
+}
+
+function midiToHz(note) {
+  return 440 * Math.pow(2, (Number(note) - 69) / 12);
+}
+
+async function connectMidi() {
+  if (!navigator.requestMIDIAccess) {
+    setStatus("Web MIDI is not available in this browser.");
+    return;
+  }
+
+  try {
+    midiAccess = await navigator.requestMIDIAccess({ sysex: true });
+    midiAccess.inputs.forEach((input) => {
+      input.onmidimessage = handleMidi;
+    });
+    midiAccess.onstatechange = () => connectMidi();
+    el.midiToggle.classList.add("is-active");
+    setStatus(`Listening to ${midiAccess.inputs.size || 0} MIDI input${midiAccess.inputs.size === 1 ? "" : "s"}.`);
+  } catch (error) {
+    setStatus(`MIDI access denied or unavailable: ${error.message}`);
+  }
+}
+
+function selectedMidiOutput() {
+  if (!midiAccess) return null;
+  const outputs = Array.from(midiAccess.outputs.values());
+  return outputs[0] || null;
+}
+
+async function sendSysex() {
+  if (!midiAccess) {
+    await connectMidi();
+  }
+
+  const output = selectedMidiOutput();
+  if (!output) {
+    setStatus("No MIDI output found for SysEx send.");
+    return;
+  }
+
+  output.send(buildSysex(SYSEX_COMMAND_PREVIEW));
+  setStatus(`Sent preview SysEx to ${output.name || "MIDI output"}.`);
+}
+
+function buildSysex(command) {
+  const payload = [selected & 0x7f, ...encodeName(presets[selected].name)];
+  appendStages(payload, presets[selected].amp);
+  appendStages(payload, presets[selected].pd);
+  return [0xf0, SYSEX_MANUFACTURER, ...SYSEX_ID, command, ...payload, 0xf7];
+}
+
+function appendStages(payload, stages) {
+  stages.forEach((stage) => {
+    payload.push(...packUint14(stage.level));
+    payload.push(...packUint21(stage.time));
+  });
+}
+
+function packUint14(value) {
+  const v = clampInt(value, 0, 0x3fff);
+  return [v & 0x7f, (v >> 7) & 0x7f];
+}
+
+function packUint21(value) {
+  const v = clampInt(value, 0, 0x1fffff);
+  return [v & 0x7f, (v >> 7) & 0x7f, (v >> 14) & 0x7f];
+}
+
+function encodeName(name) {
+  return Array.from({ length: 16 }, (_, index) => {
+    const code = name.charCodeAt(index) || 32;
+    return code >= 32 && code <= 126 ? code : 32;
+  });
+}
+
+function sysexHex() {
+  return buildSysex(SYSEX_COMMAND_PREVIEW)
+    .map((byte) => byte.toString(16).toUpperCase().padStart(2, "0"))
+    .join(" ");
+}
+
+function handleMidi(event) {
+  const [status, note, velocity] = event.data;
+  const type = status & 0xf0;
+  if (type === 0x90 && velocity > 0) {
+    el.pitchInput.value = note;
+    audition(note);
+  }
+  if (type === 0x80 || (type === 0x90 && velocity === 0)) {
+    stopAudio();
+  }
+}
+
+function downloadJson() {
+  const blob = new Blob([JSON.stringify(presets, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "c1zzl3-envelope-presets.json";
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function clampInt(value, min, max) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return min;
+  return Math.max(min, Math.min(max, parsed));
+}
+
+function escapeHtml(value) {
+  return value.replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;"
+  }[char]));
+}
+
+function setStatus(message) {
+  el.status.textContent = message;
+}
+
+el.addPreset.addEventListener("click", () => {
+  presets.push(preset("Custom preset", fill(0, 1), fill(0, 1)));
+  selected = presets.length - 1;
+  savePresets();
+  render();
+});
+
+el.presetName.addEventListener("input", () => {
+  presets[selected].name = el.presetName.value || "Untitled";
+  savePresets();
+  renderPresetList();
+  updateExport();
+});
+
+el.audition.addEventListener("click", () => audition());
+el.stop.addEventListener("click", stopAudio);
+el.midiToggle.addEventListener("click", connectMidi);
+el.downloadJson.addEventListener("click", downloadJson);
+el.resetPreset.addEventListener("click", () => {
+  const factory = factoryPresets[selected] || factoryPresets[0];
+  presets[selected] = structuredClone(factory);
+  savePresets();
+  render();
+  setStatus("Preset reset.");
+});
+el.copyCpp.addEventListener("click", async () => {
+  await navigator.clipboard.writeText(el.exportText.value);
+  setStatus("C++ preset copied.");
+});
+el.copySysex.addEventListener("click", async () => {
+  await navigator.clipboard.writeText(sysexHex());
+  setStatus("SysEx preview frame copied.");
+});
+el.sendSysex.addEventListener("click", sendSysex);
+
+window.addEventListener("resize", drawCurves);
+render();

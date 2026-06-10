@@ -1,3 +1,2 @@
-build/
-build-verify/
+build*/
 .DS_Store
