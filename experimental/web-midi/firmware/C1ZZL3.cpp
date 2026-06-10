@@ -76,6 +76,7 @@ public:
         if (envelopeSelectMode)
         {
             updateEnvelopeSelectMode(main, mode, previousMode);
+            updateWebMidiFeedback();
             lastMode = mode;
             return;
         }
@@ -186,6 +187,8 @@ public:
 
             updateTuringLEDs();
         }
+
+        updateWebMidiFeedback();
     }
 
 private:
@@ -228,6 +231,7 @@ private:
     static constexpr uint8_t EnvelopePresetCount = 10;
     static constexpr uint32_t StartupSelectDelaySamples = 12000u;
     static constexpr uint32_t StartupSelectWindowSamples = 24000u;
+    static constexpr uint32_t WebMidiFeedbackSamples = 24000u;
     static constexpr uint32_t SaveMagic = 0x43315A33u; // C1Z3
     static constexpr uint16_t SaveVersion = 2;
     static constexpr uint32_t SaveFlashOffset =
@@ -590,32 +594,51 @@ private:
     void handleWebMidiSysex()
     {
         if (sysexLength != WebMidiPayloadLength + 6u)
+        {
+            flashWebMidiRejected();
             return;
+        }
 
         if (sysexBuffer[0] != WebMidiManufacturer)
+        {
+            flashWebMidiRejected();
             return;
+        }
 
         for (uint32_t i = 0; i < 4u; ++i)
         {
             if (sysexBuffer[1u + i] != WebMidiId[i])
+            {
+                flashWebMidiRejected();
                 return;
+            }
         }
 
         uint8_t command = sysexBuffer[5];
         if (command != WebMidiCommandPreview)
+        {
+            flashWebMidiRejected();
             return;
+        }
 
         EnvelopeProgram decoded;
         uint32_t offset = 6u + 1u + 16u;
 
         if (!decodeWebMidiStages(decoded.amp, offset))
+        {
+            flashWebMidiRejected();
             return;
+        }
 
         if (!decodeWebMidiStages(decoded.pd, offset))
+        {
+            flashWebMidiRejected();
             return;
+        }
 
         pendingWebEnvelopeProgram = decoded;
         pendingWebEnvelopeReady = true;
+        flashWebMidiAccepted();
     }
 
     bool decodeWebMidiStages(EnvelopeStage* stages, uint32_t& offset)
@@ -656,6 +679,18 @@ private:
         envelopePreset = (uint8_t)EnvelopePreset::WebMidi;
         triggerEnvelope();
 
+    }
+
+    void flashWebMidiAccepted()
+    {
+        webMidiFeedbackKind = 1;
+        webMidiFeedbackSamples = WebMidiFeedbackSamples;
+    }
+
+    void flashWebMidiRejected()
+    {
+        webMidiFeedbackKind = 2;
+        webMidiFeedbackSamples = WebMidiFeedbackSamples;
     }
 
     inline int32_t morphWave(uint32_t phase, int32_t wave)
@@ -869,6 +904,30 @@ private:
         LedBrightness(3, osc2Ring);
         LedBrightness(4, osc2Noise);
         LedBrightness(5, alt ? 4095 : 0);
+    }
+
+    void updateWebMidiFeedback()
+    {
+        if (webMidiFeedbackSamples == 0)
+            return;
+
+        uint32_t age = WebMidiFeedbackSamples - webMidiFeedbackSamples;
+        webMidiFeedbackSamples--;
+
+        if (webMidiFeedbackKind == 1)
+        {
+            bool on = (age & 2048u) < 1536u;
+            for (uint32_t i = 0; i < 6; ++i)
+                LedBrightness(i, on ? 4095 : 0);
+            return;
+        }
+
+        bool phase = (age & 2048u) != 0;
+        for (uint32_t i = 0; i < 6; ++i)
+        {
+            bool even = (i & 1u) == 0;
+            LedBrightness(i, even == phase ? 4095 : 0);
+        }
     }
 
     void updateStartupEnvelopeSelect(Switch mode)
@@ -1341,6 +1400,8 @@ private:
     bool envelopeSelectReady = false;
     bool envelopeSelectHoldActive = false;
     bool envelopeSelectSaved = false;
+    volatile uint32_t webMidiFeedbackSamples = 0;
+    volatile uint8_t webMidiFeedbackKind = 0;
     EnvelopeProgram webEnvelopeProgram = {{
         {0, 1}, {0, 1}, {0, 1}, {0, 1},
         {0, 1}, {0, 1}, {0, 1}, {0, 1}
