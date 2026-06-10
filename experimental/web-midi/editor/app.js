@@ -2,9 +2,15 @@ const SAMPLE_RATE = 48000;
 const MAX_LEVEL = 4095;
 const STAGES = 8;
 const CUSTOM_SLOT_COUNT = 8;
+const AUDITION_TIME_SCALE = 4;
+const EDITOR_VIEW_SAMPLES = SAMPLE_RATE * 4;
+const MIN_SEND_SAMPLES = 960;
 const SYSEX_MANUFACTURER = 0x7d;
 const SYSEX_ID = [0x43, 0x31, 0x5a, 0x33];
 const SYSEX_COMMAND_PREVIEW = 0x01;
+const SYSEX_COMMAND_SAVE = 0x02;
+const SYSEX_COMMAND_SETTINGS = 0x03;
+const SYSEX_COMMAND_SAVE_SETTINGS = 0x04;
 
 const factoryPresets = [
   preset("Off", fill(0, 1), fill(0, 1)),
@@ -34,12 +40,18 @@ const factoryPresets = [
     [[3000, 480], [800, 12000], [3600, 12000], [1200, 12000], [2600, 18000], [600, 18000], [1800, 24000], [0, 36000]])
 ];
 
+const FACTORY_PRESET_COUNT = factoryPresets.length;
+
 let presets = loadPresets();
-let selected = 1;
+let selected = 3;
 let audioCtx;
 let activeNodes = [];
 let midiAccess;
 let sendingSysex = false;
+let auditionLoop = false;
+let auditionToken = 0;
+let dragTarget = null;
+let performanceSettings = loadPerformanceSettings();
 
 const el = {
   presetList: document.querySelector("#presetList"),
@@ -60,8 +72,16 @@ const el = {
   copyCpp: document.querySelector("#copyCpp"),
   copySysex: document.querySelector("#copySysex"),
   sendSysex: document.querySelector("#sendSysex"),
+  flashSysex: document.querySelector("#flashSysex"),
+  sendSettings: document.querySelector("#sendSettings"),
+  flashSettings: document.querySelector("#flashSettings"),
   downloadJson: document.querySelector("#downloadJson"),
-  resetPreset: document.querySelector("#resetPreset")
+  resetPreset: document.querySelector("#resetPreset"),
+  ringControl: document.querySelector("#ringControl"),
+  noiseControl: document.querySelector("#noiseControl"),
+  midiInChannel: document.querySelector("#midiInChannel"),
+  midiOutChannel: document.querySelector("#midiOutChannel"),
+  turingMidiOut: document.querySelector("#turingMidiOut")
 };
 
 function preset(name, amp, pd) {
@@ -70,6 +90,12 @@ function preset(name, amp, pd) {
 
 function fill(level, time) {
   return Array.from({ length: STAGES }, () => [level, time]);
+}
+
+function defaultCustomPreset() {
+  return preset("Custom preset",
+    [[0, 6000], [4095, 6000], [3200, 9000], [2100, 9000], [1400, 9000], [900, 6000], [400, 6000], [0, 3000]],
+    [[0, 6000], [1800, 6000], [900, 9000], [2300, 9000], [1200, 9000], [700, 6000], [300, 6000], [0, 3000]]);
 }
 
 function normalizeStages(stages) {
@@ -82,8 +108,18 @@ function normalizeStages(stages) {
 function loadPresets() {
   try {
     const saved = JSON.parse(localStorage.getItem("c1zzl3-envelope-presets"));
-    if (Array.isArray(saved) && saved.length) {
-      return saved.map((item) => preset(item.name || "Preset", item.amp, item.pd));
+    if (Array.isArray(saved)) {
+      const custom = saved
+        .slice(FACTORY_PRESET_COUNT)
+        .map((item) => preset(item.name || "Custom preset", item.amp, item.pd))
+        .slice(0, CUSTOM_SLOT_COUNT);
+      return [...structuredClone(factoryPresets), ...custom];
+    }
+    if (Array.isArray(saved?.customPresets)) {
+      const custom = saved.customPresets
+        .map((item) => preset(item.name || "Custom preset", item.amp, item.pd))
+        .slice(0, CUSTOM_SLOT_COUNT);
+      return [...structuredClone(factoryPresets), ...custom];
     }
   } catch {
     /* Keep factory presets if saved data is malformed. */
@@ -92,7 +128,32 @@ function loadPresets() {
 }
 
 function savePresets() {
-  localStorage.setItem("c1zzl3-envelope-presets", JSON.stringify(presets));
+  localStorage.setItem("c1zzl3-envelope-presets", JSON.stringify({
+    customPresets: presets.slice(FACTORY_PRESET_COUNT, FACTORY_PRESET_COUNT + CUSTOM_SLOT_COUNT)
+  }));
+}
+
+function loadPerformanceSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("c1zzl3-performance-settings"));
+    if (saved && typeof saved === "object") {
+      return {
+        ring: clampInt(saved.ring, 0, MAX_LEVEL),
+        noise: clampInt(saved.noise, 0, MAX_LEVEL),
+        midiInChannel: clampInt(saved.midiInChannel, 1, 16),
+        midiOutChannel: clampInt(saved.midiOutChannel, 1, 16),
+        turingMidiOut: Boolean(saved.turingMidiOut)
+      };
+    }
+  } catch {
+    /* Keep defaults if saved data is malformed. */
+  }
+
+  return { ring: 0, noise: 0, midiInChannel: 1, midiOutChannel: 1, turingMidiOut: false };
+}
+
+function savePerformanceSettings() {
+  localStorage.setItem("c1zzl3-performance-settings", JSON.stringify(performanceSettings));
 }
 
 function render() {
@@ -101,25 +162,63 @@ function render() {
 
   renderPresetList();
   el.presetName.value = current.name;
+  el.presetName.disabled = selected < FACTORY_PRESET_COUNT;
+  el.addPreset.disabled = customPresetCount() >= CUSTOM_SLOT_COUNT;
   renderStages("amp", el.ampStages);
   renderStages("pd", el.pdStages);
+  renderPerformanceSettings();
   drawCurves();
   updateExport();
+}
+
+function renderPerformanceSettings() {
+  el.ringControl.value = performanceSettings.ring;
+  el.noiseControl.value = performanceSettings.noise;
+  el.midiInChannel.value = performanceSettings.midiInChannel;
+  el.midiOutChannel.value = performanceSettings.midiOutChannel;
+  el.turingMidiOut.checked = performanceSettings.turingMidiOut;
 }
 
 function renderPresetList() {
   el.presetList.innerHTML = "";
   presets.forEach((item, index) => {
+    const row = document.createElement("div");
+    row.className = "preset-row";
     const button = document.createElement("button");
     button.className = `preset-button${index === selected ? " is-active" : ""}`;
     button.type = "button";
-    button.innerHTML = `<span>${escapeHtml(item.name)}</span><span>${index}</span>`;
+    button.innerHTML = `<span>${escapeHtml(item.name)}</span><span>${index < FACTORY_PRESET_COUNT ? index : `C${index - FACTORY_PRESET_COUNT + 1}`}</span>`;
     button.addEventListener("click", () => {
       selected = index;
       render();
     });
-    el.presetList.append(button);
+    row.append(button);
+
+    if (index >= FACTORY_PRESET_COUNT) {
+      const remove = document.createElement("button");
+      remove.className = "preset-remove";
+      remove.type = "button";
+      remove.title = "Remove custom preset";
+      remove.textContent = "×";
+      remove.addEventListener("click", () => removeCustomPreset(index));
+      row.append(remove);
+    }
+
+    el.presetList.append(row);
   });
+}
+
+function customPresetCount() {
+  return Math.max(0, presets.length - FACTORY_PRESET_COUNT);
+}
+
+function removeCustomPreset(index) {
+  if (index < FACTORY_PRESET_COUNT) return;
+  presets.splice(index, 1);
+  selected = Math.min(Math.max(1, index - 1), presets.length - 1);
+  savePresets();
+  render();
+  setStatus("Custom preset removed.");
 }
 
 function renderStages(lane, container) {
@@ -140,12 +239,31 @@ function renderStages(lane, container) {
 }
 
 function updateStage(lane, index, key, value) {
+  if (selected < FACTORY_PRESET_COUNT) {
+    if (!duplicateFactoryPreset()) return;
+  }
+
   const max = key === "level" ? MAX_LEVEL : 192000;
   const min = key === "level" ? 0 : 1;
   presets[selected][lane][index][key] = clampInt(value, min, max);
   savePresets();
   drawCurves();
   updateExport();
+}
+
+function duplicateFactoryPreset() {
+  if (selected >= FACTORY_PRESET_COUNT) return true;
+  if (customPresetCount() >= CUSTOM_SLOT_COUNT) {
+    setStatus("Custom preset limit reached.");
+    return false;
+  }
+
+  const source = presets[selected];
+  presets.push(preset(`${source.name} copy`, source.amp, source.pd));
+  selected = presets.length - 1;
+  savePresets();
+  render();
+  return true;
 }
 
 function drawCurves() {
@@ -172,8 +290,11 @@ function drawCurves() {
     ctx.stroke();
   }
 
-  drawLane(ctx, presets[selected].amp, "#ffcc66", w, h);
-  drawLane(ctx, presets[selected].pd, "#6ee7c8", w, h);
+  const viewSamples = editorViewSamples();
+  drawLane(ctx, presets[selected].amp, "#ffcc66", w, h, viewSamples);
+  drawLane(ctx, presets[selected].pd, "#6ee7c8", w, h, viewSamples);
+  drawHandles(ctx, presets[selected].amp, "#ffcc66", w, h, viewSamples);
+  drawHandles(ctx, presets[selected].pd, "#6ee7c8", w, h, viewSamples);
 
   ctx.fillStyle = "#a5adba";
   ctx.font = "12px system-ui";
@@ -181,11 +302,22 @@ function drawCurves() {
   ctx.fillStyle = "#6ee7c8";
   ctx.fillText(`PD`, 62, 22);
   ctx.fillStyle = "#a5adba";
-  ctx.fillText(`${(totalSamples(presets[selected].amp) / SAMPLE_RATE).toFixed(2)}s`, w - 64, h - 16);
+  ctx.fillText(`${(totalSamples(presets[selected].amp) / SAMPLE_RATE).toFixed(2)}s / ${(viewSamples / SAMPLE_RATE).toFixed(0)}s`, w - 94, h - 16);
 }
 
-function drawLane(ctx, stages, color, w, h) {
-  const total = Math.max(1, totalSamples(stages));
+function drawHandles(ctx, stages, color, w, h, viewSamples) {
+  let x = 0;
+  ctx.fillStyle = color;
+  stages.forEach((stage) => {
+    x = Math.min(w, x + (stage.time / viewSamples) * w);
+    const y = levelY(stage.level, h);
+    ctx.beginPath();
+    ctx.arc(x, y, 5, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+function drawLane(ctx, stages, color, w, h, viewSamples) {
   let x = 0;
   let y = levelY(0, h);
 
@@ -195,7 +327,7 @@ function drawLane(ctx, stages, color, w, h) {
   ctx.moveTo(x, y);
 
   stages.forEach((stage) => {
-    x += (stage.time / total) * w;
+    x = Math.min(w, x + (stage.time / viewSamples) * w);
     y = levelY(stage.level, h);
     ctx.lineTo(x, y);
   });
@@ -209,6 +341,19 @@ function levelY(level, height) {
 
 function totalSamples(stages) {
   return stages.reduce((sum, stage) => sum + stage.time, 0);
+}
+
+function editorViewSamples() {
+  const current = presets[selected];
+  const longest = Math.max(
+    EDITOR_VIEW_SAMPLES,
+    totalSamples(current.amp),
+    totalSamples(current.pd));
+  return Math.ceil(longest / SAMPLE_RATE) * SAMPLE_RATE;
+}
+
+function samplesBeforeStage(stages, index) {
+  return stages.slice(0, index).reduce((sum, stage) => sum + stage.time, 0);
 }
 
 function updateExport() {
@@ -232,8 +377,16 @@ function cppName(name) {
 
 async function audition(note = Number(el.pitchInput.value)) {
   stopAudio();
+  auditionLoop = true;
+  const token = ++auditionToken;
   audioCtx ||= new AudioContext();
   await audioCtx.resume();
+
+  playAudition(note, token);
+}
+
+function playAudition(note, token) {
+  if (!auditionLoop || token !== auditionToken) return;
 
   const now = audioCtx.currentTime;
   const current = presets[selected];
@@ -247,14 +400,18 @@ async function audition(note = Number(el.pitchInput.value)) {
   filter.frequency.value = 220;
   gain.gain.value = 0;
 
+  const duration = scaledSamples(current.amp) / SAMPLE_RATE;
   scheduleEnvelope(gain.gain, current.amp, now, 0, 0.35);
   scheduleEnvelope(filter.frequency, current.pd, now, 220, 4200);
 
   osc.connect(filter).connect(gain).connect(audioCtx.destination);
   osc.start(now);
-  osc.stop(now + totalSamples(current.amp) / SAMPLE_RATE + 0.15);
+  osc.stop(now + duration + 0.15);
+  osc.onended = () => {
+    if (auditionLoop && token === auditionToken) playAudition(note, token);
+  };
   activeNodes = [osc, gain, filter];
-  setStatus(`Auditioning ${current.name} at MIDI note ${note}.`);
+  setStatus(`Looping browser audition for ${current.name} at MIDI note ${note}.`);
 }
 
 function scheduleEnvelope(param, stages, startTime, base, depth) {
@@ -264,13 +421,15 @@ function scheduleEnvelope(param, stages, startTime, base, depth) {
   param.setValueAtTime(lastValue, startTime);
 
   stages.forEach((stage) => {
-    t += stage.time / SAMPLE_RATE;
+    t += (stage.time * AUDITION_TIME_SCALE) / SAMPLE_RATE;
     lastValue = base + (stage.level / MAX_LEVEL) * depth;
     param.linearRampToValueAtTime(lastValue, t);
   });
 }
 
 function stopAudio() {
+  auditionLoop = false;
+  auditionToken++;
   activeNodes.forEach((node) => {
     try {
       node.stop?.();
@@ -280,6 +439,10 @@ function stopAudio() {
     }
   });
   activeNodes = [];
+}
+
+function scaledSamples(stages) {
+  return totalSamples(stages) * AUDITION_TIME_SCALE;
 }
 
 function midiToHz(note) {
@@ -339,14 +502,14 @@ function selectedMidiOutput() {
   return Array.from(midiAccess.outputs.values())[0] || null;
 }
 
-async function sendSysex() {
+async function sendSysex(command = SYSEX_COMMAND_PREVIEW) {
   if (sendingSysex) {
     setStatus("SysEx send already in progress.");
     return;
   }
 
   if (!canSendSelectedEnvelope()) {
-    setStatus("Preset 0 / silent envelopes are not sent to custom card slots.");
+    setStatus("Preset 0, silent envelopes, and very short envelopes are not sent to custom card slots.");
     return;
   }
 
@@ -360,32 +523,56 @@ async function sendSysex() {
     return;
   }
 
-  const frame = buildSysex(SYSEX_COMMAND_PREVIEW);
+  const frame = buildSysex(command);
+  const action = command === SYSEX_COMMAND_SAVE ? "Flash" : "Sent";
+  const summary = frameSummary();
   sendingSysex = true;
   el.sendSysex.disabled = true;
+  el.flashSysex.disabled = true;
   output.send(frame);
-  setStatus(`Sent ${frame.length} byte preview SysEx to ${output.name || "MIDI output"} as Custom ${Number(el.customSlot.value) + 1}.`);
+  setStatus(`${action} ${frame.length} byte SysEx to ${output.name || "MIDI output"} as Custom ${Number(el.customSlot.value) + 1}. Amp max ${summary.ampMax}, ${summary.seconds}s.`);
 
   window.setTimeout(() => {
     sendingSysex = false;
     el.sendSysex.disabled = false;
+    el.flashSysex.disabled = false;
   }, 250);
 }
 
 function buildSysex(command) {
   if (!canSendSelectedEnvelope()) {
-    throw new Error("Cannot build SysEx for preset 0 or a silent envelope.");
+    throw new Error("Cannot build SysEx for preset 0, a silent envelope, or a very short envelope.");
   }
 
   const slot = clampInt(el.customSlot.value, 0, CUSTOM_SLOT_COUNT - 1);
   const payload = [slot & 0x7f, ...encodeName(presets[selected].name)];
   appendStages(payload, presets[selected].amp);
   appendStages(payload, presets[selected].pd);
-  return new Uint8Array([0xf0, SYSEX_MANUFACTURER, ...SYSEX_ID, command, ...payload, 0xf7]);
+  return [0xf0, SYSEX_MANUFACTURER, ...SYSEX_ID, command, ...payload, 0xf7];
+}
+
+function buildSettingsSysex(command) {
+  const payload = [];
+  payload.push(...packUint14(performanceSettings.ring));
+  payload.push(...packUint14(performanceSettings.noise));
+  payload.push(clampInt(performanceSettings.midiInChannel, 1, 16) - 1);
+  payload.push(clampInt(performanceSettings.midiOutChannel, 1, 16) - 1);
+  payload.push(performanceSettings.turingMidiOut ? 1 : 0);
+  return [0xf0, SYSEX_MANUFACTURER, ...SYSEX_ID, command, ...payload, 0xf7];
 }
 
 function canSendSelectedEnvelope() {
-  return selected !== 0 && presets[selected].amp.some((stage) => stage.level > 0);
+  return selected !== 0 &&
+    presets[selected].amp.some((stage) => stage.level > 0) &&
+    totalSamples(presets[selected].amp) >= MIN_SEND_SAMPLES;
+}
+
+function frameSummary() {
+  const amp = presets[selected].amp;
+  return {
+    ampMax: Math.max(...amp.map((stage) => stage.level)),
+    seconds: (totalSamples(amp) / SAMPLE_RATE).toFixed(2)
+  };
 }
 
 function appendStages(payload, stages) {
@@ -460,14 +647,105 @@ function setStatus(message) {
   el.status.textContent = message;
 }
 
+function canvasPoint(event) {
+  const rect = el.canvas.getBoundingClientRect();
+  return {
+    x: Math.max(0, Math.min(rect.width, event.clientX - rect.left)),
+    y: Math.max(0, Math.min(rect.height, event.clientY - rect.top)),
+    width: rect.width,
+    height: rect.height
+  };
+}
+
+function findDragTarget(point) {
+  const current = presets[selected];
+  let best = null;
+  const viewSamples = editorViewSamples();
+
+  for (const lane of ["amp", "pd"]) {
+    const stages = current[lane];
+    let x = 0;
+
+    stages.forEach((stage, index) => {
+      x = Math.min(point.width, x + (stage.time / viewSamples) * point.width);
+      const y = levelY(stage.level, point.height);
+      const distance = Math.hypot(point.x - x, point.y - y);
+      if (!best || distance < best.distance) {
+        best = { lane, index, distance };
+      }
+    });
+  }
+
+  return best && best.distance <= 28 ? best : null;
+}
+
+function updateDraggedStage(event) {
+  if (!dragTarget) return;
+  const point = canvasPoint(event);
+
+  if (selected < FACTORY_PRESET_COUNT) {
+    if (!duplicateFactoryPreset()) return;
+  }
+
+  const level = Math.round((1 - ((point.y - 18) / Math.max(1, point.height - 36))) * MAX_LEVEL);
+  const stages = presets[selected][dragTarget.lane];
+  const stage = stages[dragTarget.index];
+  const before = samplesBeforeStage(stages, dragTarget.index);
+  const targetEnd = Math.round((point.x / Math.max(1, point.width)) * editorViewSamples());
+  const maxStageTime = Math.max(1, 192000 - before);
+
+  stage.level = clampInt(level, 0, MAX_LEVEL);
+  stage.time = clampInt(targetEnd - before, 1, maxStageTime);
+  savePresets();
+  renderStages("amp", el.ampStages);
+  renderStages("pd", el.pdStages);
+  drawCurves();
+  updateExport();
+}
+
+function updatePerformanceSetting(key, value) {
+  if (key === "turingMidiOut") {
+    performanceSettings[key] = Boolean(value);
+  } else if (key === "midiInChannel" || key === "midiOutChannel") {
+    performanceSettings[key] = clampInt(value, 1, 16);
+  } else {
+    performanceSettings[key] = clampInt(value, 0, MAX_LEVEL);
+  }
+
+  savePerformanceSettings();
+}
+
+async function sendPerformanceSettings(command = SYSEX_COMMAND_SETTINGS) {
+  if (!midiAccess) {
+    await connectMidi();
+  }
+
+  const output = selectedMidiOutput();
+  if (!output) {
+    setStatus("No MIDI output found for settings send.");
+    return;
+  }
+
+  const frame = buildSettingsSysex(command);
+  output.send(frame);
+  const action = command === SYSEX_COMMAND_SAVE_SETTINGS ? "Saved" : "Set";
+  setStatus(`${action} ring ${performanceSettings.ring}, noise ${performanceSettings.noise}, MIDI in ch ${performanceSettings.midiInChannel}, Turing out ch ${performanceSettings.midiOutChannel}.`);
+}
+
 el.addPreset.addEventListener("click", () => {
-  presets.push(preset("Custom preset", fill(0, 1), fill(0, 1)));
+  if (customPresetCount() >= CUSTOM_SLOT_COUNT) {
+    setStatus("Custom preset limit reached.");
+    return;
+  }
+
+  presets.push(defaultCustomPreset());
   selected = presets.length - 1;
   savePresets();
   render();
 });
 
 el.presetName.addEventListener("input", () => {
+  if (selected < FACTORY_PRESET_COUNT) return;
   presets[selected].name = el.presetName.value || "Untitled";
   savePresets();
   renderPresetList();
@@ -495,14 +773,36 @@ el.copyCpp.addEventListener("click", async () => {
 });
 el.copySysex.addEventListener("click", async () => {
   if (!canSendSelectedEnvelope()) {
-    setStatus("Preset 0 / silent envelopes are not copied as custom SysEx.");
+    setStatus("Preset 0, silent envelopes, and very short envelopes are not copied as custom SysEx.");
     return;
   }
 
   await navigator.clipboard.writeText(sysexHex());
   setStatus(`SysEx preview frame copied for Custom ${Number(el.customSlot.value) + 1}.`);
 });
-el.sendSysex.addEventListener("click", sendSysex);
+el.sendSysex.addEventListener("click", () => sendSysex(SYSEX_COMMAND_PREVIEW));
+el.flashSysex.addEventListener("click", () => sendSysex(SYSEX_COMMAND_SAVE));
+el.sendSettings.addEventListener("click", () => sendPerformanceSettings(SYSEX_COMMAND_SETTINGS));
+el.flashSettings.addEventListener("click", () => sendPerformanceSettings(SYSEX_COMMAND_SAVE_SETTINGS));
+el.ringControl.addEventListener("input", () => updatePerformanceSetting("ring", el.ringControl.value));
+el.noiseControl.addEventListener("input", () => updatePerformanceSetting("noise", el.noiseControl.value));
+el.midiInChannel.addEventListener("input", () => updatePerformanceSetting("midiInChannel", el.midiInChannel.value));
+el.midiOutChannel.addEventListener("input", () => updatePerformanceSetting("midiOutChannel", el.midiOutChannel.value));
+el.turingMidiOut.addEventListener("change", () => updatePerformanceSetting("turingMidiOut", el.turingMidiOut.checked));
+el.canvas.addEventListener("pointerdown", (event) => {
+  const target = findDragTarget(canvasPoint(event));
+  if (!target) return;
+  dragTarget = target;
+  el.canvas.setPointerCapture(event.pointerId);
+  updateDraggedStage(event);
+});
+el.canvas.addEventListener("pointermove", updateDraggedStage);
+el.canvas.addEventListener("pointerup", () => {
+  dragTarget = null;
+});
+el.canvas.addEventListener("pointercancel", () => {
+  dragTarget = null;
+});
 
 window.addEventListener("resize", drawCurves);
 render();

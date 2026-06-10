@@ -9,8 +9,8 @@ The production firmware in the repo root does not use this protocol.
 
 - USB MIDI device mode.
 - Browser/editor sends Web MIDI SysEx to the card.
-- Current firmware command is RAM-only preview into one of eight custom slots.
-  Custom envelope data is not persisted to flash.
+- Current firmware supports preview and flash-save commands for one of eight
+  custom slots, plus an experimental performance-settings command.
 - Factory presets `0..8` are never overwritten by SysEx.
 - Custom slots are enumerated after the factory presets as card presets `9..16`.
 - Custom envelopes with no non-zero amplitude stage are rejected, so preset `0`
@@ -21,7 +21,7 @@ The production firmware in the repo root does not use this protocol.
 All bytes inside the SysEx frame must be 7-bit clean.
 
 ```text
-F0 7D 43 31 5A 33 01 ss nn... aa... dd... F7
+F0 7D 43 31 5A 33 cc payload... F7
 ```
 
 | Bytes | Meaning |
@@ -29,14 +29,21 @@ F0 7D 43 31 5A 33 01 ss nn... aa... dd... F7
 | `F0` | SysEx start |
 | `7D` | non-commercial/manufacturer development ID |
 | `43 31 5A 33` | C1ZZL3 card ID, ASCII `C1Z3` |
-| `01` | preview command |
+| `cc` | command byte |
 | `ss` | custom slot target, `0..7`, mapped to card presets `9..16` |
 | `nn...` | 16-byte ASCII preset name, space-padded |
 | `aa...` | eight amplitude stages |
 | `dd...` | eight phase-distortion stages |
 | `F7` | SysEx end |
 
-Payload length after the command byte is 97 bytes:
+Envelope commands:
+
+| Command | Meaning |
+| --- | --- |
+| `01` | preview RAM-only custom envelope |
+| `02` | flash-save custom envelope |
+
+Envelope payload length after the command byte is 97 bytes:
 
 ```text
 1 custom slot target
@@ -82,6 +89,29 @@ time = time_lsb7 | (time_mid7 << 7) | (time_msb7 << 14)
 
 Firmware treats `time == 0` as `1` sample.
 
+## Performance Settings Encoding
+
+Performance settings use command `03` for RAM-only apply and `04` for
+flash-save apply.
+
+```text
+F0 7D 43 31 5A 33 03 rr rr nn nn ic oc ff F7
+```
+
+Payload length after the command byte is 7 bytes:
+
+```text
+2 ring-mod bytes
+2 noise bytes
+1 MIDI input channel
+1 MIDI Turing output channel
+1 flags byte
+```
+
+Ring mod and noise are 14-bit little-endian 7-bit packed integers, using the
+same `0..4095` range as knob values. MIDI channels are encoded as `0..15` for
+channels `1..16`. Flags bit `0` enables Turing MIDI note output.
+
 ## Firmware Response
 
 There is no MIDI acknowledgement yet.
@@ -107,8 +137,12 @@ slot 7 -> preset 16
 ## Current Limitations
 
 - No SysEx readback.
-- No flash persistence for custom envelope data.
-- Custom slots are blank after startup until sent from the browser.
+- Custom slot names are kept by the browser editor, not by the card firmware.
+- Custom slots are blank after startup unless they were sent with command `02`.
 - Silent custom envelopes are not accepted.
 - No USB MIDI host mode.
-- No MIDI note or pitchbend control of the oscillator.
+- USB MIDI note input is device-mode only: a DAW or USB host can play the card,
+  but a plain USB MIDI keyboard cannot plug directly into the card without a
+  USB host in between.
+- MIDI note input currently retriggers the selected envelope as a one-shot. It
+  does not implement a separate release stage.

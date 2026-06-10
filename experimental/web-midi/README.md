@@ -38,6 +38,7 @@ The editor can:
 
 - edit and add envelope presets
 - preview amplitude and phase-distortion envelopes
+- set ring mod, noise, MIDI input channel, and Turing MIDI output channel
 - audition envelopes in the browser
 - use Web MIDI note input for browser pitch auditioning
 - copy firmware-ready C++ for `envelopeProgram()`
@@ -53,10 +54,15 @@ The experimental firmware can:
 - immediately trigger the received envelope for auditioning
 - flash all six LEDs for accepted SysEx frames
 - alternate even/odd LEDs for rejected SysEx frames
+- persist a custom slot to flash when the editor sends the `Flash` command
+- apply ring/noise/MIDI channel settings from the editor
+- receive USB MIDI note on/off from a DAW or other USB MIDI host on the selected
+  channel, using note-on to pitch the synth and retrigger the selected envelope
+- send Turing mode note-on/note-off messages back to the DAW when Turing MIDI
+  output is enabled
 
-The experimental firmware does not yet persist custom envelope data to flash.
-That is deliberate: saving only the preset number without saving the full
-envelope shape would make reloads misleading.
+The editor keeps custom preset names in browser local storage. The card firmware
+persists custom envelope shapes only; it does not store or display names.
 
 ## Testing Notes
 
@@ -65,8 +71,27 @@ envelope shape would make reloads misleading.
 - Factory presets 0-8 are not overwritten by SysEx.
 - Preset 0 / Off and fully silent amplitude envelopes are not sent or accepted
   as custom slots.
+- Very short envelopes are blocked by the editor before sending. If the status
+  shows `0.00s`, drag a node to the right or enter a longer stage time before
+  using `Send`.
 - Envelope retriggers now start from the current envelope level instead of
   snapping back to zero, which should reduce trigger clicks.
+- `Send` previews a custom slot in RAM. `Flash` writes the chosen custom slot to
+  the card's flash sector for power-cycle testing.
+- `Set` applies ring/noise/MIDI channel settings in RAM. `Save Set` writes those
+  settings to the card's flash sector.
+- The browser editor is capped at eight custom presets, matching the eight card
+  custom slots, and custom presets can be removed from the preset list.
+- The canvas handles can be dragged up/down to change stage level and sideways
+  to change that stage's time. The editor shows at least four seconds, then
+  expands to fit longer presets such as Strings. When
+  amplitude and PD handles sit on top of each other, the editor picks the
+  amplitude handle first; move the amplitude handle away, then grab the PD
+  handle underneath if needed. Stage times can still be edited numerically.
+- In Turing mode, turning X now briefly displays the selected sequence length as
+  a binary value on the six LEDs.
+- Turing MIDI output maps the generated CV to notes over roughly four octaves.
+  Check for hanging notes during testing before relying on it in a DAW session.
 - If Chrome freezes or becomes unstable, reload the page, press `MIDI` once,
   select the C1ZZL3 MIDI output explicitly, and send one frame at a time.
 - The editor no longer reconnects automatically from inside MIDI state-change

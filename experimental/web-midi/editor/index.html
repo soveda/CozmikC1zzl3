@@ -14,8 +14,8 @@
         <h1>Envelope Lab</h1>
       </div>
       <div class="transport">
-        <button id="audition" type="button" title="Audition envelope">▶</button>
-        <button id="stop" type="button" title="Stop audition">■</button>
+        <button id="audition" type="button" title="Loop browser audition">▶</button>
+        <button id="stop" type="button" title="Stop browser audition">■</button>
         <button id="midiToggle" type="button" title="Connect USB MIDI input">MIDI</button>
       </div>
     </header>
@@ -92,10 +92,35 @@
             <option value="">No output selected</option>
           </select>
         </label>
+        <section class="performance-panel" aria-label="Performance settings">
+          <label>
+            Ring mod
+            <input id="ringControl" type="range" min="0" max="4095" value="0">
+          </label>
+          <label>
+            Noise
+            <input id="noiseControl" type="range" min="0" max="4095" value="0">
+          </label>
+          <label>
+            MIDI in ch
+            <input id="midiInChannel" type="number" min="1" max="16" value="1">
+          </label>
+          <label>
+            Turing out ch
+            <input id="midiOutChannel" type="number" min="1" max="16" value="1">
+          </label>
+          <label class="checkbox-row">
+            <input id="turingMidiOut" type="checkbox">
+            Turing MIDI out
+          </label>
+        </section>
         <div class="output-actions">
           <button id="copyCpp" type="button">Copy C++</button>
           <button id="copySysex" type="button">SysEx</button>
           <button id="sendSysex" type="button">Send</button>
+          <button id="flashSysex" type="button">Flash</button>
+          <button id="sendSettings" type="button">Set</button>
+          <button id="flashSettings" type="button">Save Set</button>
           <button id="downloadJson" type="button">JSON</button>
           <button id="resetPreset" type="button">Reset</button>
         </div>
