@@ -97,7 +97,7 @@ h2 {
 .workspace {
   min-height: 0;
   display: grid;
-  grid-template-columns: 220px minmax(520px, 1fr) minmax(380px, 28vw);
+  grid-template-columns: 220px minmax(520px, 1fr) clamp(360px, 22vw, 420px);
 }
 
 .preset-list,
@@ -111,10 +111,10 @@ h2 {
   border-right: 0;
   border-left: 1px solid var(--line);
   display: grid;
-  grid-template-rows: auto auto minmax(360px, 1fr) auto;
+  grid-template-rows: auto auto auto minmax(320px, 1fr) auto;
   align-content: start;
-  gap: 10px;
-  padding: 16px;
+  gap: 8px;
+  padding: 12px;
 }
 
 .list-head,
@@ -287,15 +287,17 @@ canvas {
   padding: 0;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
 }
 
 .output-actions button {
-  padding: 0 10px;
+  min-height: 32px;
+  padding: 0 6px;
+  font-size: 12px;
 }
 
 textarea {
-  min-height: 360px;
+  min-height: 320px;
   resize: none;
   padding: 12px;
   color: #f8e7bb;
@@ -309,11 +311,20 @@ textarea {
 .performance-panel {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px 12px;
-  padding: 10px;
+  gap: 8px 10px;
+  padding: 8px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #14171b;
+}
+
+.performance-panel label {
+  gap: 4px;
+}
+
+.performance-panel input,
+.performance-panel select {
+  height: 32px;
 }
 
 .performance-panel input[type="range"] {
