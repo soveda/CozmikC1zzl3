@@ -13,6 +13,8 @@ The production firmware in the repo root does not use this protocol.
   Custom envelope data is not persisted to flash.
 - Factory presets `0..8` are never overwritten by SysEx.
 - Custom slots are enumerated after the factory presets as card presets `9..16`.
+- Custom envelopes with no non-zero amplitude stage are rejected, so preset `0`
+  / Off cannot accidentally create a silent custom slot.
 
 ## Frame
 
@@ -107,5 +109,6 @@ slot 7 -> preset 16
 - No SysEx readback.
 - No flash persistence for custom envelope data.
 - Custom slots are blank after startup until sent from the browser.
+- Silent custom envelopes are not accepted.
 - No USB MIDI host mode.
 - No MIDI note or pitchbend control of the oscillator.

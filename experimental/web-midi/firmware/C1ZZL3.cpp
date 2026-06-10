@@ -435,12 +435,12 @@ private:
 
         ampEnvelopeStage = 0;
         ampEnvelopeSample = 0;
-        ampEnvelopeLevel = 0;
-        ampEnvelopeStartLevel = 0;
+        ampEnvelopeStartLevel = envelopeActive ? ampEnvelopeLevel : 0;
+        ampEnvelopeLevel = ampEnvelopeStartLevel;
         pdEnvelopeStage = 0;
         pdEnvelopeSample = 0;
-        pdEnvelopeLevel = 0;
-        pdEnvelopeStartLevel = 0;
+        pdEnvelopeStartLevel = envelopeActive ? pdEnvelopeLevel : 0;
+        pdEnvelopeLevel = pdEnvelopeStartLevel;
         envelopeActive = true;
     }
 
@@ -650,6 +650,12 @@ private:
             return;
         }
 
+        if (!hasAudibleAmpStage(decoded.amp))
+        {
+            flashWebMidiRejected();
+            return;
+        }
+
         if (!decodeWebMidiStages(decoded.pd, offset))
         {
             flashWebMidiRejected();
@@ -688,6 +694,17 @@ private:
         }
 
         return true;
+    }
+
+    bool hasAudibleAmpStage(const EnvelopeStage* stages)
+    {
+        for (uint32_t i = 0; i < 8u; ++i)
+        {
+            if (stages[i].level > 0)
+                return true;
+        }
+
+        return false;
     }
 
     void applyPendingWebEnvelope()

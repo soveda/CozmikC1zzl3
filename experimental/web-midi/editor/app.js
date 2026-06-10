@@ -39,6 +39,7 @@ let selected = 1;
 let audioCtx;
 let activeNodes = [];
 let midiAccess;
+let sendingSysex = false;
 
 const el = {
   presetList: document.querySelector("#presetList"),
@@ -55,6 +56,7 @@ const el = {
   audition: document.querySelector("#audition"),
   stop: document.querySelector("#stop"),
   midiToggle: document.querySelector("#midiToggle"),
+  midiOutput: document.querySelector("#midiOutput"),
   copyCpp: document.querySelector("#copyCpp"),
   copySysex: document.querySelector("#copySysex"),
   sendSysex: document.querySelector("#sendSysex"),
@@ -292,24 +294,62 @@ async function connectMidi() {
 
   try {
     midiAccess = await navigator.requestMIDIAccess({ sysex: true });
-    midiAccess.inputs.forEach((input) => {
-      input.onmidimessage = handleMidi;
-    });
-    midiAccess.onstatechange = () => connectMidi();
+    refreshMidiPorts();
+    midiAccess.onstatechange = refreshMidiPorts;
     el.midiToggle.classList.add("is-active");
-    setStatus(`Listening to ${midiAccess.inputs.size || 0} MIDI input${midiAccess.inputs.size === 1 ? "" : "s"}.`);
   } catch (error) {
     setStatus(`MIDI access denied or unavailable: ${error.message}`);
   }
 }
 
+function refreshMidiPorts() {
+  if (!midiAccess) return;
+
+  midiAccess.inputs.forEach((input) => {
+    input.onmidimessage = handleMidi;
+  });
+
+  const previousOutput = el.midiOutput.value;
+  el.midiOutput.innerHTML = "";
+
+  const outputs = Array.from(midiAccess.outputs.values());
+  outputs.forEach((output, index) => {
+    const option = document.createElement("option");
+    option.value = output.id;
+    option.textContent = output.name || `MIDI output ${index + 1}`;
+    el.midiOutput.append(option);
+  });
+
+  if (outputs.length === 0) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "No output found";
+    el.midiOutput.append(option);
+  } else if (outputs.some((output) => output.id === previousOutput)) {
+    el.midiOutput.value = previousOutput;
+  }
+
+  setStatus(`MIDI ready: ${midiAccess.inputs.size || 0} input${midiAccess.inputs.size === 1 ? "" : "s"}, ${outputs.length} output${outputs.length === 1 ? "" : "s"}.`);
+}
+
 function selectedMidiOutput() {
   if (!midiAccess) return null;
-  const outputs = Array.from(midiAccess.outputs.values());
-  return outputs[0] || null;
+  const selectedOutput = midiAccess.outputs.get(el.midiOutput.value);
+  if (selectedOutput) return selectedOutput;
+  return Array.from(midiAccess.outputs.values())[0] || null;
 }
 
 async function sendSysex() {
+  if (sendingSysex) {
+    setStatus("SysEx send already in progress.");
+    return;
+  }
+
+  if (!canSendSelectedEnvelope()) {
+    setStatus("Preset 0 / silent envelopes are not sent to custom card slots.");
+    return;
+  }
+
   if (!midiAccess) {
     await connectMidi();
   }
@@ -320,16 +360,32 @@ async function sendSysex() {
     return;
   }
 
-  output.send(buildSysex(SYSEX_COMMAND_PREVIEW));
-  setStatus(`Sent preview SysEx to ${output.name || "MIDI output"} as Custom ${Number(el.customSlot.value) + 1}.`);
+  const frame = buildSysex(SYSEX_COMMAND_PREVIEW);
+  sendingSysex = true;
+  el.sendSysex.disabled = true;
+  output.send(frame);
+  setStatus(`Sent ${frame.length} byte preview SysEx to ${output.name || "MIDI output"} as Custom ${Number(el.customSlot.value) + 1}.`);
+
+  window.setTimeout(() => {
+    sendingSysex = false;
+    el.sendSysex.disabled = false;
+  }, 250);
 }
 
 function buildSysex(command) {
+  if (!canSendSelectedEnvelope()) {
+    throw new Error("Cannot build SysEx for preset 0 or a silent envelope.");
+  }
+
   const slot = clampInt(el.customSlot.value, 0, CUSTOM_SLOT_COUNT - 1);
   const payload = [slot & 0x7f, ...encodeName(presets[selected].name)];
   appendStages(payload, presets[selected].amp);
   appendStages(payload, presets[selected].pd);
-  return [0xf0, SYSEX_MANUFACTURER, ...SYSEX_ID, command, ...payload, 0xf7];
+  return new Uint8Array([0xf0, SYSEX_MANUFACTURER, ...SYSEX_ID, command, ...payload, 0xf7]);
+}
+
+function canSendSelectedEnvelope() {
+  return selected !== 0 && presets[selected].amp.some((stage) => stage.level > 0);
 }
 
 function appendStages(payload, stages) {
@@ -357,7 +413,7 @@ function encodeName(name) {
 }
 
 function sysexHex() {
-  return buildSysex(SYSEX_COMMAND_PREVIEW)
+  return Array.from(buildSysex(SYSEX_COMMAND_PREVIEW))
     .map((byte) => byte.toString(16).toUpperCase().padStart(2, "0"))
     .join(" ");
 }
@@ -421,6 +477,10 @@ el.presetName.addEventListener("input", () => {
 el.audition.addEventListener("click", () => audition());
 el.stop.addEventListener("click", stopAudio);
 el.midiToggle.addEventListener("click", connectMidi);
+el.midiOutput.addEventListener("change", () => {
+  const output = selectedMidiOutput();
+  setStatus(output ? `Selected ${output.name || "MIDI output"}.` : "No MIDI output selected.");
+});
 el.downloadJson.addEventListener("click", downloadJson);
 el.resetPreset.addEventListener("click", () => {
   const factory = factoryPresets[selected] || factoryPresets[0];
@@ -434,6 +494,11 @@ el.copyCpp.addEventListener("click", async () => {
   setStatus("C++ preset copied.");
 });
 el.copySysex.addEventListener("click", async () => {
+  if (!canSendSelectedEnvelope()) {
+    setStatus("Preset 0 / silent envelopes are not copied as custom SysEx.");
+    return;
+  }
+
   await navigator.clipboard.writeText(sysexHex());
   setStatus(`SysEx preview frame copied for Custom ${Number(el.customSlot.value) + 1}.`);
 });

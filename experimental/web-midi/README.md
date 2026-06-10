@@ -29,6 +29,9 @@ Then open:
 http://localhost:5173
 ```
 
+After pressing `MIDI`, choose the C1ZZL3 device in the `MIDI output` selector
+before pressing `Send`.
+
 ## Current Status
 
 The editor can:
@@ -54,6 +57,20 @@ The experimental firmware can:
 The experimental firmware does not yet persist custom envelope data to flash.
 That is deliberate: saving only the preset number without saving the full
 envelope shape would make reloads misleading.
+
+## Testing Notes
+
+- A valid SysEx frame will switch the active envelope to the chosen custom slot
+  for auditioning. This is expected.
+- Factory presets 0-8 are not overwritten by SysEx.
+- Preset 0 / Off and fully silent amplitude envelopes are not sent or accepted
+  as custom slots.
+- Envelope retriggers now start from the current envelope level instead of
+  snapping back to zero, which should reduce trigger clicks.
+- If Chrome freezes or becomes unstable, reload the page, press `MIDI` once,
+  select the C1ZZL3 MIDI output explicitly, and send one frame at a time.
+- The editor no longer reconnects automatically from inside MIDI state-change
+  events; it only refreshes the visible port list.
 
 ## Building The Experimental Firmware
 
