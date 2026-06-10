@@ -45,7 +45,8 @@ The experimental firmware can:
 - enumerate as a USB MIDI device
 - receive C1ZZL3 SysEx preview frames from the browser editor
 - decode the transmitted amplitude and phase-distortion stages
-- load the transmitted envelope into a RAM-only `WebMidi` preset slot
+- load the transmitted envelope into one of eight RAM-only custom preset slots
+- keep factory presets 0-8 intact and only enumerate custom slots after them
 - immediately trigger the received envelope for auditioning
 - flash all six LEDs for accepted SysEx frames
 - alternate even/odd LEDs for rejected SysEx frames

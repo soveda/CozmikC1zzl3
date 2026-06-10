@@ -203,7 +203,14 @@ private:
         Strings,
         ReverseSwell,
         EvolvingDigital,
-        WebMidi
+        Custom1,
+        Custom2,
+        Custom3,
+        Custom4,
+        Custom5,
+        Custom6,
+        Custom7,
+        Custom8
     };
 
     struct EnvelopeStage
@@ -228,7 +235,11 @@ private:
     static constexpr int32_t MinPitchUnits = -2 * PitchUnitsPerOctave;
     static constexpr int32_t MaxPitchUnits = 7 * PitchUnitsPerOctave;
     static constexpr uint32_t C2PhaseIncrement = 5852465u;
-    static constexpr uint8_t EnvelopePresetCount = 10;
+    static constexpr uint8_t FactoryEnvelopePresetCount = 9;
+    static constexpr uint8_t CustomEnvelopePresetCount = 8;
+    static constexpr uint8_t FirstCustomEnvelopePreset = (uint8_t)EnvelopePreset::Custom1;
+    static constexpr uint8_t EnvelopePresetCount =
+        FactoryEnvelopePresetCount + CustomEnvelopePresetCount;
     static constexpr uint32_t StartupSelectDelaySamples = 12000u;
     static constexpr uint32_t StartupSelectWindowSamples = 24000u;
     static constexpr uint32_t WebMidiFeedbackSamples = 24000u;
@@ -482,6 +493,10 @@ private:
 
     EnvelopeProgram envelopeProgram()
     {
+        uint8_t preset = envelopePreset;
+        if (preset >= FirstCustomEnvelopePreset && preset < EnvelopePresetCount)
+            return customEnvelopePrograms[preset - FirstCustomEnvelopePreset];
+
         switch ((EnvelopePreset)envelopePreset)
         {
             case EnvelopePreset::Pluck:
@@ -548,8 +563,6 @@ private:
                     {3000, 480}, {800, 12000}, {3600, 12000}, {1200, 12000},
                     {2600, 18000}, {600, 18000}, {1800, 24000}, {0, 36000}
                 }};
-            case EnvelopePreset::WebMidi:
-                return webEnvelopeProgram;
             case EnvelopePreset::Off:
             default:
                 return {{
@@ -621,6 +634,13 @@ private:
             return;
         }
 
+        uint8_t customSlot = sysexBuffer[6];
+        if (customSlot >= CustomEnvelopePresetCount)
+        {
+            flashWebMidiRejected();
+            return;
+        }
+
         EnvelopeProgram decoded;
         uint32_t offset = 6u + 1u + 16u;
 
@@ -637,6 +657,7 @@ private:
         }
 
         pendingWebEnvelopeProgram = decoded;
+        pendingWebEnvelopeSlot = customSlot;
         pendingWebEnvelopeReady = true;
         flashWebMidiAccepted();
     }
@@ -674,9 +695,13 @@ private:
         if (!pendingWebEnvelopeReady)
             return;
 
-        webEnvelopeProgram = pendingWebEnvelopeProgram;
+        uint8_t customSlot = pendingWebEnvelopeSlot;
+        if (customSlot >= CustomEnvelopePresetCount)
+            customSlot = 0;
+
+        customEnvelopePrograms[customSlot] = pendingWebEnvelopeProgram;
         pendingWebEnvelopeReady = false;
-        envelopePreset = (uint8_t)EnvelopePreset::WebMidi;
+        envelopePreset = FirstCustomEnvelopePreset + customSlot;
         triggerEnvelope();
 
     }
@@ -1148,7 +1173,9 @@ private:
         state.osc2Level = osc2Level;
         state.osc2Ring = osc2Ring;
         state.osc2Noise = osc2Noise;
-        state.envelopePreset = envelopePreset;
+        state.envelopePreset = envelopePreset < FactoryEnvelopePresetCount ?
+            envelopePreset :
+            (uint8_t)EnvelopePreset::Off;
         state.reserved[0] = 0;
         state.reserved[1] = 0;
         state.reserved[2] = 0;
@@ -1207,7 +1234,7 @@ private:
         osc2Level = clamp12(state.osc2Level);
         osc2Ring = clamp12(state.osc2Ring);
         osc2Noise = clamp12(state.osc2Noise);
-        envelopePreset = state.envelopePreset < (uint8_t)EnvelopePreset::WebMidi ?
+        envelopePreset = state.envelopePreset < FactoryEnvelopePresetCount ?
             state.envelopePreset :
             (uint8_t)EnvelopePreset::Off;
     }
@@ -1402,13 +1429,7 @@ private:
     bool envelopeSelectSaved = false;
     volatile uint32_t webMidiFeedbackSamples = 0;
     volatile uint8_t webMidiFeedbackKind = 0;
-    EnvelopeProgram webEnvelopeProgram = {{
-        {0, 1}, {0, 1}, {0, 1}, {0, 1},
-        {0, 1}, {0, 1}, {0, 1}, {0, 1}
-    }, {
-        {0, 1}, {0, 1}, {0, 1}, {0, 1},
-        {0, 1}, {0, 1}, {0, 1}, {0, 1}
-    }};
+    EnvelopeProgram customEnvelopePrograms[CustomEnvelopePresetCount] = {};
     EnvelopeProgram pendingWebEnvelopeProgram = {{
         {0, 1}, {0, 1}, {0, 1}, {0, 1},
         {0, 1}, {0, 1}, {0, 1}, {0, 1}
@@ -1416,6 +1437,7 @@ private:
         {0, 1}, {0, 1}, {0, 1}, {0, 1},
         {0, 1}, {0, 1}, {0, 1}, {0, 1}
     }};
+    volatile uint8_t pendingWebEnvelopeSlot = 0;
     volatile bool pendingWebEnvelopeReady = false;
     uint8_t sysexBuffer[128] = {};
     uint32_t sysexLength = 0;

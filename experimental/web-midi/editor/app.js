@@ -1,6 +1,7 @@
 const SAMPLE_RATE = 48000;
 const MAX_LEVEL = 4095;
 const STAGES = 8;
+const CUSTOM_SLOT_COUNT = 8;
 const SYSEX_MANUFACTURER = 0x7d;
 const SYSEX_ID = [0x43, 0x31, 0x5a, 0x33];
 const SYSEX_COMMAND_PREVIEW = 0x01;
@@ -45,6 +46,7 @@ const el = {
   presetName: document.querySelector("#presetName"),
   pitchInput: document.querySelector("#pitchInput"),
   waveSelect: document.querySelector("#waveSelect"),
+  customSlot: document.querySelector("#customSlot"),
   canvas: document.querySelector("#curveCanvas"),
   ampStages: document.querySelector("#ampStages"),
   pdStages: document.querySelector("#pdStages"),
@@ -319,11 +321,12 @@ async function sendSysex() {
   }
 
   output.send(buildSysex(SYSEX_COMMAND_PREVIEW));
-  setStatus(`Sent preview SysEx to ${output.name || "MIDI output"}.`);
+  setStatus(`Sent preview SysEx to ${output.name || "MIDI output"} as Custom ${Number(el.customSlot.value) + 1}.`);
 }
 
 function buildSysex(command) {
-  const payload = [selected & 0x7f, ...encodeName(presets[selected].name)];
+  const slot = clampInt(el.customSlot.value, 0, CUSTOM_SLOT_COUNT - 1);
+  const payload = [slot & 0x7f, ...encodeName(presets[selected].name)];
   appendStages(payload, presets[selected].amp);
   appendStages(payload, presets[selected].pd);
   return [0xf0, SYSEX_MANUFACTURER, ...SYSEX_ID, command, ...payload, 0xf7];
@@ -432,7 +435,7 @@ el.copyCpp.addEventListener("click", async () => {
 });
 el.copySysex.addEventListener("click", async () => {
   await navigator.clipboard.writeText(sysexHex());
-  setStatus("SysEx preview frame copied.");
+  setStatus(`SysEx preview frame copied for Custom ${Number(el.customSlot.value) + 1}.`);
 });
 el.sendSysex.addEventListener("click", sendSysex);
 
