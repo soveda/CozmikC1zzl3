@@ -11,7 +11,7 @@ Creator: Adrian Vos
 
 C1ZZL3 is a CZ-inspired phase-distortion oscillator card with a second mirrored oscillator for detune, ring modulation, and noise modulation. The switch also opens a Turing machine mode, turning the card into a clocked CV and pulse source with a self-playing stepped oscillator voice.
 
-The current v1 build has passed hardware tests for the core oscillator, held-switch performance controls, Turing machine outputs, self-playing stepped Turing voice, oscillator sync, restrained CZ-style grit, envelope presets, manual flash persistence, and 1V/oct pitch input scaling.
+The current v1 build has passed hardware tests for the core oscillator, held-switch performance controls, Turing machine outputs, self-playing stepped Turing voice, oscillator sync, restrained CZ-style grit, envelope presets, manual flash persistence, 1V/oct pitch input scaling, mode-specific knob pickup, and matched CV modulation in synth and Turing modes.
 
 The current MIDI build also includes a browser Web MIDI editor for custom
 envelopes, USB MIDI device mode for computer/DAW control, and USB MIDI host mode
@@ -25,9 +25,9 @@ Holding the switch down during startup enters envelope preset select. Release th
 
 Main controls oscillator pitch over an octave-based range. Audio/CV in 1 adds pitch at a hardware-tested 1V/oct scale.
 
-X controls phase-distortion amount. Fully counter-clockwise is closest to a clean sine. Turning X up introduces the selected CZ-style target waveform.
+X controls phase-distortion amount. CV in 1 modulates the same parameter. Fully counter-clockwise is closest to a clean sine. Turning X up introduces the selected CZ-style target waveform.
 
-Y morphs across eight CZ-inspired waveform families:
+Y morphs across eight CZ-inspired waveform families. CV in 2 modulates the same parameter:
 
 1. Saw
 2. Square
@@ -41,6 +41,8 @@ Y morphs across eight CZ-inspired waveform families:
 Audio out 1 carries oscillator 1.
 
 Audio out 2 carries oscillator 2. In normal middle position, oscillator 2 is silent until it has been introduced with the held-switch controls.
+
+Main, X, and Y use mode-specific pickup when returning from another switch position. The previous synth pitch, phase-distortion amount, and waveform values are held until each physical knob is moved back through its stored value.
 
 CV out 1 and CV out 2 continue to run the Turing machine using the last Turing mode length, mutation, and clock settings, so the sequencer can modulate other modules while the synth voice is playing. The background Turing sequence does not drive the synth pitch outside Turing mode.
 
@@ -70,6 +72,8 @@ X controls sequence length, from 2 to 16 steps.
 
 Y controls internal clock speed.
 
+Main, X, and Y use mode-specific pickup when returning from synth mode. The previous Turing mutation, length, and clock speed are held until each physical knob is moved back through its stored value.
+
 Pulse in 1 acts as an external clock. When an external clock is present, it takes priority over the internal clock.
 
 Flicking the switch down from Turing mode taps the internal clock tempo.
@@ -80,7 +84,7 @@ CV out 2 carries a smoothed version of the scaled Turing CV.
 
 Pulse out 1 outputs the main Turing pulse. Pulse out 2 outputs an alternate Turing bit pulse.
 
-Audio out 1 and audio out 2 carry a self-playing stepped oscillator voice. The last PD synth pitch, phase-distortion, waveform, detune, ring, and noise settings are used as the voice sound, with the Turing pattern added to the pitch.
+Audio out 1 and audio out 2 carry a self-playing stepped oscillator voice. The last PD synth pitch, phase-distortion, waveform, detune, ring, and noise settings are used as the voice sound, with the Turing pattern added to the pitch. CV in 1 continues to modulate phase-distortion amount and CV in 2 continues to modulate waveform morph in Turing mode.
 
 When an envelope preset is active, the main Turing pulse self-triggers the envelope for the stepped oscillator voice. Preset 0 is Off and leaves the Turing voice free-running. Turing envelope triggers do not reset oscillator phase.
 
@@ -90,11 +94,11 @@ When an envelope preset is active, the main Turing pulse self-triggers the envel
 
 Audio/CV in 1: 1V/oct pitch modulation in PD synth mode.
 
-Audio/CV in 2: phase-distortion shape modulation in PD synth mode.
+Audio/CV in 2: currently unused.
 
-CV in 1: waveform morph modulation in PD synth mode.
+CV in 1: phase-distortion amount modulation in PD synth and Turing modes.
 
-CV in 2: positive voltage increases ring modulation while holding the switch down; negative voltage increases CZ-style noise modulation while holding the switch down.
+CV in 2: waveform morph modulation in PD synth and Turing modes.
 
 Pulse in 1: external Turing clock.
 
@@ -160,6 +164,8 @@ Confirmed on hardware:
 - X phase-distortion control and Y waveform morphing are responsive across the usable range.
 - All eight waveform positions have distinct character, including the CZ-style resonance-window shapes at positions 6-8.
 - Held-switch soft pickup, latched detune/ring/noise controls, and 8-second manual save work as intended.
+- Mode-specific Main/X/Y pickup keeps synth and Turing controls from jumping when changing switch positions.
+- CV in 1 modulates phase-distortion amount and CV in 2 modulates waveform morph in both synth and Turing modes.
 - Envelope preset select, binary LED display, triggering, and persistence work as intended.
 - Turing mode clocks correctly from internal clock, tap tempo, and Pulse in 1.
 - Turing CV/pulse outputs, self-playing stepped voice, and envelope self-triggering work as intended.

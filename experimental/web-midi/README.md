@@ -105,6 +105,13 @@ persists custom envelope shapes only; it does not store or display names.
 - USB MIDI host mode enables TinyUSB hub support for setups such as a USB-B to
   USB-A controller cable into a USB-A to USB-C hub. If possible, also test with
   a direct USB-B to USB-C cable to remove the hub as a variable.
+- Experimental knob persistence test: when switching between synth and Turing
+  modes, Main/X/Y keep the last value for that mode until the physical knob is
+  moved back through the stored value. This should prevent pitch, PD/wave,
+  mutation, length, or clock-speed jumps when changing modes.
+- Experimental CV input routing test: CV In 1 now modulates phase-distortion
+  amount to match the X knob, and CV In 2 now modulates waveform morph to match
+  the Y knob in both synth and Turing modes. Audio/CV In 2 is currently unused.
 - If Chrome freezes or becomes unstable, reload the page, press `MIDI` once,
   select the C1ZZL3 MIDI output explicitly, and send one frame at a time.
 - The editor no longer reconnects automatically from inside MIDI state-change

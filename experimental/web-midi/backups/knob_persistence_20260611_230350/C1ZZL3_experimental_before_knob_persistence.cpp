@@ -78,6 +78,7 @@ public:
         applyPendingMidiNote();
 
         int32_t in1 = AudioIn1();
+        int32_t in2 = AudioIn2();
 
         int32_t cv1 = CVIn1();
         int32_t cv2 = CVIn2();
@@ -122,10 +123,9 @@ public:
 
             if (!alt)
             {
-                if (previousMode != Switch::Middle)
-                    resetSynthPickup(main, x, y);
-
-                updateSynthControls(main, x, y);
+                pitchControl = main;
+                pdControl = x;
+                waveControl = y;
             }
             else
             {
@@ -138,25 +138,18 @@ public:
                 updateAltControls(main, x, y);
             }
 
-            updateTuringMachine(
-                turingMutationControl,
-                turingLengthControl,
-                turingClockSpeedControl,
-                false,
-                false);
-
             // -------------------------
             // PITCH (octave map with hardware-tested 1V/oct input scale)
             // -------------------------
             int32_t freq = smoothPitch(pitchFrequency(currentPitchUnits(pitchControl, in1)));
 
-            int32_t pd = clamp12(pdControl + (cv1 << 1));
-            int32_t wave = clamp12(waveControl + (cv2 << 1));
+            int32_t pd = clamp12(pdControl + (in2 << 1));
+            int32_t wave = clamp12(waveControl + (cv1 << 1));
 
             int32_t ring =
-                clamp12(osc2Ring);
+                clamp12(osc2Ring + (alt && cv2 > 0 ? cv2 << 1 : 0));
             int32_t noiseAmt =
-                clamp12(osc2Noise);
+                clamp12(osc2Noise + (alt && cv2 < 0 ? (-cv2) << 1 : 0));
 
             bool pulse2Trigger = PulseIn2RisingEdge();
             if (pulse2Trigger)
@@ -185,24 +178,41 @@ public:
         {
             resetSaveGesture();
 
-            if (previousMode != Switch::Up)
-                resetTuringPickup(main, x, y);
+            uint32_t previousTuringLength = turingLength;
+            turingLength = 2 + ((x * 14) >> 12);
+            if (turingLength > 16) turingLength = 16;
+            if (turingLength != previousTuringLength)
+                turingLengthDisplaySamples = WebMidiFeedbackSamples;
 
-            updateTuringControls(main, x, y);
+            bool externalClock = PulseIn1RisingEdge();
+            bool clocked = false;
 
-            updateTuringMachine(
-                turingMutationControl,
-                turingLengthControl,
-                turingClockSpeedControl,
-                true,
-                true);
+            if (externalClock)
+            {
+                externalClockAge = 0;
+                clocked = true;
+            }
+            else
+            {
+                if (externalClockAge < 96000u)
+                    externalClockAge++;
+                else
+                    clocked = internalTuringClock(y);
+            }
+
+            if (clocked)
+            {
+                stepTuring(main);
+                triggerTuringEnvelope();
+                queueTuringMidiNote();
+            }
+
+            updateTuringPulseAge();
 
             CVOut1(turingCv);
             CVOut2(turingModCv);
 
-            int32_t pd = clamp12(pdControl + (cv1 << 1));
-            int32_t wave = clamp12(waveControl + (cv2 << 1));
-            outputTuringSynthVoice(pd, wave);
+            outputTuringSynthVoice();
 
             PulseOut1(turingPulse);
             PulseOut2(turingAltPulse);
@@ -370,12 +380,14 @@ private:
         outputSynthVoice(freq, pd, wave, osc2Ring, osc2Noise);
     }
 
-    void outputTuringSynthVoice(int32_t pd, int32_t wave)
+    void outputTuringSynthVoice()
     {
         int32_t pitchOffset =
             (turingCv * TuringAudioPitchDepth * MainPitchOctaves) >> 12;
         int32_t freq = smoothPitch(
             pitchFrequency(pitchUnits(pitchControl, 0) + pitchOffset));
+        int32_t pd = clamp12(pdControl);
+        int32_t wave = clamp12(waveControl);
 
         outputSynthVoice(freq, pd, wave, osc2Ring, osc2Noise);
     }
@@ -1088,49 +1100,6 @@ private:
     // =========================================================
     // TURING MACHINE
     // =========================================================
-    void updateTuringMachine(
-        int32_t mutationKnob,
-        int32_t lengthKnob,
-        int32_t clockSpeedKnob,
-        bool triggerVoice,
-        bool showLength)
-    {
-        uint32_t previousTuringLength = turingLength;
-        turingLength = 2 + ((lengthKnob * 14) >> 12);
-        if (turingLength > 16) turingLength = 16;
-        if (showLength && turingLength != previousTuringLength)
-            turingLengthDisplaySamples = WebMidiFeedbackSamples;
-
-        bool externalClock = PulseIn1RisingEdge();
-        bool clocked = false;
-
-        if (externalClock)
-        {
-            externalClockAge = 0;
-            clocked = true;
-        }
-        else
-        {
-            if (externalClockAge < 96000u)
-                externalClockAge++;
-            else
-                clocked = internalTuringClock(clockSpeedKnob);
-        }
-
-        if (clocked)
-        {
-            stepTuring(mutationKnob);
-
-            if (triggerVoice)
-            {
-                triggerTuringEnvelope();
-                queueTuringMidiNote();
-            }
-        }
-
-        updateTuringPulseAge();
-    }
-
     void stepTuring(int32_t knob)
     {
         uint32_t mask = (1u << turingLength) - 1u;
@@ -1482,56 +1451,6 @@ private:
         return pickedUp;
     }
 
-    void updateSynthControls(int32_t main, int32_t x, int32_t y)
-    {
-        if (synthMainPickedUp ||
-            pickupAltControl(main, synthMainEntry, pitchControl, synthMainPickedUp))
-            pitchControl = main;
-
-        if (synthXPickedUp ||
-            pickupAltControl(x, synthXEntry, pdControl, synthXPickedUp))
-            pdControl = x;
-
-        if (synthYPickedUp ||
-            pickupAltControl(y, synthYEntry, waveControl, synthYPickedUp))
-            waveControl = y;
-    }
-
-    void resetSynthPickup(int32_t main, int32_t x, int32_t y)
-    {
-        synthMainPickedUp = false;
-        synthXPickedUp = false;
-        synthYPickedUp = false;
-        synthMainEntry = main;
-        synthXEntry = x;
-        synthYEntry = y;
-    }
-
-    void updateTuringControls(int32_t main, int32_t x, int32_t y)
-    {
-        if (turingMainPickedUp ||
-            pickupAltControl(main, turingMainEntry, turingMutationControl, turingMainPickedUp))
-            turingMutationControl = main;
-
-        if (turingXPickedUp ||
-            pickupAltControl(x, turingXEntry, turingLengthControl, turingXPickedUp))
-            turingLengthControl = x;
-
-        if (turingYPickedUp ||
-            pickupAltControl(y, turingYEntry, turingClockSpeedControl, turingYPickedUp))
-            turingClockSpeedControl = y;
-    }
-
-    void resetTuringPickup(int32_t main, int32_t x, int32_t y)
-    {
-        turingMainPickedUp = false;
-        turingXPickedUp = false;
-        turingYPickedUp = false;
-        turingMainEntry = main;
-        turingXEntry = x;
-        turingYEntry = y;
-    }
-
     SavedPerformanceState currentPerformanceState()
     {
         SavedPerformanceState state;
@@ -1831,9 +1750,6 @@ private:
     uint32_t turingLength = 16;
     uint32_t turingLengthDisplaySamples = 0;
     uint32_t externalClockAge = 96000u;
-    int32_t turingMutationControl = 2048;
-    int32_t turingLengthControl = 4095;
-    int32_t turingClockSpeedControl = 2048;
     bool turingPulse = false;
     bool turingAltPulse = false;
     bool useTappedClock = false;
@@ -1895,12 +1811,6 @@ private:
     int32_t pitchControl = 2048;
     int32_t pdControl = 0;
     int32_t waveControl = 0;
-    int32_t synthMainEntry = 2048;
-    int32_t synthXEntry = 0;
-    int32_t synthYEntry = 0;
-    bool synthMainPickedUp = true;
-    bool synthXPickedUp = true;
-    bool synthYPickedUp = true;
     int32_t smoothedFreq = 0;
     int32_t osc2Detune = 0;
     int32_t osc2Level = 0;
@@ -1912,12 +1822,6 @@ private:
     bool altMainPickedUp = false;
     bool altXPickedUp = false;
     bool altYPickedUp = false;
-    int32_t turingMainEntry = 2048;
-    int32_t turingXEntry = 4095;
-    int32_t turingYEntry = 2048;
-    bool turingMainPickedUp = true;
-    bool turingXPickedUp = true;
-    bool turingYPickedUp = true;
     uint32_t saveHoldSamples = 0;
     uint32_t saveConfirmSamples = 0;
     bool saveHoldCanSave = false;

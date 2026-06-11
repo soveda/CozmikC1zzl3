@@ -200,9 +200,7 @@ public:
             CVOut1(turingCv);
             CVOut2(turingModCv);
 
-            int32_t pd = clamp12(pdControl + (cv1 << 1));
-            int32_t wave = clamp12(waveControl + (cv2 << 1));
-            outputTuringSynthVoice(pd, wave);
+            outputTuringSynthVoice();
 
             PulseOut1(turingPulse);
             PulseOut2(turingAltPulse);
@@ -370,12 +368,14 @@ private:
         outputSynthVoice(freq, pd, wave, osc2Ring, osc2Noise);
     }
 
-    void outputTuringSynthVoice(int32_t pd, int32_t wave)
+    void outputTuringSynthVoice()
     {
         int32_t pitchOffset =
             (turingCv * TuringAudioPitchDepth * MainPitchOctaves) >> 12;
         int32_t freq = smoothPitch(
             pitchFrequency(pitchUnits(pitchControl, 0) + pitchOffset));
+        int32_t pd = clamp12(pdControl);
+        int32_t wave = clamp12(waveControl);
 
         outputSynthVoice(freq, pd, wave, osc2Ring, osc2Noise);
     }
