@@ -15,6 +15,8 @@ add_executable(C1ZZL3_web_midi_experimental
     C1ZZL3.cpp
     C1ZZL3_LUT.cpp
     usb_descriptors.c
+    usb_midi_host.c
+    usb_midi_host_app_driver.c
 )
 
 target_include_directories(C1ZZL3_web_midi_experimental PRIVATE
@@ -26,6 +28,7 @@ target_link_libraries(C1ZZL3_web_midi_experimental
     pico_unique_id
     pico_multicore
     tinyusb_device
+    tinyusb_host
     tinyusb_board
 
     hardware_adc

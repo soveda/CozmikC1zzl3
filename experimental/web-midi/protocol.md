@@ -7,7 +7,9 @@ The production firmware in the repo root does not use this protocol.
 
 ## Transport
 
-- USB MIDI device mode.
+- USB MIDI device mode when connected to a computer/DAW/browser.
+- USB MIDI host mode at boot on 2025 hardware when the port is
+  downstream-facing and a class-compliant USB MIDI controller is attached.
 - Browser/editor sends Web MIDI SysEx to the card.
 - Current firmware supports preview and flash-save commands for one of eight
   custom slots, plus an experimental performance-settings command.
@@ -140,9 +142,8 @@ slot 7 -> preset 16
 - Custom slot names are kept by the browser editor, not by the card firmware.
 - Custom slots are blank after startup unless they were sent with command `02`.
 - Silent custom envelopes are not accepted.
-- No USB MIDI host mode.
-- USB MIDI note input is device-mode only: a DAW or USB host can play the card,
-  but a plain USB MIDI keyboard cannot plug directly into the card without a
-  USB host in between.
+- USB role is selected only at boot/reset. It does not hot-switch between
+  browser/DAW device mode and controller host mode while running.
+- Web MIDI SysEx editing is only available in device mode.
 - MIDI note input currently retriggers the selected envelope as a one-shot. It
   does not implement a separate release stage.

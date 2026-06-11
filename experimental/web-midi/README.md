@@ -11,9 +11,9 @@ experimental Web MIDI/SysEx path.
 - `editor/`: static browser editor for envelope presets.
 - `editor/app.js`: Web MIDI note auditioning and experimental C1ZZL3 SysEx
   frame generation.
-- `firmware/`: isolated experimental firmware copy with a TinyUSB USB MIDI
-  device SysEx receiver. The production `../../C1ZZL3.cpp` is not used or
-  modified by this build.
+- `firmware/`: isolated experimental firmware copy with TinyUSB USB MIDI
+  device/host auto-role support and a SysEx receiver. The production
+  `../../C1ZZL3.cpp` is not used or modified by this build.
 - `protocol.md`: current experimental SysEx frame format and LED feedback
   expectations.
 
@@ -46,7 +46,10 @@ The editor can:
 
 The experimental firmware can:
 
-- enumerate as a USB MIDI device
+- choose USB MIDI device or host mode at boot on 2025 hardware
+- enumerate as a USB MIDI device when connected to a computer/DAW/browser
+- enumerate an attached class-compliant USB MIDI controller in host mode when
+  the USB port is downstream-facing
 - receive C1ZZL3 SysEx preview frames from the browser editor
 - decode the transmitted amplitude and phase-distortion stages
 - load the transmitted envelope into one of eight RAM-only custom preset slots
@@ -58,6 +61,7 @@ The experimental firmware can:
 - apply ring/noise/MIDI channel settings from the editor
 - receive USB MIDI note on/off from a DAW or other USB MIDI host on the selected
   channel, using note-on to pitch the synth and retrigger the selected envelope
+- receive USB MIDI note on/off from a class-compliant controller in host mode
 - send Turing mode note-on/note-off messages back to the DAW when Turing MIDI
   output is enabled
 
@@ -92,6 +96,12 @@ persists custom envelope shapes only; it does not store or display names.
   a binary value on the six LEDs.
 - Turing MIDI output maps the generated CV to notes over roughly four octaves.
   Check for hanging notes during testing before relying on it in a DAW session.
+- USB role is selected at boot/reset. Connect the USB-C port first, then power
+  or reset the card. A computer connection starts Web MIDI/DAW device mode; a
+  downstream-facing connection starts USB MIDI host mode on 2025 hardware.
+- USB MIDI host mode enables TinyUSB hub support for setups such as a USB-B to
+  USB-A controller cable into a USB-A to USB-C hub. If possible, also test with
+  a direct USB-B to USB-C cable to remove the hub as a variable.
 - If Chrome freezes or becomes unstable, reload the page, press `MIDI` once,
   select the C1ZZL3 MIDI output explicitly, and send one frame at a time.
 - The editor no longer reconnects automatically from inside MIDI state-change

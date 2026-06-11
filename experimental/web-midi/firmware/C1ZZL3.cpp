@@ -2,7 +2,9 @@
 #include "C1ZZL3_LUT.h"
 #include "hardware/sync.h"
 #include "pico/multicore.h"
+#include "pico/time.h"
 #include "tusb.h"
+#include "usb_midi_host.h"
 
 static constexpr uint8_t WebMidiManufacturer = 0x7Du;
 static constexpr uint8_t WebMidiId[4] = {0x43u, 0x31u, 0x5Au, 0x33u}; // C1Z3
@@ -25,6 +27,11 @@ public:
         noise = 1;
 
         loadPerformanceState();
+    }
+
+    bool ShouldBootUsbHost()
+    {
+        return USBPowerState() == USBPowerState_t::DFP;
     }
 
     void ProcessUsbMidiByte(uint8_t byte)
@@ -1795,32 +1802,130 @@ private:
 // ENTRY
 // =========================================================
 C1ZZL3 card;
+static volatile uint8_t hostMidiDeviceAddress = 0;
+static volatile int8_t hostMidiOutputCable = -1;
+
+extern "C" void tuh_midi_mount_cb(
+    uint8_t dev_addr,
+    uint8_t in_ep,
+    uint8_t out_ep,
+    uint8_t num_cables_rx,
+    uint16_t num_cables_tx)
+{
+    (void)in_ep;
+    (void)out_ep;
+    (void)num_cables_rx;
+
+    if (hostMidiDeviceAddress == 0)
+    {
+        hostMidiDeviceAddress = dev_addr;
+        hostMidiOutputCable = num_cables_tx > 0 ? (int8_t)(num_cables_tx - 1u) : -1;
+    }
+}
+
+extern "C" void tuh_midi_umount_cb(uint8_t dev_addr, uint8_t instance)
+{
+    (void)instance;
+
+    if (dev_addr == hostMidiDeviceAddress)
+    {
+        hostMidiDeviceAddress = 0;
+        hostMidiOutputCable = -1;
+    }
+}
+
+extern "C" void tuh_midi_rx_cb(uint8_t dev_addr, uint32_t num_packets)
+{
+    if (dev_addr != hostMidiDeviceAddress || num_packets == 0)
+        return;
+
+    uint8_t cable = 0;
+    uint8_t bytes[128];
+    while (true)
+    {
+        uint32_t count = tuh_midi_stream_read(dev_addr, &cable, bytes, sizeof(bytes));
+        if (count == 0)
+            break;
+
+        for (uint32_t i = 0; i < count; ++i)
+            card.ProcessUsbMidiByte(bytes[i]);
+    }
+}
+
+extern "C" void tuh_midi_tx_cb(uint8_t dev_addr)
+{
+    (void)dev_addr;
+}
+
+static void sendPendingMidiOutToDevice()
+{
+    uint8_t channel;
+    uint8_t note;
+    uint8_t velocity;
+    bool on;
+    if (!card.TakePendingMidiOut(channel, note, velocity, on))
+        return;
+
+    uint8_t message[3] = {
+        (uint8_t)((on ? 0x90u : 0x80u) | (channel & 0x0Fu)),
+        (uint8_t)(note & 0x7Fu),
+        (uint8_t)(velocity & 0x7Fu)
+    };
+    tud_midi_stream_write(0, message, sizeof(message));
+}
+
+static void sendPendingMidiOutToHostDevice()
+{
+    uint8_t channel;
+    uint8_t note;
+    uint8_t velocity;
+    bool on;
+    if (!card.TakePendingMidiOut(channel, note, velocity, on))
+        return;
+
+    if (hostMidiDeviceAddress == 0 || hostMidiOutputCable < 0)
+        return;
+
+    uint8_t message[3] = {
+        (uint8_t)((on ? 0x90u : 0x80u) | (channel & 0x0Fu)),
+        (uint8_t)(note & 0x7Fu),
+        (uint8_t)(velocity & 0x7Fu)
+    };
+    tuh_midi_stream_write(
+        hostMidiDeviceAddress,
+        (uint8_t)hostMidiOutputCable,
+        message,
+        sizeof(message));
+    tuh_midi_stream_flush(hostMidiDeviceAddress);
+}
 
 void usbMidiWorker()
 {
-    tud_init(0);
+    sleep_ms(100);
+    bool hostMode = card.ShouldBootUsbHost();
+
+    if (hostMode)
+        tuh_init(0);
+    else
+        tud_init(0);
 
     while (true)
     {
-        tud_task();
-
-        uint8_t bytes[64];
-        uint32_t count = tud_midi_stream_read(bytes, sizeof(bytes));
-        for (uint32_t i = 0; i < count; ++i)
-            card.ProcessUsbMidiByte(bytes[i]);
-
-        uint8_t channel;
-        uint8_t note;
-        uint8_t velocity;
-        bool on;
-        if (card.TakePendingMidiOut(channel, note, velocity, on))
+        if (hostMode)
         {
-            uint8_t message[3] = {
-                (uint8_t)((on ? 0x90u : 0x80u) | (channel & 0x0Fu)),
-                (uint8_t)(note & 0x7Fu),
-                (uint8_t)(velocity & 0x7Fu)
-            };
-            tud_midi_stream_write(0, message, sizeof(message));
+            tuh_task();
+            sendPendingMidiOutToHostDevice();
+        }
+        else
+        {
+            tud_task();
+
+            uint8_t bytes[64];
+            uint32_t count = tud_midi_stream_read(bytes, sizeof(bytes));
+            for (uint32_t i = 0; i < count; ++i)
+                card.ProcessUsbMidiByte(bytes[i]);
+
+            sendPendingMidiOutToDevice();
         }
     }
 }
