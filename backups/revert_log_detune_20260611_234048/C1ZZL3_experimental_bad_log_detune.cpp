@@ -258,6 +258,8 @@ private:
     static constexpr int32_t MaxPitchUnits = 7 * PitchUnitsPerOctave;
     static constexpr uint32_t C2PhaseIncrement = 5852465u;
     static constexpr int32_t FixedOscillator2Level = 4095;
+    static constexpr int32_t MaxDetunePitchUnits =
+        (PitchUnitsPerOctave * 3) / 2;
     static constexpr uint8_t FactoryEnvelopePresetCount = 9;
     static constexpr uint8_t CustomEnvelopePresetCount = 8;
     static constexpr uint8_t FirstCustomEnvelopePreset = (uint8_t)EnvelopePreset::Custom1;
@@ -1444,6 +1446,7 @@ private:
                 osc2Detune = 0;
 
             osc2Level = FixedOscillator2Level;
+            updateDetuneRatio();
         }
 
         if (altXPickedUp ||
@@ -1646,6 +1649,7 @@ private:
 
         osc2Detune = state.osc2Detune;
         osc2Level = FixedOscillator2Level;
+        updateDetuneRatio();
         osc2Ring = clamp12(state.osc2Ring);
         osc2Noise = clamp12(state.osc2Noise);
         envelopePreset = state.envelopePreset < FactoryEnvelopePresetCount ?
@@ -1688,29 +1692,39 @@ private:
 
     int32_t applyDetune(int32_t freq, int32_t detune)
     {
-        int32_t bend = detune;
-        int32_t sign = 1;
+        (void)detune;
+        uint64_t result = ((uint64_t)(uint32_t)freq * detuneRatioQ15) >> 15;
 
-        if (bend < 0)
-        {
-            sign = -1;
-            bend = -bend;
-        }
-
-        // Small movements give fine beating; the far ends reach wide offsets.
-        int32_t fine = (bend * bend) >> 11;
-        int64_t offset = ((int64_t)freq * fine) >> 12;
-        int64_t detuned = sign < 0 ?
-            (int64_t)freq - offset :
-            (int64_t)freq + offset;
-
-        if (detuned < 0)
-            return 0;
-
-        if (detuned > 0x7FFFFFFFLL)
+        if (result > 0x7FFFFFFFu)
             return 0x7FFFFFFF;
 
-        return (int32_t)detuned;
+        return (int32_t)result;
+    }
+
+    int32_t detunePitchOffsetUnits(int32_t detune)
+    {
+        int32_t amount = detune;
+        int32_t sign = 1;
+        if (amount < 0)
+        {
+            sign = -1;
+            amount = -amount;
+        }
+
+        if (amount > 2048)
+            amount = 2048;
+
+        int32_t shaped = (amount * amount) >> 11;
+        int32_t units = (shaped * MaxDetunePitchUnits) >> 11;
+        return sign * units;
+    }
+
+    void updateDetuneRatio()
+    {
+        int32_t offsetUnits = detunePitchOffsetUnits(osc2Detune);
+        int32_t ratio = pitchFrequency(offsetUnits);
+        detuneRatioQ15 = (uint32_t)(((uint64_t)(uint32_t)ratio << 15) /
+            C2PhaseIncrement);
     }
 
     void syncOscillators()
@@ -1820,8 +1834,7 @@ private:
         uint32_t x2 = (x * x) >> 12;
         uint32_t x3 = (x2 * x) >> 12;
 
-        uint32_t y = (3u * x2) - (2u * x3);
-        return y > 4095u ? 4095u : y;
+        return (3u * x2) - (2u * x3);
     }
 private:
 
@@ -1917,6 +1930,7 @@ private:
     int32_t smoothedFreq = 0;
     int32_t osc2Detune = 0;
     int32_t osc2Level = FixedOscillator2Level;
+    uint32_t detuneRatioQ15 = 32768;
     int32_t osc2Ring = 0;
     int32_t osc2Noise = 0;
     int32_t altMainEntry = 2048;

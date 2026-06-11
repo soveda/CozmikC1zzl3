@@ -114,7 +114,14 @@ persists custom envelope shapes only; it does not store or display names.
   the Y knob in both synth and Turing modes. Audio/CV In 2 is currently unused.
 - Experimental detune test: held-switch Main now changes oscillator 2 frequency
   only. Oscillator 2 output level is fixed at full level for external mixing,
-  and LED 3 shows detune amount rather than oscillator 2 volume.
+  and LED 3 shows detune amount rather than oscillator 2 volume. The abandoned
+  curved/log detune experiment overloaded the card and has been reverted.
+- Experimental Y-maximum envelope crash test: waveform morph keeps the original
+  sound, but clamps the smooth morph curve so the exact maximum Y position
+  cannot overshoot the intended 0-4095 range.
+- Experimental extreme-parameter stability test: oscillator 2 detune now uses
+  saturated arithmetic so maximum pitch plus maximum detune cannot overflow the
+  phase increment.
 - If Chrome freezes or becomes unstable, reload the page, press `MIDI` once,
   select the C1ZZL3 MIDI output explicitly, and send one frame at a time.
 - The editor no longer reconnects automatically from inside MIDI state-change

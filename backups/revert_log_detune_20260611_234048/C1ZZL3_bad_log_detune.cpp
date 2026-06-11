@@ -258,6 +258,8 @@ private:
     static constexpr int32_t MaxPitchUnits = 7 * PitchUnitsPerOctave;
     static constexpr uint32_t C2PhaseIncrement = 5852465u;
     static constexpr int32_t FixedOscillator2Level = 4095;
+    static constexpr int32_t MaxDetunePitchUnits =
+        (PitchUnitsPerOctave * 3) / 2;
     static constexpr uint8_t FactoryEnvelopePresetCount = 9;
     static constexpr uint8_t CustomEnvelopePresetCount = 8;
     static constexpr uint8_t FirstCustomEnvelopePreset = (uint8_t)EnvelopePreset::Custom1;
@@ -1688,29 +1690,33 @@ private:
 
     int32_t applyDetune(int32_t freq, int32_t detune)
     {
-        int32_t bend = detune;
-        int32_t sign = 1;
+        int32_t offsetUnits = detunePitchOffsetUnits(detune);
+        int32_t ratio = pitchFrequency(offsetUnits);
+        uint64_t scaled = (uint64_t)(uint32_t)freq * (uint32_t)ratio;
+        uint64_t result = scaled / C2PhaseIncrement;
 
-        if (bend < 0)
-        {
-            sign = -1;
-            bend = -bend;
-        }
-
-        // Small movements give fine beating; the far ends reach wide offsets.
-        int32_t fine = (bend * bend) >> 11;
-        int64_t offset = ((int64_t)freq * fine) >> 12;
-        int64_t detuned = sign < 0 ?
-            (int64_t)freq - offset :
-            (int64_t)freq + offset;
-
-        if (detuned < 0)
-            return 0;
-
-        if (detuned > 0x7FFFFFFFLL)
+        if (result > 0x7FFFFFFFu)
             return 0x7FFFFFFF;
 
-        return (int32_t)detuned;
+        return (int32_t)result;
+    }
+
+    int32_t detunePitchOffsetUnits(int32_t detune)
+    {
+        int32_t amount = detune;
+        int32_t sign = 1;
+        if (amount < 0)
+        {
+            sign = -1;
+            amount = -amount;
+        }
+
+        if (amount > 2048)
+            amount = 2048;
+
+        int32_t shaped = (amount * amount) >> 11;
+        int32_t units = (shaped * MaxDetunePitchUnits) >> 11;
+        return sign * units;
     }
 
     void syncOscillators()
@@ -1820,8 +1826,7 @@ private:
         uint32_t x2 = (x * x) >> 12;
         uint32_t x3 = (x2 * x) >> 12;
 
-        uint32_t y = (3u * x2) - (2u * x3);
-        return y > 4095u ? 4095u : y;
+        return (3u * x2) - (2u * x3);
     }
 private:
 

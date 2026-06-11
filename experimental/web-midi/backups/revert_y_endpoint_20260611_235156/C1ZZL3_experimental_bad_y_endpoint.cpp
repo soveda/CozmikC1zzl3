@@ -986,12 +986,24 @@ private:
 
     inline int32_t morphWave(uint32_t phase, int32_t wave)
     {
+        if (wave <= 0)
+            return czWave(phase, 0);
+
+        if (wave >= 4095)
+            return czWave(phase, 7);
+
         uint32_t scaled = ((uint32_t)wave * 7u);
         uint32_t index = scaled >> 12;
         uint32_t frac = smoothStep12(scaled & 4095);
 
         int32_t a = czWave(phase, index);
         int32_t b = czWave(phase, index < 7 ? index + 1 : 7);
+
+        if (frac <= 8)
+            return a;
+
+        if (frac >= 4087)
+            return b;
 
         return a + (((b - a) * (int32_t)frac) >> 12);
     }
@@ -1079,8 +1091,7 @@ private:
         else
             envelope = ((int32_t)(4095 - p) * 4095) / 1023;
 
-        int32_t overtone =
-            (getSine(phase * 7) + (getSine(phase * 8) >> 1)) >> 1;
+        int32_t overtone = getSine(phase * 7);
         int32_t body = envelope >> 4;
 
         return clip(body + ((overtone * envelope) >> 12));
@@ -1699,18 +1710,12 @@ private:
 
         // Small movements give fine beating; the far ends reach wide offsets.
         int32_t fine = (bend * bend) >> 11;
-        int64_t offset = ((int64_t)freq * fine) >> 12;
-        int64_t detuned = sign < 0 ?
-            (int64_t)freq - offset :
-            (int64_t)freq + offset;
+        int32_t offset = (freq * fine) >> 12;
 
-        if (detuned < 0)
-            return 0;
+        if (sign < 0)
+            return freq - offset;
 
-        if (detuned > 0x7FFFFFFFLL)
-            return 0x7FFFFFFF;
-
-        return (int32_t)detuned;
+        return freq + offset;
     }
 
     void syncOscillators()
@@ -1820,8 +1825,7 @@ private:
         uint32_t x2 = (x * x) >> 12;
         uint32_t x3 = (x2 * x) >> 12;
 
-        uint32_t y = (3u * x2) - (2u * x3);
-        return y > 4095u ? 4095u : y;
+        return (3u * x2) - (2u * x3);
     }
 private:
 

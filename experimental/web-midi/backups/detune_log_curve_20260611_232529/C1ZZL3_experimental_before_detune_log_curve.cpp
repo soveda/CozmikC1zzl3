@@ -1699,18 +1699,12 @@ private:
 
         // Small movements give fine beating; the far ends reach wide offsets.
         int32_t fine = (bend * bend) >> 11;
-        int64_t offset = ((int64_t)freq * fine) >> 12;
-        int64_t detuned = sign < 0 ?
-            (int64_t)freq - offset :
-            (int64_t)freq + offset;
+        int32_t offset = (freq * fine) >> 12;
 
-        if (detuned < 0)
-            return 0;
+        if (sign < 0)
+            return freq - offset;
 
-        if (detuned > 0x7FFFFFFFLL)
-            return 0x7FFFFFFF;
-
-        return (int32_t)detuned;
+        return freq + offset;
     }
 
     void syncOscillators()
@@ -1820,8 +1814,7 @@ private:
         uint32_t x2 = (x * x) >> 12;
         uint32_t x3 = (x2 * x) >> 12;
 
-        uint32_t y = (3u * x2) - (2u * x3);
-        return y > 4095u ? 4095u : y;
+        return (3u * x2) - (2u * x3);
     }
 private:
 
