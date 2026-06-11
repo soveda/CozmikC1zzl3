@@ -52,7 +52,7 @@ Pulse out 1 carries the main Turing pulse. Pulse out 2 carries an alternate Turi
 
 Holding the switch down edits the latched second oscillator and modulation amounts. The normal Main, X, and Y synth controls are held at their last middle-position values while editing, and the held controls must move after the switch is pressed before soft pickup can edit a latched value.
 
-Main controls oscillator 2 detune and level from the centre point. Around 12 o'clock, oscillator 2 is off. Turning left detunes down; turning right detunes up. The further from centre, the louder oscillator 2 becomes.
+Main controls oscillator 2 detune from the centre point. Around 12 o'clock, oscillator 2 is unison. Turning left detunes down; turning right detunes up. Oscillator 2 output level stays fixed at full level for external mixing in the Workshop System.
 
 X controls ring modulation amount. The setting remains active after the switch is released.
 
@@ -124,7 +124,7 @@ In PD synth mode:
 
 - LED 1 shows phase-distortion amount.
 - LED 2 shows waveform morph position.
-- LED 3 shows oscillator 2 level.
+- LED 3 shows oscillator 2 detune amount.
 - LED 4 shows ring modulation amount.
 - LED 5 shows noise modulation amount.
 - LED 6 lights while the switch is held down.
@@ -163,7 +163,7 @@ Confirmed on hardware:
 - Audio/CV in 1 tracks at 1V/oct using the Workshop Computer 12V-over-4096-count input convention used by Chord Blimey.
 - X phase-distortion control and Y waveform morphing are responsive across the usable range.
 - All eight waveform positions have distinct character, including the CZ-style resonance-window shapes at positions 6-8.
-- Held-switch soft pickup, latched detune/ring/noise controls, and 8-second manual save work as intended.
+- Held-switch soft pickup, latched detune/ring/noise controls, fixed-level oscillator 2 detune, and 8-second manual save work as intended.
 - Mode-specific Main/X/Y pickup keeps synth and Turing controls from jumping when changing switch positions.
 - CV in 1 modulates phase-distortion amount and CV in 2 modulates waveform morph in both synth and Turing modes.
 - Envelope preset select, binary LED display, triggering, and persistence work as intended.
@@ -182,6 +182,7 @@ Recently tuned:
 - Active envelope presets can be self-triggered by the main Turing pulse without oscillator sync.
 - Ring modulation now uses a stronger internal carrier while keeping some dry signal at the maximum setting to avoid full signal loss.
 - Held-switch performance controls now require movement before soft pickup, and Main/X/Y no longer change pitch, PD amount, or waveform while editing detune/ring/noise.
+- Oscillator 2 detune is now decoupled from oscillator 2 volume; oscillator 2 stays at full output level for external mixing.
 - Manual flash persistence saves latched performance settings after an 8-second held-switch gesture; autosave is intentionally avoided.
 - Brass envelope decay has been lengthened, oscillator sync now uses a very short fade, and preset 0 ignores Pulse in 2 for clean free-running oscillator use.
 - Envelope presets are ordered by musical family: short percussive shapes, tonal/instrument-like shapes, then unusual/special shapes.

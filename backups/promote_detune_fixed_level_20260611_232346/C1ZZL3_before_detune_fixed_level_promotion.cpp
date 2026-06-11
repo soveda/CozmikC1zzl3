@@ -257,7 +257,6 @@ private:
     static constexpr int32_t MinPitchUnits = -2 * PitchUnitsPerOctave;
     static constexpr int32_t MaxPitchUnits = 7 * PitchUnitsPerOctave;
     static constexpr uint32_t C2PhaseIncrement = 5852465u;
-    static constexpr int32_t FixedOscillator2Level = 4095;
     static constexpr uint8_t FactoryEnvelopePresetCount = 9;
     static constexpr uint8_t CustomEnvelopePresetCount = 8;
     static constexpr uint8_t FirstCustomEnvelopePreset = (uint8_t)EnvelopePreset::Custom1;
@@ -1245,7 +1244,7 @@ private:
     {
         LedBrightness(0, pd);
         LedBrightness(1, wave);
-        LedBrightness(2, detuneDisplayLevel());
+        LedBrightness(2, osc2Level);
         LedBrightness(3, osc2Ring);
         LedBrightness(4, osc2Noise);
         LedBrightness(5, alt ? 4095 : 0);
@@ -1443,7 +1442,9 @@ private:
             if (osc2Detune > -32 && osc2Detune < 32)
                 osc2Detune = 0;
 
-            osc2Level = FixedOscillator2Level;
+            osc2Level = osc2Detune < 0 ? -osc2Detune : osc2Detune;
+            osc2Level <<= 1;
+            if (osc2Level > 4095) osc2Level = 4095;
         }
 
         if (altXPickedUp ||
@@ -1479,13 +1480,6 @@ private:
             pickedUp = true;
 
         return pickedUp;
-    }
-
-    int32_t detuneDisplayLevel()
-    {
-        int32_t amount = osc2Detune < 0 ? -osc2Detune : osc2Detune;
-        amount <<= 1;
-        return clamp12(amount);
     }
 
     void updateSynthControls(int32_t main, int32_t x, int32_t y)
@@ -1545,7 +1539,7 @@ private:
         state.version = SaveVersion;
         state.size = sizeof(SavedPerformanceState);
         state.osc2Detune = osc2Detune;
-        state.osc2Level = FixedOscillator2Level;
+        state.osc2Level = osc2Level;
         state.osc2Ring = osc2Ring;
         state.osc2Noise = osc2Noise;
         state.envelopePreset = envelopePreset < FactoryEnvelopePresetCount ?
@@ -1645,7 +1639,7 @@ private:
             return;
 
         osc2Detune = state.osc2Detune;
-        osc2Level = FixedOscillator2Level;
+        osc2Level = clamp12(state.osc2Level);
         osc2Ring = clamp12(state.osc2Ring);
         osc2Noise = clamp12(state.osc2Noise);
         envelopePreset = state.envelopePreset < FactoryEnvelopePresetCount ?
@@ -1909,7 +1903,7 @@ private:
     bool synthYPickedUp = true;
     int32_t smoothedFreq = 0;
     int32_t osc2Detune = 0;
-    int32_t osc2Level = FixedOscillator2Level;
+    int32_t osc2Level = 0;
     int32_t osc2Ring = 0;
     int32_t osc2Noise = 0;
     int32_t altMainEntry = 2048;

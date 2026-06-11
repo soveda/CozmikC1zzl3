@@ -1,9 +1,9 @@
-Description: Dual phase-distortion synthesiser with CZ-style oscillator engine, hardware-tested 1V/oct pitch input, matched CV modulation in synth and Turing modes, mode-specific knob pickup, envelope presets, Web MIDI editing, USB MIDI, manual flash persistence, and a self-playing probabilistic Turing machine sequencer.
+Description: Dual phase-distortion synthesiser with CZ-style oscillator engine, fixed-level oscillator 2 detune for external mixing, hardware-tested 1V/oct pitch input, matched CV modulation in synth and Turing modes, mode-specific knob pickup, envelope presets, Web MIDI editing, USB MIDI, manual flash persistence, and a self-playing probabilistic Turing machine sequencer.
 Name: C1ZZL3
 Language: C++ (Pico SDK)
 Creator: Adrian Vos
 Instagram: https://instagram.com/professeur_whom
-Version: 0.5
+Version: 0.6
 Status: Hardware-tested working
 
 tags:
@@ -17,9 +17,9 @@ tags:
 
 manual: |
   C1ZZL3 is a CZ-inspired phase-distortion oscillator card with a second mirrored oscillator for
-  detune, ring modulation, and CZ-style noise/grit. Audio/CV in 1 tracks at a hardware-tested
-  1V/oct scale. CV In 1 modulates phase-distortion amount and CV In 2 modulates waveform morph
-  in both synth and Turing modes.
+  fixed-level detune, ring modulation, and CZ-style noise/grit. Audio/CV in 1 tracks at a
+  hardware-tested 1V/oct scale. CV In 1 modulates phase-distortion amount and CV In 2 modulates
+  waveform morph in both synth and Turing modes.
 
   Switch middle is the main PD synth voice. Hold the switch down from middle to edit the latched
   second oscillator, ring modulation, and grit controls using soft pickup. Hold down for 8 seconds
@@ -91,7 +91,7 @@ controls:
     - when: { z: down, gesture: hold }
       main:
         name: Main
-        description: Latched oscillator 2 detune and level from centre; normal pitch is held while editing
+        description: Latched oscillator 2 detune from centre at fixed output level; normal pitch is held while editing
       x:
         name: X
         description: Latched ring modulation amount; uses soft pickup
@@ -135,7 +135,7 @@ controls:
           description: Waveform morph position
         - id: LED2
           name: LED 2
-          description: Oscillator 2 level
+          description: Oscillator 2 detune amount
         - id: LED3
           name: LED 3
           description: Ring modulation amount
