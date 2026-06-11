@@ -262,6 +262,7 @@ private:
     static constexpr int32_t PitchInputCountsPerVolt = 341;
     static constexpr int32_t MinPitchUnits = -2 * PitchUnitsPerOctave;
     static constexpr int32_t MaxPitchUnits = 7 * PitchUnitsPerOctave;
+    static constexpr int32_t MaxOsc2DetuneCents = 1900;
     static constexpr uint32_t C2PhaseIncrement = 5852465u;
     static constexpr uint8_t FactoryEnvelopePresetCount = 9;
     static constexpr uint8_t CustomEnvelopePresetCount = 8;
@@ -405,11 +406,9 @@ private:
             oscCZ(phase2, freq2, pd, wave, noiseAmt);
 
         int32_t osc2Raw = osc2;
-        osc2 = (osc2Raw * osc2Level) >> 12;
+        osc2 = osc2Raw;
 
-        int32_t ringDrive = osc2Level;
-        if (ringDrive < 2048)
-            ringDrive = 2048;
+        int32_t ringDrive = 4095;
         int32_t ringCarrier = (osc2Raw * ringDrive) >> 12;
         int32_t ringSig = clip((osc1 * ringCarrier) >> 10);
         int32_t ringMix = (ring * 3840) >> 12;
@@ -1195,9 +1194,12 @@ private:
 
     void updateSynthLEDs(bool alt, int32_t pd, int32_t wave)
     {
+        int32_t detuneAmount = osc2Detune < 0 ? -osc2Detune : osc2Detune;
+        int32_t detuneLed = (detuneAmount * 4095) / MaxOsc2DetuneCents;
+
         LedBrightness(0, pd);
         LedBrightness(1, wave);
-        LedBrightness(2, osc2Level);
+        LedBrightness(2, detuneLed);
         LedBrightness(3, osc2Ring);
         LedBrightness(4, osc2Noise);
         LedBrightness(5, alt ? 4095 : 0);
@@ -1389,15 +1391,10 @@ private:
     void updateAltControls(int32_t main, int32_t x, int32_t y)
     {
         if (altMainPickedUp ||
-            pickupAltControl(main, altMainEntry, clamp12(osc2Detune + 2048), altMainPickedUp))
+            pickupAltControl(main, altMainEntry, detuneKnobPosition(osc2Detune), altMainPickedUp))
         {
-            osc2Detune = main - 2048;
-            if (osc2Detune > -32 && osc2Detune < 32)
-                osc2Detune = 0;
-
-            osc2Level = osc2Detune < 0 ? -osc2Detune : osc2Detune;
-            osc2Level <<= 1;
-            if (osc2Level > 4095) osc2Level = 4095;
+            osc2Detune = detuneCentsFromKnob(main);
+            osc2Level = 4095;
         }
 
         if (altXPickedUp ||
@@ -1435,6 +1432,75 @@ private:
         return pickedUp;
     }
 
+    int32_t detuneCentsFromKnob(int32_t knob)
+    {
+        int32_t offset = clamp12(knob) - 2048;
+        int32_t sign = offset < 0 ? -1 : 1;
+        int32_t distance = offset < 0 ? -offset : offset;
+
+        if (distance < 32)
+            return 0;
+
+        if (distance > 2047)
+            distance = 2047;
+
+        return sign * detuneCentsCurve(distance);
+    }
+
+    int32_t detuneCentsCurve(int32_t distance)
+    {
+        static constexpr int32_t FineEnd = 512;
+        static constexpr int32_t FifthEnd = 1365;
+        static constexpr int32_t OctaveEnd = 1706;
+        static constexpr int32_t FineCents = 100;
+        static constexpr int32_t FifthCents = 700;
+        static constexpr int32_t OctaveCents = 1200;
+
+        if (distance <= FineEnd)
+            return (distance * distance * FineCents) / (FineEnd * FineEnd);
+
+        if (distance <= FifthEnd)
+        {
+            int32_t t = ((distance - FineEnd) * 4095) / (FifthEnd - FineEnd);
+            int32_t curved = smoothStep12(t);
+            return FineCents + (((FifthCents - FineCents) * curved) >> 12);
+        }
+
+        if (distance <= OctaveEnd)
+        {
+            int32_t t = ((distance - FifthEnd) * 4095) / (OctaveEnd - FifthEnd);
+            int32_t curved = smoothStep12(t);
+            return FifthCents + (((OctaveCents - FifthCents) * curved) >> 12);
+        }
+
+        int32_t t = ((distance - OctaveEnd) * 4095) / (2047 - OctaveEnd);
+        int32_t curved = smoothStep12(t);
+        return OctaveCents + (((MaxOsc2DetuneCents - OctaveCents) * curved) >> 12);
+    }
+
+    int32_t detuneKnobPosition(int32_t detuneCents)
+    {
+        int32_t sign = detuneCents < 0 ? -1 : 1;
+        int32_t target = detuneCents < 0 ? -detuneCents : detuneCents;
+        int32_t bestDistance = 0;
+        int32_t bestError = MaxOsc2DetuneCents;
+
+        for (int32_t distance = 0; distance <= 2047; distance += 16)
+        {
+            int32_t error = detuneCentsCurve(distance) - target;
+            if (error < 0)
+                error = -error;
+
+            if (error < bestError)
+            {
+                bestError = error;
+                bestDistance = distance;
+            }
+        }
+
+        return clamp12(2048 + (sign * bestDistance));
+    }
+
     SavedPerformanceState currentPerformanceState()
     {
         SavedPerformanceState state;
@@ -1442,7 +1508,7 @@ private:
         state.version = SaveVersion;
         state.size = sizeof(SavedPerformanceState);
         state.osc2Detune = osc2Detune;
-        state.osc2Level = osc2Level;
+        state.osc2Level = 4095;
         state.osc2Ring = osc2Ring;
         state.osc2Noise = osc2Noise;
         state.envelopePreset = envelopePreset < FactoryEnvelopePresetCount ?
@@ -1542,7 +1608,11 @@ private:
             return;
 
         osc2Detune = state.osc2Detune;
-        osc2Level = clamp12(state.osc2Level);
+        if (osc2Detune < -MaxOsc2DetuneCents)
+            osc2Detune = -MaxOsc2DetuneCents;
+        if (osc2Detune > MaxOsc2DetuneCents)
+            osc2Detune = MaxOsc2DetuneCents;
+        osc2Level = 4095;
         osc2Ring = clamp12(state.osc2Ring);
         osc2Noise = clamp12(state.osc2Noise);
         envelopePreset = state.envelopePreset < FactoryEnvelopePresetCount ?
@@ -1585,23 +1655,10 @@ private:
 
     int32_t applyDetune(int32_t freq, int32_t detune)
     {
-        int32_t bend = detune;
-        int32_t sign = 1;
-
-        if (bend < 0)
-        {
-            sign = -1;
-            bend = -bend;
-        }
-
-        // Small movements give fine beating; the far ends reach wide offsets.
-        int32_t fine = (bend * bend) >> 11;
-        int32_t offset = (freq * fine) >> 12;
-
-        if (sign < 0)
-            return freq - offset;
-
-        return freq + offset;
+        int32_t units = (detune * PitchUnitsPerOctave) / 1200;
+        int32_t ratioFreq = pitchFrequency(units);
+        int32_t baseFreq = pitchFrequency(0);
+        return (int32_t)(((int64_t)freq * ratioFreq) / baseFreq);
     }
 
     void syncOscillators()
@@ -1788,7 +1845,7 @@ private:
     int32_t waveControl = 0;
     int32_t smoothedFreq = 0;
     int32_t osc2Detune = 0;
-    int32_t osc2Level = 0;
+    int32_t osc2Level = 4095;
     int32_t osc2Ring = 0;
     int32_t osc2Noise = 0;
     int32_t altMainEntry = 2048;
