@@ -525,6 +525,7 @@ async function sendSysex(command = SYSEX_COMMAND_PREVIEW) {
 
   const frame = buildSysex(command);
   const action = command === SYSEX_COMMAND_SAVE ? "Flash" : "Sent";
+  const sendCooldownMs = command === SYSEX_COMMAND_SAVE ? 1800 : 250;
   const summary = frameSummary();
   sendingSysex = true;
   el.sendSysex.disabled = true;
@@ -536,7 +537,7 @@ async function sendSysex(command = SYSEX_COMMAND_PREVIEW) {
     sendingSysex = false;
     el.sendSysex.disabled = false;
     el.flashSysex.disabled = false;
-  }, 250);
+  }, sendCooldownMs);
 }
 
 function buildSysex(command) {

@@ -64,6 +64,10 @@ The experimental firmware can:
 - receive USB MIDI note on/off from a class-compliant controller in host mode
 - send Turing mode note-on/note-off messages back to the DAW when Turing MIDI
   output is enabled
+- use switch up for synth mode, switch middle for Turing mode, and switch down
+  for the synth alternate/save layer
+- use CV1 and CV2 in Turing mode to modulate the internal synth voice's
+  waveform morph and phase-distortion amount
 
 The editor keeps custom preset names in browser local storage. The card firmware
 persists custom envelope shapes only; it does not store or display names.
@@ -78,8 +82,9 @@ persists custom envelope shapes only; it does not store or display names.
 - Very short envelopes are blocked by the editor before sending. If the status
   shows `0.00s`, drag a node to the right or enter a longer stage time before
   using `Send`.
-- Envelope retriggers now start from the current envelope level instead of
-  snapping back to zero, which should reduce trigger clicks.
+- Envelope triggers apply a short de-click fade. This is intended to reduce
+  hard edges from pulse, MIDI, and Turing retriggers without changing the saved
+  envelope shapes.
 - `Send` previews a custom slot in RAM. `Flash` writes the chosen custom slot to
   the card's flash sector for power-cycle testing.
 - `Set` applies ring/noise/MIDI channel settings in RAM. `Save Set` writes those
@@ -94,6 +99,15 @@ persists custom envelope shapes only; it does not store or display names.
   handle underneath if needed. Stage times can still be edited numerically.
 - In Turing mode, turning X now briefly displays the selected sequence length as
   a binary value on the six LEDs.
+- The current experimental switch layout is: up = synth, middle = Turing, down =
+  synth alternate/save. Down still edits oscillator 2 detune, ring, and noise,
+  and a long hold from synth mode saves the current performance settings.
+- Oscillator 2 now runs at full level. Its detune control uses a musical curve:
+  small movements around centre are fine cents, then the range opens toward a
+  fifth, octave, and octave-plus-fifth near the extremes.
+- Returning from Turing or alternate mode to synth mode uses pickup for Main, X,
+  and Y so the Turing length/speed knob positions do not immediately overwrite
+  synth pitch, PD amount, or waveform.
 - Turing MIDI output maps the generated CV to notes over roughly four octaves.
   Check for hanging notes during testing before relying on it in a DAW session.
 - USB role is selected at boot/reset. Connect the USB-C port first, then power

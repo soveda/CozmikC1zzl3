@@ -105,28 +105,28 @@ public:
             return;
         }
 
-        if (previousMode == Switch::Up && mode == Switch::Down)
-            tapTuringClock();
+        bool synthMode = mode == Switch::Up;
+        bool turingMode = mode == Switch::Middle;
+        bool alt = mode == Switch::Down;
         lastMode = mode;
 
         // =========================
-        // PD SYNTH MODE (MID + DOWN)
+        // PD SYNTH MODE (UP + DOWN)
         // =========================
-        if (mode != Switch::Up)
+        if (synthMode || alt)
         {
-            bool alt = (mode == Switch::Down);
-
-            if (!alt)
+            if (synthMode)
             {
-                pitchControl = main;
-                pdControl = x;
-                waveControl = y;
+                if (previousMode != Switch::Up)
+                    resetSynthPickup(main, x, y);
+
+                updateSynthControls(main, x, y);
             }
             else
             {
                 if (previousMode != Switch::Down)
                 {
-                    saveHoldCanSave = (previousMode == Switch::Middle);
+                    saveHoldCanSave = (previousMode == Switch::Up);
                     resetAltPickup(main, x, y);
                 }
 
@@ -170,7 +170,7 @@ public:
         // =========================
         // TURING MODE
         // =========================
-        else
+        else if (turingMode)
         {
             resetSaveGesture();
 
@@ -208,7 +208,7 @@ public:
             CVOut1(turingCv);
             CVOut2(turingModCv);
 
-            outputTuringSynthVoice();
+            outputTuringSynthVoice(cv1, cv2);
 
             PulseOut1(turingPulse);
             PulseOut2(turingAltPulse);
@@ -271,6 +271,8 @@ private:
     static constexpr uint32_t StartupSelectDelaySamples = 12000u;
     static constexpr uint32_t StartupSelectWindowSamples = 24000u;
     static constexpr uint32_t WebMidiFeedbackSamples = 24000u;
+    static constexpr uint32_t TriggerFadeSamples = 240u;
+    static constexpr int32_t MaxOsc2DetuneUnits = (PitchUnitsPerOctave * 3) / 2;
     static constexpr uint32_t SaveMagic = 0x43315A33u; // C1Z3
     static constexpr uint16_t SaveVersion = 4;
     static constexpr uint32_t SaveFlashOffset =
@@ -373,14 +375,14 @@ private:
         outputSynthVoice(freq, pd, wave, osc2Ring, osc2Noise);
     }
 
-    void outputTuringSynthVoice()
+    void outputTuringSynthVoice(int32_t cv1, int32_t cv2)
     {
         int32_t pitchOffset =
             (turingCv * TuringAudioPitchDepth * MainPitchOctaves) >> 12;
         int32_t freq = smoothPitch(
             pitchFrequency(pitchUnits(pitchControl, 0) + pitchOffset));
-        int32_t pd = clamp12(pdControl);
-        int32_t wave = clamp12(waveControl);
+        int32_t pd = clamp12(pdControl + (cv2 << 1));
+        int32_t wave = clamp12(waveControl + (cv1 << 1));
 
         outputSynthVoice(freq, pd, wave, osc2Ring, osc2Noise);
     }
@@ -405,11 +407,8 @@ private:
             oscCZ(phase2, freq2, pd, wave, noiseAmt);
 
         int32_t osc2Raw = osc2;
-        osc2 = (osc2Raw * osc2Level) >> 12;
 
-        int32_t ringDrive = osc2Level;
-        if (ringDrive < 2048)
-            ringDrive = 2048;
+        int32_t ringDrive = 4095;
         int32_t ringCarrier = (osc2Raw * ringDrive) >> 12;
         int32_t ringSig = clip((osc1 * ringCarrier) >> 10);
         int32_t ringMix = (ring * 3840) >> 12;
@@ -469,6 +468,7 @@ private:
         if (envelopePreset == (uint8_t)EnvelopePreset::Off)
             return;
 
+        syncFadeSamples = TriggerFadeSamples;
         ampEnvelopeStage = 0;
         ampEnvelopeSample = 0;
         ampEnvelopeStartLevel = envelopeActive ? ampEnvelopeLevel : 0;
@@ -856,6 +856,13 @@ private:
         customEnvelopeValid[customSlot] = true;
         pendingWebEnvelopeSlot = customSlot;
         pendingWebEnvelopeShouldSave = command == WebMidiCommandSave;
+
+        if (pendingWebEnvelopeShouldSave)
+        {
+            customEnvelopePersist[customSlot] = true;
+            savePerformanceStateIfChanged();
+        }
+
         pendingWebEnvelopeReady = true;
         flashWebMidiAccepted();
     }
@@ -952,7 +959,6 @@ private:
         {
             customEnvelopePersist[customSlot] = true;
             pendingWebEnvelopeShouldSave = false;
-            savePerformanceStateIfChanged();
         }
         else
         {
@@ -1189,9 +1195,12 @@ private:
 
     void updateSynthLEDs(bool alt, int32_t pd, int32_t wave)
     {
+        int32_t detuneAmount = osc2Detune < 0 ? -osc2Detune : osc2Detune;
+        int32_t detuneLed = (detuneAmount * 4095) / MaxOsc2DetuneUnits;
+
         LedBrightness(0, pd);
         LedBrightness(1, wave);
-        LedBrightness(2, osc2Level);
+        LedBrightness(2, detuneLed);
         LedBrightness(3, osc2Ring);
         LedBrightness(4, osc2Noise);
         LedBrightness(5, alt ? 4095 : 0);
@@ -1383,15 +1392,10 @@ private:
     void updateAltControls(int32_t main, int32_t x, int32_t y)
     {
         if (altMainPickedUp ||
-            pickupAltControl(main, altMainEntry, clamp12(osc2Detune + 2048), altMainPickedUp))
+            pickupAltControl(main, altMainEntry, detuneKnobPosition(osc2Detune), altMainPickedUp))
         {
-            osc2Detune = main - 2048;
-            if (osc2Detune > -32 && osc2Detune < 32)
-                osc2Detune = 0;
-
-            osc2Level = osc2Detune < 0 ? -osc2Detune : osc2Detune;
-            osc2Level <<= 1;
-            if (osc2Level > 4095) osc2Level = 4095;
+            osc2Detune = detuneUnitsFromKnob(main);
+            osc2Level = 4095;
         }
 
         if (altXPickedUp ||
@@ -1403,6 +1407,21 @@ private:
             osc2Noise = y;
     }
 
+    void updateSynthControls(int32_t main, int32_t x, int32_t y)
+    {
+        if (synthMainPickedUp ||
+            pickupAltControl(main, synthMainEntry, pitchControl, synthMainPickedUp))
+            pitchControl = main;
+
+        if (synthXPickedUp ||
+            pickupAltControl(x, synthXEntry, pdControl, synthXPickedUp))
+            pdControl = x;
+
+        if (synthYPickedUp ||
+            pickupAltControl(y, synthYEntry, waveControl, synthYPickedUp))
+            waveControl = y;
+    }
+
     void resetAltPickup(int32_t main, int32_t x, int32_t y)
     {
         altMainPickedUp = false;
@@ -1411,6 +1430,16 @@ private:
         altMainEntry = main;
         altXEntry = x;
         altYEntry = y;
+    }
+
+    void resetSynthPickup(int32_t main, int32_t x, int32_t y)
+    {
+        synthMainPickedUp = false;
+        synthXPickedUp = false;
+        synthYPickedUp = false;
+        synthMainEntry = main;
+        synthXEntry = x;
+        synthYEntry = y;
     }
 
     bool pickupAltControl(int32_t knob, int32_t entry, int32_t target, bool& pickedUp)
@@ -1429,6 +1458,77 @@ private:
         return pickedUp;
     }
 
+    int32_t detuneUnitsFromKnob(int32_t knob)
+    {
+        int32_t offset = clamp12(knob) - 2048;
+        int32_t sign = offset < 0 ? -1 : 1;
+        int32_t distance = offset < 0 ? -offset : offset;
+
+        if (distance < 32)
+            return 0;
+
+        if (distance > 2047)
+            distance = 2047;
+
+        int32_t units = detuneCurve(distance);
+        return sign * units;
+    }
+
+    int32_t detuneCurve(int32_t distance)
+    {
+        static constexpr int32_t FineEnd = 512;
+        static constexpr int32_t FifthEnd = 1365;
+        static constexpr int32_t OctaveEnd = 1706;
+        static constexpr int32_t FineUnits = PitchUnitsPerOctave / 4;
+        static constexpr int32_t FifthUnits = (PitchUnitsPerOctave * 7) / 12;
+
+        if (distance <= FineEnd)
+            return (distance * distance * FineUnits) / (FineEnd * FineEnd);
+
+        if (distance <= FifthEnd)
+        {
+            int32_t t = ((distance - FineEnd) * 4095) / (FifthEnd - FineEnd);
+            int32_t curved = smoothStep12(t);
+            return FineUnits + (((FifthUnits - FineUnits) * curved) >> 12);
+        }
+
+        if (distance <= OctaveEnd)
+        {
+            int32_t t = ((distance - FifthEnd) * 4095) / (OctaveEnd - FifthEnd);
+            int32_t curved = smoothStep12(t);
+            return FifthUnits + (((PitchUnitsPerOctave - FifthUnits) * curved) >> 12);
+        }
+
+        int32_t t = ((distance - OctaveEnd) * 4095) / (2047 - OctaveEnd);
+        int32_t curved = smoothStep12(t);
+        return PitchUnitsPerOctave +
+            (((MaxOsc2DetuneUnits - PitchUnitsPerOctave) * curved) >> 12);
+    }
+
+    int32_t detuneKnobPosition(int32_t detune)
+    {
+        int32_t sign = detune < 0 ? -1 : 1;
+        int32_t target = detune < 0 ? -detune : detune;
+        int32_t bestDistance = 0;
+        int32_t bestError = MaxOsc2DetuneUnits;
+
+        for (int32_t distance = 0; distance <= 2047; distance += 16)
+        {
+            int32_t error = detuneCurve(distance) - target;
+            if (error < 0)
+                error = -error;
+
+            if (error < bestError)
+            {
+                bestError = error;
+                bestDistance = distance;
+            }
+        }
+
+        return clamp12(2048 + (sign * bestDistance));
+    }
+
+
     SavedPerformanceState currentPerformanceState()
     {
         SavedPerformanceState state;
@@ -1436,7 +1536,7 @@ private:
         state.version = SaveVersion;
         state.size = sizeof(SavedPerformanceState);
         state.osc2Detune = osc2Detune;
-        state.osc2Level = osc2Level;
+        state.osc2Level = 4095;
         state.osc2Ring = osc2Ring;
         state.osc2Noise = osc2Noise;
         state.envelopePreset = envelopePreset < FactoryEnvelopePresetCount ?
@@ -1536,7 +1636,7 @@ private:
             return;
 
         osc2Detune = state.osc2Detune;
-        osc2Level = clamp12(state.osc2Level);
+        osc2Level = 4095;
         osc2Ring = clamp12(state.osc2Ring);
         osc2Noise = clamp12(state.osc2Noise);
         envelopePreset = state.envelopePreset < FactoryEnvelopePresetCount ?
@@ -1579,30 +1679,16 @@ private:
 
     int32_t applyDetune(int32_t freq, int32_t detune)
     {
-        int32_t bend = detune;
-        int32_t sign = 1;
-
-        if (bend < 0)
-        {
-            sign = -1;
-            bend = -bend;
-        }
-
-        // Small movements give fine beating; the far ends reach wide offsets.
-        int32_t fine = (bend * bend) >> 11;
-        int32_t offset = (freq * fine) >> 12;
-
-        if (sign < 0)
-            return freq - offset;
-
-        return freq + offset;
+        int32_t ratioFreq = pitchFrequency((4 * PitchUnitsPerOctave) + detune);
+        int32_t baseFreq = pitchFrequency(4 * PitchUnitsPerOctave);
+        return (int32_t)(((int64_t)freq * ratioFreq) / baseFreq);
     }
 
     void syncOscillators()
     {
         phase1 = 0;
         phase2 = 0;
-        syncFadeSamples = 96;
+        syncFadeSamples = TriggerFadeSamples;
     }
 
     int32_t updateSyncFade()
@@ -1782,12 +1868,18 @@ private:
     int32_t waveControl = 0;
     int32_t smoothedFreq = 0;
     int32_t osc2Detune = 0;
-    int32_t osc2Level = 0;
+    int32_t osc2Level = 4095;
     int32_t osc2Ring = 0;
     int32_t osc2Noise = 0;
+    int32_t synthMainEntry = 2048;
+    int32_t synthXEntry = 0;
+    int32_t synthYEntry = 0;
     int32_t altMainEntry = 2048;
     int32_t altXEntry = 0;
     int32_t altYEntry = 0;
+    bool synthMainPickedUp = true;
+    bool synthXPickedUp = true;
+    bool synthYPickedUp = true;
     bool altMainPickedUp = false;
     bool altXPickedUp = false;
     bool altYPickedUp = false;
@@ -1795,7 +1887,7 @@ private:
     uint32_t saveConfirmSamples = 0;
     bool saveHoldCanSave = false;
     bool saveCompletedThisHold = false;
-    Switch lastMode = Switch::Middle;
+    Switch lastMode = Switch::Up;
 };
 
 // =========================================================
