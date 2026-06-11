@@ -2,7 +2,7 @@
 
 Dual phase-distortion synthesiser and probabilistic Turing machine program card for the Music Thing Modular Workshop Computer.
 
-Status: Hardware-tested v1  
+Status: Hardware-tested v1 with Web MIDI / USB MIDI support  
 Language: C++ / Pico SDK  
 Framework: ComputerCard  
 Creator: Adrian Vos
@@ -12,6 +12,10 @@ Creator: Adrian Vos
 C1ZZL3 is a CZ-inspired phase-distortion oscillator card with a second mirrored oscillator for detune, ring modulation, and noise modulation. The switch also opens a Turing machine mode, turning the card into a clocked CV and pulse source with a self-playing stepped oscillator voice.
 
 The current v1 build has passed hardware tests for the core oscillator, held-switch performance controls, Turing machine outputs, self-playing stepped Turing voice, oscillator sync, restrained CZ-style grit, envelope presets, manual flash persistence, and 1V/oct pitch input scaling.
+
+The current MIDI build also includes a browser Web MIDI editor for custom
+envelopes, USB MIDI device mode for computer/DAW control, and USB MIDI host mode
+for class-compliant controllers on 2025 Workshop Computer hardware.
 
 Holding the switch down during startup enters envelope preset select. Release the startup hold, then Main chooses one of nine presets, LEDs show the preset number in binary, a short down press exits for the current session, and a long down hold saves the selected preset to flash.
 
@@ -38,9 +42,9 @@ Audio out 1 carries oscillator 1.
 
 Audio out 2 carries oscillator 2. In normal middle position, oscillator 2 is silent until it has been introduced with the held-switch controls.
 
-CV out 1 and CV out 2 continue to carry the scaled Turing machine CV signals, so the sequencer can modulate other modules while the synth voice is playing.
+CV out 1 and CV out 2 continue to run the Turing machine using the last Turing mode length, mutation, and clock settings, so the sequencer can modulate other modules while the synth voice is playing. The background Turing sequence does not drive the synth pitch outside Turing mode.
 
-Pulse out 1 carries the main Turing pulse. Pulse out 2 carries an alternate Turing bit pulse.
+Pulse out 1 carries the main Turing pulse. Pulse out 2 carries an alternate Turing bit pulse. These also keep running outside Turing mode from the last Turing settings.
 
 ### Hold Switch Down: Performance Edit
 
@@ -182,7 +186,26 @@ Recently tuned:
 - Further waveform tuning if hardware feedback suggests it.
 - Further envelope preset tuning and possible envelope editing mode.
 - Optional flash persistence expansion for future complex envelope data.
-- Experimental web interface for custom envelopes in `experimental/web-midi/editor/`. Run `python3 -m http.server 5173 --directory experimental/web-midi/editor`, open `http://localhost:5173`, then edit presets, audition the browser preview, connect USB MIDI input if supported by the browser, and copy the generated C++ back into `envelopeProgram()`. The page also emits a compact C1ZZL3 SysEx preview frame in the same broad style as Workshop Computer Reverb+, ready for a future firmware receiver/save path. The working card firmware in `C1ZZL3.cpp` is intentionally kept separate.
+
+## Web MIDI Editor
+
+The browser editor lives in `web-midi/editor/`.
+
+Run it locally with:
+
+```sh
+python3 -m http.server 5173 --directory web-midi/editor
+```
+
+Then open:
+
+```text
+http://localhost:5173
+```
+
+The editor can send custom envelope slots over Web MIDI SysEx, flash custom
+slots to the card, and set or save ring/noise/MIDI channel settings. Factory
+presets remain protected.
 
 ## Design Notes
 

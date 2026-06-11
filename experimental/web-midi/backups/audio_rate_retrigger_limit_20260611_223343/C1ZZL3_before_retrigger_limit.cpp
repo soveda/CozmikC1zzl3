@@ -71,8 +71,6 @@ public:
     {
         if (oscillatorSyncAge < MinOscillatorSyncIntervalSamples)
             oscillatorSyncAge++;
-        if (externalEnvelopeTriggerAge < MinExternalEnvelopeRetriggerSamples)
-            externalEnvelopeTriggerAge++;
 
         applyPendingWebEnvelope();
         applyPendingMidiNote();
@@ -156,7 +154,8 @@ public:
             {
                 if (envelopePreset != (uint8_t)EnvelopePreset::Off)
                 {
-                    triggerExternalEnvelope();
+                    syncOscillatorsForEnvelopeTrigger();
+                    triggerEnvelope();
                 }
             }
 
@@ -277,7 +276,6 @@ private:
     static constexpr uint32_t WebMidiFeedbackSamples = 24000u;
     static constexpr uint32_t MinEnvelopeStageSamples = 240u;
     static constexpr uint32_t MinOscillatorSyncIntervalSamples = 480u;
-    static constexpr uint32_t MinExternalEnvelopeRetriggerSamples = 480u;
     static constexpr uint32_t SaveMagic = 0x43315A33u; // C1Z3
     static constexpr uint16_t SaveVersion = 5;
     static constexpr uint32_t SaveFlashOffset =
@@ -485,16 +483,6 @@ private:
         pdEnvelopeStartLevel = envelopeActive ? pdEnvelopeLevel : 0;
         pdEnvelopeLevel = pdEnvelopeStartLevel;
         envelopeActive = true;
-    }
-
-    void triggerExternalEnvelope()
-    {
-        if (externalEnvelopeTriggerAge < MinExternalEnvelopeRetriggerSamples)
-            return;
-
-        externalEnvelopeTriggerAge = 0;
-        syncOscillatorsForEnvelopeTrigger();
-        triggerEnvelope();
     }
 
     void triggerTuringEnvelope()
@@ -730,7 +718,8 @@ private:
 
         if (envelopePreset != (uint8_t)EnvelopePreset::Off)
         {
-            triggerExternalEnvelope();
+            syncOscillatorsForEnvelopeTrigger();
+            triggerEnvelope();
         }
     }
 
@@ -1735,7 +1724,6 @@ private:
     uint32_t phase2 = 0;
     uint32_t syncFadeSamples = 0;
     uint32_t oscillatorSyncAge = MinOscillatorSyncIntervalSamples;
-    uint32_t externalEnvelopeTriggerAge = MinExternalEnvelopeRetriggerSamples;
 
     uint32_t turing = 0xACE1u;
     int32_t turingSmooth = 0;

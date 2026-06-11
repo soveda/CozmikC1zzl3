@@ -69,11 +69,6 @@ public:
     // =========================================================
     void ProcessSample() override
     {
-        if (oscillatorSyncAge < MinOscillatorSyncIntervalSamples)
-            oscillatorSyncAge++;
-        if (externalEnvelopeTriggerAge < MinExternalEnvelopeRetriggerSamples)
-            externalEnvelopeTriggerAge++;
-
         applyPendingWebEnvelope();
         applyPendingMidiNote();
 
@@ -156,7 +151,8 @@ public:
             {
                 if (envelopePreset != (uint8_t)EnvelopePreset::Off)
                 {
-                    triggerExternalEnvelope();
+                    syncOscillators();
+                    triggerEnvelope();
                 }
             }
 
@@ -275,11 +271,8 @@ private:
     static constexpr uint32_t StartupSelectDelaySamples = 12000u;
     static constexpr uint32_t StartupSelectWindowSamples = 24000u;
     static constexpr uint32_t WebMidiFeedbackSamples = 24000u;
-    static constexpr uint32_t MinEnvelopeStageSamples = 240u;
-    static constexpr uint32_t MinOscillatorSyncIntervalSamples = 480u;
-    static constexpr uint32_t MinExternalEnvelopeRetriggerSamples = 480u;
     static constexpr uint32_t SaveMagic = 0x43315A33u; // C1Z3
-    static constexpr uint16_t SaveVersion = 5;
+    static constexpr uint16_t SaveVersion = 4;
     static constexpr uint32_t SaveFlashOffset =
         (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE) &
         ~(FLASH_SECTOR_SIZE - 1u);
@@ -487,16 +480,6 @@ private:
         envelopeActive = true;
     }
 
-    void triggerExternalEnvelope()
-    {
-        if (externalEnvelopeTriggerAge < MinExternalEnvelopeRetriggerSamples)
-            return;
-
-        externalEnvelopeTriggerAge = 0;
-        syncOscillatorsForEnvelopeTrigger();
-        triggerEnvelope();
-    }
-
     void triggerTuringEnvelope()
     {
         if (turingPulse)
@@ -647,8 +630,8 @@ private:
             return true;
 
         uint32_t time = stages[stage].time;
-        if (time < MinEnvelopeStageSamples)
-            time = MinEnvelopeStageSamples;
+        if (time == 0)
+            time = 1;
 
         sample++;
         int32_t target = stages[stage].level;
@@ -730,7 +713,8 @@ private:
 
         if (envelopePreset != (uint8_t)EnvelopePreset::Off)
         {
-            triggerExternalEnvelope();
+            syncOscillators();
+            triggerEnvelope();
         }
     }
 
@@ -1625,13 +1609,6 @@ private:
         phase1 = 0;
         phase2 = 0;
         syncFadeSamples = 96;
-        oscillatorSyncAge = 0;
-    }
-
-    void syncOscillatorsForEnvelopeTrigger()
-    {
-        if (oscillatorSyncAge >= MinOscillatorSyncIntervalSamples)
-            syncOscillators();
     }
 
     int32_t updateSyncFade()
@@ -1734,8 +1711,6 @@ private:
     uint32_t phase1 = 0;
     uint32_t phase2 = 0;
     uint32_t syncFadeSamples = 0;
-    uint32_t oscillatorSyncAge = MinOscillatorSyncIntervalSamples;
-    uint32_t externalEnvelopeTriggerAge = MinExternalEnvelopeRetriggerSamples;
 
     uint32_t turing = 0xACE1u;
     int32_t turingSmooth = 0;

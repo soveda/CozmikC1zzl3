@@ -1,9 +1,6 @@
-# C1ZZL3 Experimental Web MIDI SysEx Protocol
+# C1ZZL3 Web MIDI SysEx Protocol
 
-This protocol is experimental and is only implemented by the firmware in
-`experimental/web-midi/firmware/`.
-
-The production firmware in the repo root does not use this protocol.
+This protocol is implemented by the main C1ZZL3 firmware in the repo root.
 
 ## Transport
 
@@ -12,7 +9,7 @@ The production firmware in the repo root does not use this protocol.
   downstream-facing and a class-compliant USB MIDI controller is attached.
 - Browser/editor sends Web MIDI SysEx to the card.
 - Current firmware supports preview and flash-save commands for one of eight
-  custom slots, plus an experimental performance-settings command.
+  custom slots, plus a performance-settings command.
 - Factory presets `0..8` are never overwritten by SysEx.
 - Custom slots are enumerated after the factory presets as card presets `9..16`.
 - Custom envelopes with no non-zero amplitude stage are rejected, so preset `0`

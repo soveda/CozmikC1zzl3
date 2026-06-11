@@ -69,6 +69,11 @@ public:
     // =========================================================
     void ProcessSample() override
     {
+        if (oscillatorSyncAge < MinOscillatorSyncIntervalSamples)
+            oscillatorSyncAge++;
+        if (externalEnvelopeTriggerAge < MinExternalEnvelopeRetriggerSamples)
+            externalEnvelopeTriggerAge++;
+
         applyPendingWebEnvelope();
         applyPendingMidiNote();
 
@@ -133,6 +138,13 @@ public:
                 updateAltControls(main, x, y);
             }
 
+            updateTuringMachine(
+                turingMutationControl,
+                turingLengthControl,
+                turingClockSpeedControl,
+                false,
+                false);
+
             // -------------------------
             // PITCH (octave map with hardware-tested 1V/oct input scale)
             // -------------------------
@@ -151,8 +163,7 @@ public:
             {
                 if (envelopePreset != (uint8_t)EnvelopePreset::Off)
                 {
-                    syncOscillators();
-                    triggerEnvelope();
+                    triggerExternalEnvelope();
                 }
             }
 
@@ -174,36 +185,16 @@ public:
         {
             resetSaveGesture();
 
-            uint32_t previousTuringLength = turingLength;
-            turingLength = 2 + ((x * 14) >> 12);
-            if (turingLength > 16) turingLength = 16;
-            if (turingLength != previousTuringLength)
-                turingLengthDisplaySamples = WebMidiFeedbackSamples;
+            turingMutationControl = main;
+            turingLengthControl = x;
+            turingClockSpeedControl = y;
 
-            bool externalClock = PulseIn1RisingEdge();
-            bool clocked = false;
-
-            if (externalClock)
-            {
-                externalClockAge = 0;
-                clocked = true;
-            }
-            else
-            {
-                if (externalClockAge < 96000u)
-                    externalClockAge++;
-                else
-                    clocked = internalTuringClock(y);
-            }
-
-            if (clocked)
-            {
-                stepTuring(main);
-                triggerTuringEnvelope();
-                queueTuringMidiNote();
-            }
-
-            updateTuringPulseAge();
+            updateTuringMachine(
+                turingMutationControl,
+                turingLengthControl,
+                turingClockSpeedControl,
+                true,
+                true);
 
             CVOut1(turingCv);
             CVOut2(turingModCv);
@@ -271,8 +262,11 @@ private:
     static constexpr uint32_t StartupSelectDelaySamples = 12000u;
     static constexpr uint32_t StartupSelectWindowSamples = 24000u;
     static constexpr uint32_t WebMidiFeedbackSamples = 24000u;
+    static constexpr uint32_t MinEnvelopeStageSamples = 240u;
+    static constexpr uint32_t MinOscillatorSyncIntervalSamples = 480u;
+    static constexpr uint32_t MinExternalEnvelopeRetriggerSamples = 480u;
     static constexpr uint32_t SaveMagic = 0x43315A33u; // C1Z3
-    static constexpr uint16_t SaveVersion = 4;
+    static constexpr uint16_t SaveVersion = 5;
     static constexpr uint32_t SaveFlashOffset =
         (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE) &
         ~(FLASH_SECTOR_SIZE - 1u);
@@ -480,6 +474,16 @@ private:
         envelopeActive = true;
     }
 
+    void triggerExternalEnvelope()
+    {
+        if (externalEnvelopeTriggerAge < MinExternalEnvelopeRetriggerSamples)
+            return;
+
+        externalEnvelopeTriggerAge = 0;
+        syncOscillatorsForEnvelopeTrigger();
+        triggerEnvelope();
+    }
+
     void triggerTuringEnvelope()
     {
         if (turingPulse)
@@ -630,8 +634,8 @@ private:
             return true;
 
         uint32_t time = stages[stage].time;
-        if (time == 0)
-            time = 1;
+        if (time < MinEnvelopeStageSamples)
+            time = MinEnvelopeStageSamples;
 
         sample++;
         int32_t target = stages[stage].level;
@@ -713,8 +717,7 @@ private:
 
         if (envelopePreset != (uint8_t)EnvelopePreset::Off)
         {
-            syncOscillators();
-            triggerEnvelope();
+            triggerExternalEnvelope();
         }
     }
 
@@ -1084,6 +1087,49 @@ private:
     // =========================================================
     // TURING MACHINE
     // =========================================================
+    void updateTuringMachine(
+        int32_t mutationKnob,
+        int32_t lengthKnob,
+        int32_t clockSpeedKnob,
+        bool triggerVoice,
+        bool showLength)
+    {
+        uint32_t previousTuringLength = turingLength;
+        turingLength = 2 + ((lengthKnob * 14) >> 12);
+        if (turingLength > 16) turingLength = 16;
+        if (showLength && turingLength != previousTuringLength)
+            turingLengthDisplaySamples = WebMidiFeedbackSamples;
+
+        bool externalClock = PulseIn1RisingEdge();
+        bool clocked = false;
+
+        if (externalClock)
+        {
+            externalClockAge = 0;
+            clocked = true;
+        }
+        else
+        {
+            if (externalClockAge < 96000u)
+                externalClockAge++;
+            else
+                clocked = internalTuringClock(clockSpeedKnob);
+        }
+
+        if (clocked)
+        {
+            stepTuring(mutationKnob);
+
+            if (triggerVoice)
+            {
+                triggerTuringEnvelope();
+                queueTuringMidiNote();
+            }
+        }
+
+        updateTuringPulseAge();
+    }
+
     void stepTuring(int32_t knob)
     {
         uint32_t mask = (1u << turingLength) - 1u;
@@ -1609,6 +1655,13 @@ private:
         phase1 = 0;
         phase2 = 0;
         syncFadeSamples = 96;
+        oscillatorSyncAge = 0;
+    }
+
+    void syncOscillatorsForEnvelopeTrigger()
+    {
+        if (oscillatorSyncAge >= MinOscillatorSyncIntervalSamples)
+            syncOscillators();
     }
 
     int32_t updateSyncFade()
@@ -1711,6 +1764,8 @@ private:
     uint32_t phase1 = 0;
     uint32_t phase2 = 0;
     uint32_t syncFadeSamples = 0;
+    uint32_t oscillatorSyncAge = MinOscillatorSyncIntervalSamples;
+    uint32_t externalEnvelopeTriggerAge = MinExternalEnvelopeRetriggerSamples;
 
     uint32_t turing = 0xACE1u;
     int32_t turingSmooth = 0;
@@ -1725,6 +1780,9 @@ private:
     uint32_t turingLength = 16;
     uint32_t turingLengthDisplaySamples = 0;
     uint32_t externalClockAge = 96000u;
+    int32_t turingMutationControl = 2048;
+    int32_t turingLengthControl = 4095;
+    int32_t turingClockSpeedControl = 2048;
     bool turingPulse = false;
     bool turingAltPulse = false;
     bool useTappedClock = false;

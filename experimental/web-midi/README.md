@@ -1,26 +1,20 @@
-# C1ZZL3 Experimental Web MIDI Work
+# C1ZZL3 Experimental Archive
 
-This folder is intentionally separate from the working card firmware.
+The Web MIDI / USB MIDI work has been promoted into the main project.
 
-The production firmware remains in `C1ZZL3.cpp`. Do not copy files from this
-folder into a release build unless you are intentionally testing the
-experimental Web MIDI/SysEx path.
+The main firmware is now `../../C1ZZL3.cpp`, and the browser editor is now in
+`../../web-midi/editor/`.
 
 ## Contents
 
-- `editor/`: static browser editor for envelope presets.
-- `editor/app.js`: Web MIDI note auditioning and experimental C1ZZL3 SysEx
-  frame generation.
-- `firmware/`: isolated experimental firmware copy with TinyUSB USB MIDI
-  device/host auto-role support and a SysEx receiver. The production
-  `../../C1ZZL3.cpp` is not used or modified by this build.
-- `protocol.md`: current experimental SysEx frame format and LED feedback
-  expectations.
+- `firmware/`: previous isolated experimental firmware build.
+- `last-good/`: last known-good experimental source and UF2 before promotion.
+- `backups/` and `failed-tests/`: archived test builds from development.
 
 ## Running The Editor Locally
 
 ```sh
-python3 -m http.server 5173 --directory experimental/web-midi/editor
+python3 -m http.server 5173 --directory web-midi/editor
 ```
 
 Then open:
@@ -32,7 +26,7 @@ http://localhost:5173
 After pressing `MIDI`, choose the C1ZZL3 device in the `MIDI output` selector
 before pressing `Send`.
 
-## Current Status
+## Promoted Status
 
 The editor can:
 
@@ -44,7 +38,7 @@ The editor can:
 - copy firmware-ready C++ for `envelopeProgram()`
 - copy or send an experimental C1ZZL3 SysEx preview frame
 
-The experimental firmware can:
+The main firmware can:
 
 - choose USB MIDI device or host mode at boot on 2025 hardware
 - enumerate as a USB MIDI device when connected to a computer/DAW/browser
@@ -84,6 +78,15 @@ persists custom envelope shapes only; it does not store or display names.
   the card's flash sector for power-cycle testing.
 - `Set` applies ring/noise/MIDI channel settings in RAM. `Save Set` writes those
   settings to the card's flash sector.
+- This rebuild uses a fresh experimental saved-state version so bad settings
+  left by earlier detune test builds are ignored on first boot.
+- Current click-reduction test: envelope stages shorter than 240 samples are
+  stretched to 240 samples so amplitude and PD cannot jump in a single sample.
+- Audio-rate trigger test: Pulse 2 and MIDI note retriggers still fire the
+  envelope, but oscillator phase sync is skipped when triggers arrive less than
+  480 samples apart.
+- Additional audio-rate test: Pulse 2 and MIDI note retriggers faster than 480
+  samples are ignored rather than restarting the envelope at audio rate.
 - The browser editor is capped at eight custom presets, matching the eight card
   custom slots, and custom presets can be removed from the preset list.
 - The canvas handles can be dragged up/down to change stage level and sideways
@@ -107,23 +110,9 @@ persists custom envelope shapes only; it does not store or display names.
 - The editor no longer reconnects automatically from inside MIDI state-change
   events; it only refreshes the visible port list.
 
-## Building The Experimental Firmware
+## Building The Main Firmware
 
 ```sh
-cmake -S experimental/web-midi/firmware -B experimental/web-midi/firmware/build
-cmake --build experimental/web-midi/firmware/build
+cmake -S . -B build
+cmake --build build
 ```
-
-If your Pico SDK tries to fetch `picotool` during configure and network access is
-unavailable, use:
-
-```sh
-cmake -S experimental/web-midi/firmware -B experimental/web-midi/firmware/build-no-picotool -DPICO_NO_PICOTOOL=1
-cmake --build experimental/web-midi/firmware/build-no-picotool
-```
-
-Use the UF2 from a normal `experimental/web-midi/firmware/build/` only for
-testing the Web MIDI/SysEx path. The target is named
-`C1ZZL3_web_midi_experimental`, so the test UF2 should be
-`C1ZZL3_web_midi_experimental.uf2`. The `build-no-picotool` fallback is useful
-for compile verification and produces ELF/BIN/HEX artifacts, but not UF2 output.
