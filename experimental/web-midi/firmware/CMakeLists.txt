@@ -4,32 +4,25 @@ set(PICO_SDK_PATH "/Users/adrianvos/pico-sdk")
 
 include(${PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 
-project(C1ZZL3_web_midi_experimental C CXX ASM)
+project(C1ZZL3_v04_stable_experimental C CXX ASM)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
 pico_sdk_init()
 
-add_executable(C1ZZL3_web_midi_experimental
+add_executable(C1ZZL3_v04_stable_experimental
     C1ZZL3.cpp
     C1ZZL3_LUT.cpp
-    usb_descriptors.c
-    usb_midi_host.c
-    usb_midi_host_app_driver.c
 )
 
-target_include_directories(C1ZZL3_web_midi_experimental PRIVATE
+target_include_directories(C1ZZL3_v04_stable_experimental PRIVATE
     .
 )
 
-target_link_libraries(C1ZZL3_web_midi_experimental
+target_link_libraries(C1ZZL3_v04_stable_experimental
     pico_stdlib
     pico_unique_id
-    pico_multicore
-    tinyusb_device
-    tinyusb_host
-    tinyusb_board
 
     hardware_adc
     hardware_pwm
@@ -40,14 +33,14 @@ target_link_libraries(C1ZZL3_web_midi_experimental
     hardware_i2c
 )
 
-target_compile_definitions(C1ZZL3_web_midi_experimental PRIVATE
+target_compile_definitions(C1ZZL3_v04_stable_experimental PRIVATE
     PICO_XOSC_STARTUP_DELAY_MULTIPLIER=64
 )
 
-pico_enable_stdio_usb(C1ZZL3_web_midi_experimental 0)
-pico_set_binary_type(C1ZZL3_web_midi_experimental copy_to_ram)
+pico_enable_stdio_usb(C1ZZL3_v04_stable_experimental 0)
+pico_set_binary_type(C1ZZL3_v04_stable_experimental copy_to_ram)
 
-target_compile_options(C1ZZL3_web_midi_experimental PRIVATE
+target_compile_options(C1ZZL3_v04_stable_experimental PRIVATE
     -O3
     -ffast-math
     -Wdouble-promotion
@@ -56,8 +49,8 @@ target_compile_options(C1ZZL3_web_midi_experimental PRIVATE
     -Wextra
 )
 
-target_link_options(C1ZZL3_web_midi_experimental PRIVATE
+target_link_options(C1ZZL3_v04_stable_experimental PRIVATE
     -Wl,--print-memory-usage
 )
 
-pico_add_extra_outputs(C1ZZL3_web_midi_experimental)
+pico_add_extra_outputs(C1ZZL3_v04_stable_experimental)

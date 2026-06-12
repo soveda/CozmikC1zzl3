@@ -1,10 +1,10 @@
-Description: Dual phase-distortion synthesiser with CZ-style oscillator engine, fixed-level oscillator 2 detune for external mixing, hardware-tested 1V/oct pitch input, matched CV modulation in synth and Turing modes, mode-specific knob pickup, envelope presets, Web MIDI editing, USB MIDI, manual flash persistence, and a self-playing probabilistic Turing machine sequencer.
+Description: Stable reference is the pre-MIDI v0.4 dual phase-distortion synthesiser and Turing machine build. MIDI/Web MIDI work is experimental and currently unstable.
 Name: C1ZZL3
 Language: C++ (Pico SDK)
 Creator: Adrian Vos
 Instagram: https://instagram.com/professeur_whom
-Version: 0.6
-Status: Hardware-tested working
+Version: 0.4 stable reference
+Status: Only the non-MIDI v0.4 UF2 is confirmed stable; MIDI/Web MIDI builds are experimental
 
 tags:
   - synthesiser
@@ -16,20 +16,24 @@ tags:
   - 1v-oct
 
 manual: |
+  Stability note: the only currently confirmed stable firmware is the pre-MIDI v0.4 build,
+  uf2/C1ZZL3v04working.uf2. MIDI/Web MIDI builds are retained for development but should
+  not be treated as stable production firmware yet.
+
   C1ZZL3 is a CZ-inspired phase-distortion oscillator card with a second mirrored oscillator for
-  fixed-level detune, ring modulation, and CZ-style noise/grit. Audio/CV in 1 tracks at a
-  hardware-tested 1V/oct scale. CV In 1 modulates phase-distortion amount and CV In 2 modulates
-  waveform morph in both synth and Turing modes.
+  detune, ring modulation, and CZ-style noise/grit. Audio/CV in 1 tracks at a hardware-tested
+  1V/oct scale. Audio/CV In 2 modulates phase-distortion amount and CV In 1 modulates waveform
+  morph in synth mode.
 
   Switch middle is the main PD synth voice. Hold the switch down from middle to edit the latched
   second oscillator, ring modulation, and grit controls using soft pickup. Hold down for 8 seconds
-  to save those latched settings to flash. There is no autosave. Main, X, and Y also use
-  mode-specific pickup when switching between synth and Turing modes, so stored values do not jump
-  until the physical knob is moved back through its stored value.
+  to save those latched settings to flash. There is no autosave. Main, X, and Y use pickup when
+  moving between synth and Turing modes, so stored values do not jump until each physical knob is
+  swept back through its stored value.
 
   Switch up opens the Turing machine. It outputs stepped and smoothed Turing CV, two Turing pulse
   streams, and a self-playing stepped oscillator voice using the last PD synth sound. The Turing
-  CV and pulse outputs continue running in synth mode from the last Turing settings. If an envelope
+  CV and pulse outputs hold their last Turing values in synth mode. If an envelope
   preset is active, the main Turing pulse self-triggers the envelope without oscillator sync.
 
   Hold the switch down during startup to enter envelope preset select. Release the startup hold,
@@ -42,19 +46,19 @@ panel:
       description: 1V/oct pitch modulation in PD synth mode
     - id: AudioIn2
       name: Audio/CV In 2
-      description: Currently unused
+      description: Phase-distortion amount modulation in PD synth mode
     - id: CVIn1
       name: CV In 1
-      description: Phase-distortion amount modulation in PD synth and Turing modes
+      description: Waveform morph modulation in PD synth mode
     - id: CVIn2
       name: CV In 2
-      description: Waveform morph modulation in PD synth and Turing modes
+      description: Positive voltages add ring modulation while held down; negative voltages add noise/grit while held down
     - id: PulseIn1
       name: Pulse In 1
       description: External Turing clock in switch-up mode
     - id: PulseIn2
       name: Pulse In 2
-      description: Triggers the selected envelope preset and softened oscillator sync in PD synth mode when preset 1-8 is active; preset 0 ignores Pulse In 2
+      description: Triggers the selected envelope preset and oscillator sync in PD synth mode when preset 1-8 is active; preset 0 ignores Pulse In 2
   outputs:
     - id: AudioOut1
       name: Audio Out 1
@@ -80,18 +84,18 @@ controls:
     - when: { z: middle }
       main:
         name: Main
-        description: Oscillator pitch over octave-based range; uses mode-specific pickup when returning from Turing mode
+        description: Oscillator pitch over octave-based range; uses pickup when returning from Turing mode
       x:
         name: X
-        description: Phase-distortion amount; CV In 1 modulates the same parameter; uses mode-specific pickup when returning from Turing mode
+        description: Phase-distortion amount; Audio/CV In 2 modulates the same parameter; uses pickup when returning from Turing mode
       y:
         name: Y
-        description: Waveform morph across saw, square, pulse, double sine, saw-pulse curve, and three CZ-style resonance-window waveforms; CV In 2 modulates the same parameter; uses mode-specific pickup when returning from Turing mode
+        description: Waveform morph across saw, square, pulse, double sine, saw-pulse curve, and three CZ-style resonance-window waveforms; CV In 1 modulates the same parameter; uses pickup when returning from Turing mode
 
     - when: { z: down, gesture: hold }
       main:
         name: Main
-        description: Latched oscillator 2 detune from centre at fixed output level; normal pitch is held while editing
+        description: Latched oscillator 2 detune from centre; distance from centre also raises oscillator 2 level
       x:
         name: X
         description: Latched ring modulation amount; uses soft pickup
@@ -102,13 +106,13 @@ controls:
     - when: { z: up }
       main:
         name: Main
-        description: Turing mutation/lock amount; centre is most random and extremes are more locked; uses mode-specific pickup when returning from synth mode
+        description: Turing mutation/lock amount; centre is most random and extremes are more locked; uses pickup when returning from synth mode
       x:
         name: X
-        description: Turing sequence length, 2 to 16 steps; uses mode-specific pickup when returning from synth mode
+        description: Turing sequence length, 2 to 16 steps; uses pickup when returning from synth mode
       y:
         name: Y
-        description: Internal Turing clock speed; uses mode-specific pickup when returning from synth mode
+        description: Internal Turing clock speed; uses pickup when returning from synth mode
 
     - when: { z: up, gesture: flick-down }
       main:
@@ -135,7 +139,7 @@ controls:
           description: Waveform morph position
         - id: LED2
           name: LED 2
-          description: Oscillator 2 detune amount
+          description: Oscillator 2 level
         - id: LED3
           name: LED 3
           description: Ring modulation amount

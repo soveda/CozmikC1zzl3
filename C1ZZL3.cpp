@@ -69,15 +69,11 @@ public:
     // =========================================================
     void ProcessSample() override
     {
-        if (oscillatorSyncAge < MinOscillatorSyncIntervalSamples)
-            oscillatorSyncAge++;
-        if (externalEnvelopeTriggerAge < MinExternalEnvelopeRetriggerSamples)
-            externalEnvelopeTriggerAge++;
-
         applyPendingWebEnvelope();
         applyPendingMidiNote();
 
         int32_t in1 = AudioIn1();
+        int32_t in2 = AudioIn2();
 
         int32_t cv1 = CVIn1();
         int32_t cv2 = CVIn2();
@@ -138,32 +134,26 @@ public:
                 updateAltControls(main, x, y);
             }
 
-            updateTuringMachine(
-                turingMutationControl,
-                turingLengthControl,
-                turingClockSpeedControl,
-                false,
-                false);
-
             // -------------------------
             // PITCH (octave map with hardware-tested 1V/oct input scale)
             // -------------------------
             int32_t freq = smoothPitch(pitchFrequency(currentPitchUnits(pitchControl, in1)));
 
-            int32_t pd = clamp12(pdControl + (cv1 << 1));
-            int32_t wave = clamp12(waveControl + (cv2 << 1));
+            int32_t pd = clamp12(pdControl + (in2 << 1));
+            int32_t wave = clamp12(waveControl + (cv1 << 1));
 
             int32_t ring =
-                clamp12(osc2Ring);
+                clamp12(osc2Ring + (alt && cv2 > 0 ? cv2 << 1 : 0));
             int32_t noiseAmt =
-                clamp12(osc2Noise);
+                clamp12(osc2Noise + (alt && cv2 < 0 ? (-cv2) << 1 : 0));
 
             bool pulse2Trigger = PulseIn2RisingEdge();
             if (pulse2Trigger)
             {
                 if (envelopePreset != (uint8_t)EnvelopePreset::Off)
                 {
-                    triggerExternalEnvelope();
+                    syncOscillators();
+                    triggerEnvelope();
                 }
             }
 
@@ -190,19 +180,41 @@ public:
 
             updateTuringControls(main, x, y);
 
-            updateTuringMachine(
-                turingMutationControl,
-                turingLengthControl,
-                turingClockSpeedControl,
-                true,
-                true);
+            uint32_t previousTuringLength = turingLength;
+            turingLength = 2 + ((turingLengthControl * 14) >> 12);
+            if (turingLength > 16) turingLength = 16;
+            if (turingLength != previousTuringLength)
+                turingLengthDisplaySamples = WebMidiFeedbackSamples;
+
+            bool externalClock = PulseIn1RisingEdge();
+            bool clocked = false;
+
+            if (externalClock)
+            {
+                externalClockAge = 0;
+                clocked = true;
+            }
+            else
+            {
+                if (externalClockAge < 96000u)
+                    externalClockAge++;
+                else
+                    clocked = internalTuringClock(turingClockSpeedControl);
+            }
+
+            if (clocked)
+            {
+                stepTuring(turingMutationControl);
+                triggerTuringEnvelope();
+                queueTuringMidiNote();
+            }
+
+            updateTuringPulseAge();
 
             CVOut1(turingCv);
             CVOut2(turingModCv);
 
-            int32_t pd = clamp12(pdControl + (cv1 << 1));
-            int32_t wave = clamp12(waveControl + (cv2 << 1));
-            outputTuringSynthVoice(pd, wave);
+            outputTuringSynthVoice();
 
             PulseOut1(turingPulse);
             PulseOut2(turingAltPulse);
@@ -257,7 +269,6 @@ private:
     static constexpr int32_t MinPitchUnits = -2 * PitchUnitsPerOctave;
     static constexpr int32_t MaxPitchUnits = 7 * PitchUnitsPerOctave;
     static constexpr uint32_t C2PhaseIncrement = 5852465u;
-    static constexpr int32_t FixedOscillator2Level = 4095;
     static constexpr uint8_t FactoryEnvelopePresetCount = 9;
     static constexpr uint8_t CustomEnvelopePresetCount = 8;
     static constexpr uint8_t FirstCustomEnvelopePreset = (uint8_t)EnvelopePreset::Custom1;
@@ -266,9 +277,6 @@ private:
     static constexpr uint32_t StartupSelectDelaySamples = 12000u;
     static constexpr uint32_t StartupSelectWindowSamples = 24000u;
     static constexpr uint32_t WebMidiFeedbackSamples = 24000u;
-    static constexpr uint32_t MinEnvelopeStageSamples = 240u;
-    static constexpr uint32_t MinOscillatorSyncIntervalSamples = 480u;
-    static constexpr uint32_t MinExternalEnvelopeRetriggerSamples = 480u;
     static constexpr uint32_t SaveMagic = 0x43315A33u; // C1Z3
     static constexpr uint16_t SaveVersion = 5;
     static constexpr uint32_t SaveFlashOffset =
@@ -371,12 +379,14 @@ private:
         outputSynthVoice(freq, pd, wave, osc2Ring, osc2Noise);
     }
 
-    void outputTuringSynthVoice(int32_t pd, int32_t wave)
+    void outputTuringSynthVoice()
     {
         int32_t pitchOffset =
             (turingCv * TuringAudioPitchDepth * MainPitchOctaves) >> 12;
         int32_t freq = smoothPitch(
             pitchFrequency(pitchUnits(pitchControl, 0) + pitchOffset));
+        int32_t pd = clamp12(pdControl);
+        int32_t wave = clamp12(waveControl);
 
         outputSynthVoice(freq, pd, wave, osc2Ring, osc2Noise);
     }
@@ -390,26 +400,33 @@ private:
     {
         int32_t envelopeLevel = updateEnvelope();
         pd = applyEnvelopeToPd(pd, envelopeLevel);
+        wave = safeWaveControl(wave);
 
         int32_t osc1 =
             oscCZ(phase1, freq, pd, wave, noiseAmt);
 
-        int32_t freq2 =
-            applyDetune(freq, osc2Detune);
+        int32_t osc2Raw = 0;
+        int32_t osc2 = 0;
 
-        int32_t osc2 =
-            oscCZ(phase2, freq2, pd, wave, noiseAmt);
+        if (osc2Level > 0 || ring > 0)
+        {
+            int32_t freq2 =
+                applyDetune(freq, osc2Detune);
 
-        int32_t osc2Raw = osc2;
-        osc2 = (osc2Raw * osc2Level) >> 12;
+            osc2Raw = oscCZ(phase2, freq2, pd, wave, noiseAmt);
+            osc2 = (osc2Raw * osc2Level) >> 12;
+        }
 
-        int32_t ringDrive = osc2Level;
-        if (ringDrive < 2048)
-            ringDrive = 2048;
-        int32_t ringCarrier = (osc2Raw * ringDrive) >> 12;
-        int32_t ringSig = clip((osc1 * ringCarrier) >> 10);
-        int32_t ringMix = (ring * 3840) >> 12;
-        osc1 = mix(osc1, ringSig, ringMix);
+        if (ring > 0)
+        {
+            int32_t ringDrive = osc2Level;
+            if (ringDrive < 2048)
+                ringDrive = 2048;
+            int32_t ringCarrier = (osc2Raw * ringDrive) >> 12;
+            int32_t ringSig = clip((osc1 * ringCarrier) >> 10);
+            int32_t ringMix = (ring * 3840) >> 12;
+            osc1 = mix(osc1, ringSig, ringMix);
+        }
 
         int32_t ampScale = envelopeAmpScale(envelopeLevel);
         ampScale = (ampScale * updateSyncFade()) >> 12;
@@ -438,6 +455,9 @@ private:
         int32_t pdCurve = responseCurve(noisyPd);
 
         int32_t sine = getSine(renderPhase);
+        if (pdCurve == 0)
+            return sine;
+
         int32_t target = morphWave(renderPhase, wave);
 
         return mix(sine, target, pdCurve);
@@ -452,12 +472,22 @@ private:
             heldPhaseNoise = ((int32_t)fastNoise() - 128);
         }
 
-        int32_t noiseCurve = (responseCurve(amount) * 11) / 20;
+        int32_t noiseCurve = (responseCurve(amount) * 563) >> 10;
         int32_t pdJitter = (heldPdNoise * noiseCurve) >> 10;
         int32_t phaseJitter = heldPhaseNoise * (noiseCurve >> 6);
 
         pd = clamp12(pd + pdJitter);
         phase += (uint32_t)phaseJitter;
+    }
+
+    int32_t safeWaveControl(int32_t wave)
+    {
+        wave = clamp12(wave);
+
+        if (wave > 3984)
+            return 3984;
+
+        return wave;
     }
 
     void triggerEnvelope()
@@ -467,23 +497,13 @@ private:
 
         ampEnvelopeStage = 0;
         ampEnvelopeSample = 0;
-        ampEnvelopeStartLevel = envelopeActive ? ampEnvelopeLevel : 0;
-        ampEnvelopeLevel = ampEnvelopeStartLevel;
+        ampEnvelopeLevel = 0;
+        ampEnvelopeStartLevel = 0;
         pdEnvelopeStage = 0;
         pdEnvelopeSample = 0;
-        pdEnvelopeStartLevel = envelopeActive ? pdEnvelopeLevel : 0;
-        pdEnvelopeLevel = pdEnvelopeStartLevel;
+        pdEnvelopeLevel = 0;
+        pdEnvelopeStartLevel = 0;
         envelopeActive = true;
-    }
-
-    void triggerExternalEnvelope()
-    {
-        if (externalEnvelopeTriggerAge < MinExternalEnvelopeRetriggerSamples)
-            return;
-
-        externalEnvelopeTriggerAge = 0;
-        syncOscillatorsForEnvelopeTrigger();
-        triggerEnvelope();
     }
 
     void triggerTuringEnvelope()
@@ -636,8 +656,8 @@ private:
             return true;
 
         uint32_t time = stages[stage].time;
-        if (time < MinEnvelopeStageSamples)
-            time = MinEnvelopeStageSamples;
+        if (time == 0)
+            time = 1;
 
         sample++;
         int32_t target = stages[stage].level;
@@ -719,7 +739,8 @@ private:
 
         if (envelopePreset != (uint8_t)EnvelopePreset::Off)
         {
-            triggerExternalEnvelope();
+            syncOscillators();
+            triggerEnvelope();
         }
     }
 
@@ -998,17 +1019,12 @@ private:
 
     inline int32_t czWave(uint32_t phase, uint32_t wave)
     {
-        int32_t saw = ((int32_t)(phase >> 20) & 4095) - 2048;
-        int32_t square = (phase & 0x80000000u) ? 2047 : -2048;
-        int32_t pulse = narrowPulseWave(phase);
-        int32_t doubleSine = getSine(phase << 1);
-
         switch (wave)
         {
-            case 0: return saw;
-            case 1: return square;
-            case 2: return pulse;
-            case 3: return doubleSine;
+            case 0: return ((int32_t)(phase >> 20) & 4095) - 2048;
+            case 1: return (phase & 0x80000000u) ? 2047 : -2048;
+            case 2: return narrowPulseWave(phase);
+            case 3: return getSine(phase << 1);
             case 4: return sawPulseWave(phase);
             case 5: return resonantSawWindowWave(phase);
             case 6: return resonantTriangleWindowWave(phase);
@@ -1089,49 +1105,6 @@ private:
     // =========================================================
     // TURING MACHINE
     // =========================================================
-    void updateTuringMachine(
-        int32_t mutationKnob,
-        int32_t lengthKnob,
-        int32_t clockSpeedKnob,
-        bool triggerVoice,
-        bool showLength)
-    {
-        uint32_t previousTuringLength = turingLength;
-        turingLength = 2 + ((lengthKnob * 14) >> 12);
-        if (turingLength > 16) turingLength = 16;
-        if (showLength && turingLength != previousTuringLength)
-            turingLengthDisplaySamples = WebMidiFeedbackSamples;
-
-        bool externalClock = PulseIn1RisingEdge();
-        bool clocked = false;
-
-        if (externalClock)
-        {
-            externalClockAge = 0;
-            clocked = true;
-        }
-        else
-        {
-            if (externalClockAge < 96000u)
-                externalClockAge++;
-            else
-                clocked = internalTuringClock(clockSpeedKnob);
-        }
-
-        if (clocked)
-        {
-            stepTuring(mutationKnob);
-
-            if (triggerVoice)
-            {
-                triggerTuringEnvelope();
-                queueTuringMidiNote();
-            }
-        }
-
-        updateTuringPulseAge();
-    }
-
     void stepTuring(int32_t knob)
     {
         uint32_t mask = (1u << turingLength) - 1u;
@@ -1245,7 +1218,7 @@ private:
     {
         LedBrightness(0, pd);
         LedBrightness(1, wave);
-        LedBrightness(2, detuneDisplayLevel());
+        LedBrightness(2, osc2Level);
         LedBrightness(3, osc2Ring);
         LedBrightness(4, osc2Noise);
         LedBrightness(5, alt ? 4095 : 0);
@@ -1443,7 +1416,9 @@ private:
             if (osc2Detune > -32 && osc2Detune < 32)
                 osc2Detune = 0;
 
-            osc2Level = FixedOscillator2Level;
+            osc2Level = osc2Detune < 0 ? -osc2Detune : osc2Detune;
+            osc2Level <<= 1;
+            if (osc2Level > 4095) osc2Level = 4095;
         }
 
         if (altXPickedUp ||
@@ -1481,25 +1456,18 @@ private:
         return pickedUp;
     }
 
-    int32_t detuneDisplayLevel()
-    {
-        int32_t amount = osc2Detune < 0 ? -osc2Detune : osc2Detune;
-        amount <<= 1;
-        return clamp12(amount);
-    }
-
     void updateSynthControls(int32_t main, int32_t x, int32_t y)
     {
         if (synthMainPickedUp ||
-            pickupAltControl(main, synthMainEntry, pitchControl, synthMainPickedUp))
+            pickupControl(main, synthMainEntry, pitchControl, synthMainPickedUp))
             pitchControl = main;
 
         if (synthXPickedUp ||
-            pickupAltControl(x, synthXEntry, pdControl, synthXPickedUp))
+            pickupControl(x, synthXEntry, pdControl, synthXPickedUp))
             pdControl = x;
 
         if (synthYPickedUp ||
-            pickupAltControl(y, synthYEntry, waveControl, synthYPickedUp))
+            pickupControl(y, synthYEntry, waveControl, synthYPickedUp))
             waveControl = y;
     }
 
@@ -1516,15 +1484,15 @@ private:
     void updateTuringControls(int32_t main, int32_t x, int32_t y)
     {
         if (turingMainPickedUp ||
-            pickupAltControl(main, turingMainEntry, turingMutationControl, turingMainPickedUp))
+            pickupControl(main, turingMainEntry, turingMutationControl, turingMainPickedUp))
             turingMutationControl = main;
 
         if (turingXPickedUp ||
-            pickupAltControl(x, turingXEntry, turingLengthControl, turingXPickedUp))
+            pickupControl(x, turingXEntry, turingLengthControl, turingXPickedUp))
             turingLengthControl = x;
 
         if (turingYPickedUp ||
-            pickupAltControl(y, turingYEntry, turingClockSpeedControl, turingYPickedUp))
+            pickupControl(y, turingYEntry, turingClockSpeedControl, turingYPickedUp))
             turingClockSpeedControl = y;
     }
 
@@ -1538,6 +1506,22 @@ private:
         turingYEntry = y;
     }
 
+    bool pickupControl(int32_t knob, int32_t entry, int32_t target, bool& pickedUp)
+    {
+        int32_t moved = knob - entry;
+        if (moved < 0)
+            moved = -moved;
+
+        int32_t distance = knob - target;
+        if (distance < 0)
+            distance = -distance;
+
+        if (moved >= 64 && distance <= 96)
+            pickedUp = true;
+
+        return pickedUp;
+    }
+
     SavedPerformanceState currentPerformanceState()
     {
         SavedPerformanceState state;
@@ -1545,7 +1529,7 @@ private:
         state.version = SaveVersion;
         state.size = sizeof(SavedPerformanceState);
         state.osc2Detune = osc2Detune;
-        state.osc2Level = FixedOscillator2Level;
+        state.osc2Level = osc2Level;
         state.osc2Ring = osc2Ring;
         state.osc2Noise = osc2Noise;
         state.envelopePreset = envelopePreset < FactoryEnvelopePresetCount ?
@@ -1645,7 +1629,7 @@ private:
             return;
 
         osc2Detune = state.osc2Detune;
-        osc2Level = FixedOscillator2Level;
+        osc2Level = clamp12(state.osc2Level);
         osc2Ring = clamp12(state.osc2Ring);
         osc2Noise = clamp12(state.osc2Noise);
         envelopePreset = state.envelopePreset < FactoryEnvelopePresetCount ?
@@ -1712,13 +1696,6 @@ private:
         phase1 = 0;
         phase2 = 0;
         syncFadeSamples = 96;
-        oscillatorSyncAge = 0;
-    }
-
-    void syncOscillatorsForEnvelopeTrigger()
-    {
-        if (oscillatorSyncAge >= MinOscillatorSyncIntervalSamples)
-            syncOscillators();
     }
 
     int32_t updateSyncFade()
@@ -1821,8 +1798,6 @@ private:
     uint32_t phase1 = 0;
     uint32_t phase2 = 0;
     uint32_t syncFadeSamples = 0;
-    uint32_t oscillatorSyncAge = MinOscillatorSyncIntervalSamples;
-    uint32_t externalEnvelopeTriggerAge = MinExternalEnvelopeRetriggerSamples;
 
     uint32_t turing = 0xACE1u;
     int32_t turingSmooth = 0;
@@ -1837,9 +1812,6 @@ private:
     uint32_t turingLength = 16;
     uint32_t turingLengthDisplaySamples = 0;
     uint32_t externalClockAge = 96000u;
-    int32_t turingMutationControl = 2048;
-    int32_t turingLengthControl = 4095;
-    int32_t turingClockSpeedControl = 2048;
     bool turingPulse = false;
     bool turingAltPulse = false;
     bool useTappedClock = false;
@@ -1901,29 +1873,32 @@ private:
     int32_t pitchControl = 2048;
     int32_t pdControl = 0;
     int32_t waveControl = 0;
+    int32_t turingMutationControl = 2048;
+    int32_t turingLengthControl = 4095;
+    int32_t turingClockSpeedControl = 2048;
+    int32_t smoothedFreq = 0;
+    int32_t osc2Detune = 0;
+    int32_t osc2Level = 0;
+    int32_t osc2Ring = 0;
+    int32_t osc2Noise = 0;
     int32_t synthMainEntry = 2048;
     int32_t synthXEntry = 0;
     int32_t synthYEntry = 0;
-    bool synthMainPickedUp = true;
-    bool synthXPickedUp = true;
-    bool synthYPickedUp = true;
-    int32_t smoothedFreq = 0;
-    int32_t osc2Detune = 0;
-    int32_t osc2Level = FixedOscillator2Level;
-    int32_t osc2Ring = 0;
-    int32_t osc2Noise = 0;
-    int32_t altMainEntry = 2048;
-    int32_t altXEntry = 0;
-    int32_t altYEntry = 0;
-    bool altMainPickedUp = false;
-    bool altXPickedUp = false;
-    bool altYPickedUp = false;
     int32_t turingMainEntry = 2048;
     int32_t turingXEntry = 4095;
     int32_t turingYEntry = 2048;
+    int32_t altMainEntry = 2048;
+    int32_t altXEntry = 0;
+    int32_t altYEntry = 0;
+    bool synthMainPickedUp = true;
+    bool synthXPickedUp = true;
+    bool synthYPickedUp = true;
     bool turingMainPickedUp = true;
     bool turingXPickedUp = true;
     bool turingYPickedUp = true;
+    bool altMainPickedUp = false;
+    bool altXPickedUp = false;
+    bool altYPickedUp = false;
     uint32_t saveHoldSamples = 0;
     uint32_t saveConfirmSamples = 0;
     bool saveHoldCanSave = false;
