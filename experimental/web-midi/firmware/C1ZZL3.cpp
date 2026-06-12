@@ -62,6 +62,9 @@ public:
 
         if (previousMode == Switch::Up && mode == Switch::Down)
             tapTuringClock();
+
+        if (mode != previousMode)
+            resetModePickup(mode, previousMode, main, x, y);
         lastMode = mode;
 
         // =========================
@@ -73,9 +76,7 @@ public:
 
             if (!alt)
             {
-                pitchControl = main;
-                pdControl = x;
-                waveControl = y;
+                updateSynthModeControls(main, x, y);
             }
             else
             {
@@ -129,7 +130,9 @@ public:
         {
             resetSaveGesture();
 
-            turingLength = 2 + ((x * 14) >> 12);
+            updateTuringModeControls(main, x, y);
+
+            turingLength = 2 + ((turingLengthControl * 14) >> 12);
             if (turingLength > 16) turingLength = 16;
 
             bool externalClock = PulseIn1RisingEdge();
@@ -145,12 +148,12 @@ public:
                 if (externalClockAge < 96000u)
                     externalClockAge++;
                 else
-                    clocked = internalTuringClock(y);
+                    clocked = internalTuringClock(turingClockControl);
             }
 
             if (clocked)
             {
-                stepTuring(main);
+                stepTuring(turingMutationControl);
                 triggerTuringEnvelope();
             }
 
@@ -1049,6 +1052,64 @@ private:
             osc2Noise = y;
     }
 
+    void updateSynthModeControls(int32_t main, int32_t x, int32_t y)
+    {
+        if (synthMainPickedUp ||
+            pickupModeControl(main, synthMainEntry, pitchControl, synthMainPickedUp))
+            pitchControl = main;
+
+        if (synthXPickedUp ||
+            pickupModeControl(x, synthXEntry, pdControl, synthXPickedUp))
+            pdControl = x;
+
+        if (synthYPickedUp ||
+            pickupModeControl(y, synthYEntry, waveControl, synthYPickedUp))
+            waveControl = y;
+    }
+
+    void updateTuringModeControls(int32_t main, int32_t x, int32_t y)
+    {
+        if (turingMainPickedUp ||
+            pickupModeControl(main, turingMainEntry, turingMutationControl, turingMainPickedUp))
+            turingMutationControl = main;
+
+        if (turingXPickedUp ||
+            pickupModeControl(x, turingXEntry, turingLengthControl, turingXPickedUp))
+            turingLengthControl = x;
+
+        if (turingYPickedUp ||
+            pickupModeControl(y, turingYEntry, turingClockControl, turingYPickedUp))
+            turingClockControl = y;
+    }
+
+    void resetModePickup(Switch mode, Switch previousMode, int32_t main, int32_t x, int32_t y)
+    {
+        if (mode == Switch::Middle && previousMode != Switch::Middle)
+            resetSynthPickup(main, x, y);
+        else if (mode == Switch::Up && previousMode != Switch::Up)
+            resetTuringPickup(main, x, y);
+    }
+
+    void resetSynthPickup(int32_t main, int32_t x, int32_t y)
+    {
+        synthMainPickedUp = false;
+        synthXPickedUp = false;
+        synthYPickedUp = false;
+        synthMainEntry = main;
+        synthXEntry = x;
+        synthYEntry = y;
+    }
+
+    void resetTuringPickup(int32_t main, int32_t x, int32_t y)
+    {
+        turingMainPickedUp = false;
+        turingXPickedUp = false;
+        turingYPickedUp = false;
+        turingMainEntry = main;
+        turingXEntry = x;
+        turingYEntry = y;
+    }
+
     void resetAltPickup(int32_t main, int32_t x, int32_t y)
     {
         altMainPickedUp = false;
@@ -1060,6 +1121,22 @@ private:
     }
 
     bool pickupAltControl(int32_t knob, int32_t entry, int32_t target, bool& pickedUp)
+    {
+        int32_t moved = knob - entry;
+        if (moved < 0)
+            moved = -moved;
+
+        int32_t distance = knob - target;
+        if (distance < 0)
+            distance = -distance;
+
+        if (moved >= 64 && distance <= 96)
+            pickedUp = true;
+
+        return pickedUp;
+    }
+
+    bool pickupModeControl(int32_t knob, int32_t entry, int32_t target, bool& pickedUp)
     {
         int32_t moved = knob - entry;
         if (moved < 0)
@@ -1341,14 +1418,29 @@ private:
     int32_t pitchControl = 2048;
     int32_t pdControl = 0;
     int32_t waveControl = 0;
+    int32_t turingMutationControl = 2048;
+    int32_t turingLengthControl = 4095;
+    int32_t turingClockControl = 2048;
     int32_t smoothedFreq = 0;
     int32_t osc2Detune = 0;
     int32_t osc2Level = 0;
     int32_t osc2Ring = 0;
     int32_t osc2Noise = 0;
+    int32_t synthMainEntry = 2048;
+    int32_t synthXEntry = 0;
+    int32_t synthYEntry = 0;
+    int32_t turingMainEntry = 2048;
+    int32_t turingXEntry = 4095;
+    int32_t turingYEntry = 2048;
     int32_t altMainEntry = 2048;
     int32_t altXEntry = 0;
     int32_t altYEntry = 0;
+    bool synthMainPickedUp = true;
+    bool synthXPickedUp = true;
+    bool synthYPickedUp = true;
+    bool turingMainPickedUp = true;
+    bool turingXPickedUp = true;
+    bool turingYPickedUp = true;
     bool altMainPickedUp = false;
     bool altXPickedUp = false;
     bool altYPickedUp = false;
