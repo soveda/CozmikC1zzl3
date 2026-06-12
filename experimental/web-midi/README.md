@@ -1,8 +1,9 @@
 # C1ZZL3 Experimental Firmware
 
 This folder holds isolated firmware experiments. The current experimental
-firmware source has been reset to the exact pre-MIDI v0.4 source from commit
-`941986e` (`updated waveforms and reordered`, 9 June 2026).
+firmware starts from the exact pre-MIDI v0.4 source from commit `941986e`
+(`updated waveforms and reordered`, 9 June 2026), with a narrow Reverb+ 1.5
+style USB MIDI interface added back for testing.
 
 ## Stability Warning
 
@@ -19,11 +20,15 @@ experimental/web-midi/C1ZZL3_v04working_reference_stable.uf2
 ```
 
 The MIDI/Web MIDI firmware experiments are not currently considered stable.
+The current MIDI test build deliberately includes MIDI note input only; it does
+not include Web MIDI envelope transfer, custom envelope flash writes, settings
+SysEx, or Turing MIDI output.
 
 Known unstable or not-yet-verified areas:
 
-- MIDI/Web MIDI envelope handling can overload the firmware, especially with
-  high X/Y settings.
+- Old MIDI/Web MIDI envelope handling could overload the firmware, especially
+  with high X/Y settings. That Web MIDI envelope path is not included in the
+  current Reverb+ 1.5 style MIDI test build.
 - Combining maximum Y, maximum X, maximum detune, maximum ring, maximum noise,
   fast Pulse 2 envelope triggering, background Turing CV/pulses, and MIDI note
   input has broken the build in testing.
@@ -31,8 +36,8 @@ Known unstable or not-yet-verified areas:
   when switching to Turing mode and back.
 - Save/Flash operations in MIDI/Web MIDI builds should be considered unproven.
 
-For general use, flash the v0.4 non-MIDI UF2 above. Use the MIDI/Web MIDI files
-only when deliberately testing unstable experiments.
+For general use, flash the v0.4 non-MIDI UF2 above. Use the MIDI test file only
+when deliberately testing unstable experiments.
 
 Current experimental rebuild UF2:
 
@@ -44,23 +49,49 @@ This rebuild uses the same source as the known stable v0.4 commit, but the UF2
 is not byte-identical because the experimental target name differs. For exact
 hardware confirmation, prefer `C1ZZL3_v04working_reference_stable.uf2`.
 
+Current MIDI interface test UF2:
+
+```text
+experimental/web-midi/C1ZZL3_reverb15_midi_experimental.uf2
+```
+
+This build should enumerate as `C1ZZL3 Reverb15 MIDI Experimental`. It uses
+boot-time USB role selection on 2025 hardware: computer/DAW connection enters
+USB MIDI device mode, and downstream controller connection enters USB MIDI host
+mode.
+
+Hardware-passed recovery point:
+
+```text
+experimental/web-midi/recovery/reverb15_midi_passed_20260612/
+```
+
+This recovery folder contains the passed UF2, matching source, build file, USB
+MIDI support files, and checksum. Use it as the rollback point before adding
+new MIDI/Web UI features.
+
 Previous MIDI/Web MIDI test builds have been moved into `archive/` as
 historical artifacts. They should not be treated as stable baselines.
 
 ## Contents
 
-- `firmware/`: current v0.4 pre-MIDI experimental source/build.
+- `firmware/`: current v0.4-based experimental source with narrow MIDI note
+  input added.
 - `C1ZZL3_v04working_reference_stable.uf2`: exact copy of the confirmed stable
   non-MIDI v0.4 UF2.
 - `C1ZZL3_v04_stable_experimental.uf2`: freshly rebuilt non-MIDI v0.4
   experimental UF2.
+- `C1ZZL3_reverb15_midi_experimental.uf2`: current Reverb+ 1.5 style MIDI
+  interface test UF2.
+- `recovery/reverb15_midi_passed_20260612/`: hardware-passed rollback copy of
+  the current MIDI interface test build.
 - `archive/`: old MIDI/Web MIDI UF2s, previous backups, failed test builds,
   unused MIDI firmware files, and generated build folders.
 
 ## Running The Editor Locally
 
-The web editor is not part of the current fresh v0.4 experimental firmware.
-These notes are retained only for archived MIDI/Web MIDI development.
+The web editor is not part of the current Reverb+ 1.5 style MIDI interface
+test firmware. These notes are retained only for archived Web MIDI development.
 
 ```sh
 python3 -m http.server 5173 --directory web-midi/editor
@@ -77,8 +108,8 @@ before pressing `Send`.
 
 ## Archived MIDI/Web MIDI Notes
 
-This section describes the previous intended MIDI/Web MIDI feature set. It does
-not describe the current fresh v0.4 experimental firmware, which is non-MIDI.
+This section describes the previous intended Web MIDI feature set. It does not
+describe the current Reverb+ 1.5 style MIDI interface test firmware.
 
 The editor can:
 

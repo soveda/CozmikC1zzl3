@@ -1,10 +1,6 @@
 #include "ComputerCard.h"
 #include "C1ZZL3_LUT.h"
 #include "hardware/sync.h"
-#include "pico/multicore.h"
-#include "pico/time.h"
-#include "tusb.h"
-#include "usb_midi_host.h"
 
 class C1ZZL3 : public ComputerCard
 {
@@ -20,23 +16,11 @@ public:
         loadPerformanceState();
     }
 
-    bool ShouldBootUsbHost()
-    {
-        return USBPowerState() == USBPowerState_t::DFP;
-    }
-
-    void ProcessUsbMidiByte(uint8_t byte)
-    {
-        processMidiVoiceByte(byte);
-    }
-
     // =========================================================
     // AUDIO CALLBACK
     // =========================================================
     void ProcessSample() override
     {
-        applyPendingMidiNote();
-
         int32_t in1 = AudioIn1();
         int32_t in2 = AudioIn2();
 
@@ -91,7 +75,7 @@ public:
             // -------------------------
             // PITCH (octave map with hardware-tested 1V/oct input scale)
             // -------------------------
-            int32_t freq = smoothPitch(pitchFrequency(currentPitchUnits(pitchControl, in1)));
+            int32_t freq = smoothPitch(pitchFrequency(pitchUnits(pitchControl, in1)));
 
             int32_t pd = clamp12(pdControl + (in2 << 1));
             int32_t wave = clamp12(waveControl + (cv1 << 1));
@@ -436,11 +420,7 @@ private:
             pdEnvelopeStartLevel);
 
         if (ampDone && pdDone)
-        {
             envelopeActive = false;
-            if (midiNoteReleased)
-                midiNoteActive = false;
-        }
 
         return clamp12(ampEnvelopeLevel);
     }
@@ -457,92 +437,6 @@ private:
             return 4095;
 
         return clamp12(level);
-    }
-
-    void processMidiVoiceByte(uint8_t byte)
-    {
-        if (byte >= 0xF8u)
-            return;
-
-        if (byte & 0x80u)
-        {
-            midiRunningStatus = byte;
-            midiDataCount = 0;
-            return;
-        }
-
-        uint8_t type = midiRunningStatus & 0xF0u;
-        if (type != 0x80u && type != 0x90u && type != 0xE0u)
-            return;
-
-        midiData[midiDataCount++] = byte & 0x7Fu;
-        if (midiDataCount < 2u)
-            return;
-
-        midiDataCount = 0;
-        uint8_t channel = midiRunningStatus & 0x0Fu;
-        if (channel != midiInChannel)
-            return;
-
-        if (type == 0x90u && midiData[1] > 0)
-        {
-            pendingMidiNote = midiData[0];
-            pendingMidiVelocity = midiData[1];
-            pendingMidiNoteOn = true;
-            return;
-        }
-
-        if (type == 0x80u || (type == 0x90u && midiData[1] == 0))
-        {
-            if (midiData[0] == midiNote)
-            {
-                if (envelopePreset == (uint8_t)EnvelopePreset::Off || !envelopeActive)
-                    midiNoteActive = false;
-                else
-                    midiNoteReleased = true;
-            }
-            return;
-        }
-
-        if (type == 0xE0u)
-        {
-            int32_t bend = ((int32_t)midiData[1] << 7) | midiData[0];
-            midiPitchBend = bend - 8192;
-        }
-    }
-
-    void applyPendingMidiNote()
-    {
-        if (!pendingMidiNoteOn)
-            return;
-
-        pendingMidiNoteOn = false;
-        midiNote = pendingMidiNote;
-        midiVelocity = pendingMidiVelocity;
-        midiNoteActive = true;
-        midiNoteReleased = false;
-
-        if (envelopePreset != (uint8_t)EnvelopePreset::Off)
-        {
-            syncOscillators();
-            triggerEnvelope();
-        }
-    }
-
-    int32_t currentPitchUnits(int32_t knob, int32_t pitchInput)
-    {
-        if (!midiNoteActive)
-            return pitchUnits(knob, pitchInput);
-
-        int32_t units = midiNotePitchUnits(midiNote);
-        units += (midiPitchBend * PitchUnitsPerOctave) / (8192 * 6);
-        units += (pitchInput * PitchUnitsPerOctave) / PitchInputCountsPerVolt;
-        return units;
-    }
-
-    int32_t midiNotePitchUnits(uint8_t note)
-    {
-        return ((int32_t)note - 36) * PitchUnitsPerOctave / 12;
     }
 
     EnvelopeProgram envelopeProgram()
@@ -1357,101 +1251,12 @@ private:
     bool saveHoldCanSave = false;
     bool saveCompletedThisHold = false;
     Switch lastMode = Switch::Middle;
-
-    uint8_t midiRunningStatus = 0;
-    uint8_t midiData[2] = {};
-    uint8_t midiDataCount = 0;
-    volatile uint8_t pendingMidiNote = 60;
-    volatile uint8_t pendingMidiVelocity = 100;
-    volatile bool pendingMidiNoteOn = false;
-    uint8_t midiNote = 60;
-    uint8_t midiVelocity = 100;
-    int32_t midiPitchBend = 0;
-    bool midiNoteActive = false;
-    bool midiNoteReleased = false;
-    uint8_t midiInChannel = 0;
 };
 
 // =========================================================
 // ENTRY
 // =========================================================
 C1ZZL3 card;
-static volatile uint8_t hostMidiDeviceAddress = 0;
-
-extern "C" void tuh_midi_mount_cb(
-    uint8_t dev_addr,
-    uint8_t in_ep,
-    uint8_t out_ep,
-    uint8_t num_cables_rx,
-    uint16_t num_cables_tx)
-{
-    (void)in_ep;
-    (void)out_ep;
-    (void)num_cables_rx;
-    (void)num_cables_tx;
-
-    if (hostMidiDeviceAddress == 0)
-        hostMidiDeviceAddress = dev_addr;
-}
-
-extern "C" void tuh_midi_umount_cb(uint8_t dev_addr, uint8_t instance)
-{
-    (void)instance;
-
-    if (dev_addr == hostMidiDeviceAddress)
-        hostMidiDeviceAddress = 0;
-}
-
-extern "C" void tuh_midi_rx_cb(uint8_t dev_addr, uint32_t num_packets)
-{
-    if (dev_addr != hostMidiDeviceAddress || num_packets == 0)
-        return;
-
-    uint8_t cable = 0;
-    uint8_t bytes[128];
-    while (true)
-    {
-        uint32_t count = tuh_midi_stream_read(dev_addr, &cable, bytes, sizeof(bytes));
-        if (count == 0)
-            break;
-
-        for (uint32_t i = 0; i < count; ++i)
-            card.ProcessUsbMidiByte(bytes[i]);
-    }
-}
-
-extern "C" void tuh_midi_tx_cb(uint8_t dev_addr)
-{
-    (void)dev_addr;
-}
-
-void usbMidiWorker()
-{
-    sleep_ms(100);
-    bool hostMode = card.ShouldBootUsbHost();
-
-    if (hostMode)
-        tuh_init(0);
-    else
-        tud_init(0);
-
-    while (true)
-    {
-        if (hostMode)
-        {
-            tuh_task();
-        }
-        else
-        {
-            tud_task();
-
-            uint8_t bytes[64];
-            uint32_t count = tud_midi_stream_read(bytes, sizeof(bytes));
-            for (uint32_t i = 0; i < count; ++i)
-                card.ProcessUsbMidiByte(bytes[i]);
-        }
-    }
-}
 
 //int main()
 //{
@@ -1460,6 +1265,5 @@ void usbMidiWorker()
 //}
 int main()
 {
-    multicore_launch_core1(usbMidiWorker);
     card.Run();
 }
