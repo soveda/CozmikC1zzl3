@@ -70,6 +70,27 @@ This recovery folder contains the passed UF2, matching source, build file, USB
 MIDI support files, and checksum. Use it as the rollback point before adding
 new MIDI/Web UI features.
 
+Current knob-pickup test UF2:
+
+```text
+experimental/web-midi/C1ZZL3_reverb15_midi_knob_pickup_experimental.uf2
+```
+
+This build starts from the hardware-passed Reverb+ 1.5 style MIDI recovery
+point and adds catchup behaviour when changing between synth, held performance
+edit, and Turing switch positions. Main, X, and Y keep their previous mode
+values until each physical knob is swept back through its stored value.
+
+Failed extreme-guard test:
+
+```text
+experimental/web-midi/archive/failed-tests/extreme_guard_worse_20260612/
+```
+
+The attempted audio headroom guard made the card less stable. It has been
+removed from the active firmware source and the UF2 has been archived as a
+failed test.
+
 Previous MIDI/Web MIDI test builds have been moved into `archive/` as
 historical artifacts. They should not be treated as stable baselines.
 
@@ -83,6 +104,8 @@ historical artifacts. They should not be treated as stable baselines.
   experimental UF2.
 - `C1ZZL3_reverb15_midi_experimental.uf2`: current Reverb+ 1.5 style MIDI
   interface test UF2.
+- `C1ZZL3_reverb15_midi_knob_pickup_experimental.uf2`: current test build with
+  mode-change knob pickup added.
 - `recovery/reverb15_midi_passed_20260612/`: hardware-passed rollback copy of
   the current MIDI interface test build.
 - `archive/`: old MIDI/Web MIDI UF2s, previous backups, failed test builds,
