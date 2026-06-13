@@ -142,7 +142,14 @@ custom names are kept in browser local storage.
 
 ## Running The Web Editor
 
-From the repository root:
+Hosted editor:
+
+```text
+https://soveda.github.io/CozmikC1zzl3/web-midi/editor/
+```
+
+Use the hosted editor for normal Web MIDI editing. To run the same editor
+locally from the repository root:
 
 ```sh
 python3 -m http.server 5173 --directory web-midi/editor

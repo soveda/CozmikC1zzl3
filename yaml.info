@@ -51,8 +51,8 @@ manual: |
   Turing clock does not continue running in synth mode.
 
   Hold the switch down during startup to enter envelope preset select. Factory
-  presets are followed by any saved custom Web MIDI slots. LED 5 marks the
-  custom bank and LEDs 0-2 show the custom slot number.
+  presets are followed by any saved custom Web MIDI slots. LED 6 marks the
+  custom bank and LEDs 1-3 show the custom slot number.
 
   The Web MIDI editor can load and save up to eight custom envelopes, set ring,
   noise, and MIDI input channel, and audition envelopes in the browser. Factory
@@ -152,66 +152,66 @@ controls:
       display: list
       items:
         - id: LED0
-          name: LED 0
+          name: LED 1
           description: Phase-distortion amount
         - id: LED1
-          name: LED 1
+          name: LED 2
           description: Waveform morph position
         - id: LED2
-          name: LED 2
+          name: LED 3
           description: Oscillator 2 level
         - id: LED3
-          name: LED 3
+          name: LED 4
           description: Ring modulation amount
         - id: LED4
-          name: LED 4
+          name: LED 5
           description: Noise/grit amount
         - id: LED5
-          name: LED 5
+          name: LED 6
           description: Lights while switch is held down
 
     - when: { z: up }
       display: list
       items:
         - id: LED0
-          name: LED 0
+          name: LED 1
           description: Low bit 0 of Turing pattern
         - id: LED1
-          name: LED 1
+          name: LED 2
           description: Low bit 1 of Turing pattern
         - id: LED2
-          name: LED 2
+          name: LED 3
           description: Low bit 2 of Turing pattern
         - id: LED3
-          name: LED 3
+          name: LED 4
           description: Pulse In 1 state
         - id: LED4
-          name: LED 4
+          name: LED 5
           description: Turing sequence length
         - id: LED5
-          name: LED 5
+          name: LED 6
           description: Flashes on every Turing clock step
 
     - when: { startup: envelope-select }
       display: binary
       items:
         - id: LED0
-          name: LED 0
+          name: LED 1
           description: Factory preset bit 0 or custom slot bit 0
         - id: LED1
-          name: LED 1
+          name: LED 2
           description: Factory preset bit 1 or custom slot bit 1
         - id: LED2
-          name: LED 2
+          name: LED 3
           description: Factory preset bit 2 or custom slot bit 2
         - id: LED3
-          name: LED 3
+          name: LED 4
           description: Factory preset bit 3
         - id: LED4
-          name: LED 4
+          name: LED 5
           description: Factory preset bit 4
         - id: LED5
-          name: LED 5
+          name: LED 6
           description: Custom bank marker for saved custom slots
 
 presets:

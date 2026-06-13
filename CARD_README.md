@@ -61,7 +61,13 @@ The editor is in:
 web-midi/editor/
 ```
 
-Run it locally:
+Hosted editor:
+
+```text
+https://soveda.github.io/CozmikC1zzl3/web-midi/editor/
+```
+
+Run it locally instead:
 
 ```sh
 python3 -m http.server 5173 --directory web-midi/editor

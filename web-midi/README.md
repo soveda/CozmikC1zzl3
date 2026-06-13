@@ -3,6 +3,14 @@
 This folder contains the browser editor for the production C1ZZL3 Web MIDI
 firmware.
 
+## Hosted Editor
+
+Use the hosted GitHub Pages editor:
+
+```text
+https://soveda.github.io/CozmikC1zzl3/web-midi/editor/
+```
+
 ## Run Locally
 
 From the repository root:
