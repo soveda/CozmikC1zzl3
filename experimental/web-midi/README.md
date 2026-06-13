@@ -161,13 +161,13 @@ is blocked until the switch has first left the down position.
 Current hardware-passed recovery point:
 
 ```text
-experimental/web-midi/recovery/web_envelope_8slot_volatile_passed_20260613/
+experimental/web-midi/recovery/web_envelope_8slot_flash_select_passed_20260613/
 ```
 
-This recovery folder contains the passed eight-slot volatile-envelope Web MIDI
+This recovery folder contains the passed eight-slot persistent envelope Web MIDI
 UF2, matching source, matching editor files, build file, USB MIDI support files,
-and checksum. Use it as the rollback point before adding persistence or other
-Web MIDI envelope features.
+and checksum. It has also passed torture testing. Use it as the rollback point
+before adding further Web MIDI envelope features or promoting this work.
 
 Current volatile envelope test UF2:
 
@@ -190,6 +190,40 @@ This build starts from the hardware-passed one-slot volatile envelope recovery
 point and expands Web MIDI envelope send to eight RAM-only custom slots. Factory
 presets remain intact. Envelope flash/persistence remains disabled, and all
 custom slots are lost on reset.
+
+Current eight-slot persistent envelope test UF2:
+
+```text
+experimental/web-midi/C1ZZL3_reverb15_midi_web_envelope_8slot_flash_experimental.uf2
+```
+
+This build starts from the hardware-passed eight-slot volatile envelope recovery
+point and re-enables the editor `Flash` button for custom envelopes only. The
+selected custom slot is stored in a dedicated custom-envelope flash sector.
+Factory presets remain intact. Ring/noise still reset neutral and are not saved
+by this envelope flash path.
+
+Current persistent envelope select test UF2:
+
+```text
+experimental/web-midi/C1ZZL3_reverb15_midi_web_envelope_8slot_flash_select_experimental.uf2
+```
+
+This build starts from the eight-slot flash test and extends the startup
+envelope selector so loaded custom slots can be selected after the factory
+presets. Unloaded custom slots are skipped.
+
+Current UI/LED polish test UF2:
+
+```text
+experimental/web-midi/C1ZZL3_reverb15_midi_web_envelope_8slot_flash_select_ui_led_experimental.uf2
+```
+
+This build starts from the hardware-passed flash/select recovery point and
+changes only web editor wording plus startup-selection LED feedback. The editor
+uses `Custom 1-8`, `Load`, and `Save`. During startup envelope selection,
+factory presets keep the existing binary LED display; custom slots light LED 5
+as a custom-bank marker and use LEDs 0-2 to show custom slot 1-8.
 
 Previous MIDI/Web MIDI test builds have been moved into `archive/` as
 historical artifacts. They should not be treated as stable baselines.
@@ -224,8 +258,21 @@ historical artifacts. They should not be treated as stable baselines.
 - `C1ZZL3_reverb15_midi_web_envelope_8slot_volatile_experimental.uf2`: current
   test build with eight RAM-only Web MIDI custom envelope slots and no envelope
   flash persistence.
+- `C1ZZL3_reverb15_midi_web_envelope_8slot_flash_experimental.uf2`: current
+  test build with eight Web MIDI custom envelope slots and explicit custom-slot
+  flash persistence.
+- `C1ZZL3_reverb15_midi_web_envelope_8slot_flash_select_experimental.uf2`:
+  current test build with persisted custom slots included in startup envelope
+  selection after the factory presets.
+- `C1ZZL3_reverb15_midi_web_envelope_8slot_flash_select_ui_led_experimental.uf2`:
+  current test build with clearer Web UI labels and custom-bank LED feedback
+  during startup envelope selection.
+- `recovery/web_envelope_8slot_flash_select_passed_20260613/`: hardware-passed
+  and torture-tested rollback copy of the eight-slot persistent Web MIDI
+  envelope test build.
 - `recovery/web_envelope_8slot_volatile_passed_20260613/`: hardware-passed
-  rollback copy of the eight-slot volatile Web MIDI envelope test build.
+  rollback copy of the previous eight-slot volatile Web MIDI envelope test
+  build.
 - `recovery/web_envelope_volatile_passed_20260613/`: hardware-passed rollback
   copy of the previous one-slot volatile Web MIDI envelope test build.
 - `recovery/web_ring_noise_neutral_startup_passed_20260612/`:
@@ -282,10 +329,10 @@ The main firmware can:
   the USB port is downstream-facing
 - receive C1ZZL3 SysEx preview frames from the browser editor
 - decode the transmitted amplitude and phase-distortion stages
-- load the transmitted envelope into one RAM-only custom preset slot
+- load the transmitted envelope into one of eight custom preset slots
 - keep factory presets 0-8 intact
 - select the received envelope for the next Pulse 2 or MIDI note trigger
-- leave envelope flash/persistence disabled
+- persist a custom slot only when the editor sends `Flash`
 - apply ring/noise/MIDI channel settings from the editor
 - receive USB MIDI note on/off from a DAW or other USB MIDI host on the selected
   channel, using note-on to pitch the synth and retrigger the selected envelope
@@ -294,7 +341,7 @@ The main firmware can:
   being investigated
 
 The editor keeps custom preset names in browser local storage. The card firmware
-does not store custom envelope names or persist custom envelope shapes.
+persists custom envelope shapes only; it does not store or display names.
 
 ## Testing Notes
 
@@ -303,8 +350,10 @@ does not store custom envelope names or persist custom envelope shapes.
 - After any overload, reset the card before judging the next test.
 - Test one variable at a time where possible: first X/Y, then ring/noise, then
   detune, then Pulse 2 triggering, then MIDI/Web MIDI.
-- A valid SysEx frame switches the active envelope to the single volatile custom
-  slot for the next trigger.
+- A valid SysEx frame switches the active envelope to the selected custom slot
+  for the next trigger.
+- During startup envelope selection, LED 5 marks custom slots and LEDs 0-2 show
+  the custom slot number.
 - Factory presets 0-8 are not overwritten by SysEx.
 - Preset 0 / Off and fully silent amplitude envelopes are not sent or accepted
   as custom slots.
@@ -313,10 +362,10 @@ does not store custom envelope names or persist custom envelope shapes.
   using `Send`.
 - Envelope retriggers use the original 9 June behaviour: the envelope restarts
   from zero and the oscillators sync on Pulse 2 / MIDI note-on.
-- `Send` loads the single volatile custom slot in RAM. `Flash` is disabled in
-  this build.
-- `Set` applies ring/noise/MIDI channel settings in RAM. `Save Set` writes those
-  settings to the card's flash sector.
+- `Load` loads the selected custom slot in RAM. `Save` writes the selected
+  custom slot to the dedicated envelope flash sector.
+- `Set` applies ring/noise/MIDI channel settings in RAM. Ring/noise still reset
+  neutral and are not written by envelope `Flash`.
 - This clean rebuild keeps the original 9 June oscillator, waveform, envelope,
   Turing clock, detune, and save-gesture behaviour wherever possible.
 - The browser editor is capped at eight custom presets, matching the eight card

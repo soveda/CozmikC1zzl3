@@ -523,11 +523,7 @@ async function sendSysex(command = SYSEX_COMMAND_PREVIEW) {
   el.sendSysex.disabled = true;
   el.flashSysex.disabled = true;
   output.send(frame);
-  const slotLabel = `Custom ${Number(el.customSlot.value) + 1}`;
-  const status = isFlash
-    ? `Saved ${slotLabel}; after reset it appears after the factory presets. Amp max ${summary.ampMax}, ${summary.seconds}s.`
-    : `Loaded ${slotLabel} until reset. Amp max ${summary.ampMax}, ${summary.seconds}s.`;
-  setStatus(`${status} ${frame.length} byte SysEx to ${output.name || "MIDI output"}.`);
+  setStatus(`${isFlash ? "Flashed" : "Sent"} ${frame.length} byte SysEx to ${output.name || "MIDI output"} as Custom ${Number(el.customSlot.value) + 1}. Amp max ${summary.ampMax}, ${summary.seconds}s.`);
 
   window.setTimeout(() => {
     sendingSysex = false;
@@ -770,7 +766,7 @@ el.copySysex.addEventListener("click", async () => {
   }
 
   await navigator.clipboard.writeText(sysexHex());
-  setStatus(`SysEx preview frame copied for Custom ${Number(el.customSlot.value) + 1}.`);
+  setStatus(`SysEx preview frame copied for Volatile ${Number(el.customSlot.value) + 1}.`);
 });
 el.sendSysex.addEventListener("click", () => sendSysex(SYSEX_COMMAND_PREVIEW));
 el.flashSysex.addEventListener("click", () => sendSysex(SYSEX_COMMAND_SAVE));

@@ -1163,18 +1163,6 @@ private:
 
     void showEnvelopePresetLeds(uint8_t preset)
     {
-        if (preset >= CustomEnvelopePreset)
-        {
-            uint8_t slot = (preset - CustomEnvelopePreset) + 1u;
-            LedBrightness(0, slot & 1u ? 4095 : 0);
-            LedBrightness(1, slot & 2u ? 4095 : 0);
-            LedBrightness(2, slot & 4u ? 4095 : 0);
-            LedBrightness(3, 0);
-            LedBrightness(4, 0);
-            LedBrightness(5, 4095);
-            return;
-        }
-
         for (uint32_t i = 0; i < 6; ++i)
             LedBrightness(i, (preset & (1u << i)) ? 4095 : 0);
     }
