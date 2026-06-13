@@ -3,9 +3,9 @@ Name: C1ZZL3
 Language: C++ (Pico SDK)
 Creator: Adrian Vos
 Instagram: https://instagram.com/professeur_whom
-Version: Web MIDI production candidate 2026-06-13
-Status: Hardware-tested production candidate
-
+Version: 0.6
+Status: Released but still Beta testing
+Editor: https://soveda.github.io/CozmikC1zzl3/web-midi/editor/
 tags:
   - synthesiser
   - phase-distortion
