@@ -269,7 +269,6 @@ private:
     static constexpr uint32_t C2PhaseIncrement = 5852465u;
     static constexpr uint8_t EnvelopePresetCount = 9;
     static constexpr uint8_t CustomEnvelopePreset = EnvelopePresetCount;
-    static constexpr uint8_t CustomEnvelopeSlotCount = 8;
     static constexpr uint32_t MinWebMidiEnvelopeSamples = 960u;
     static constexpr uint32_t MaxWebMidiStageSamples = 192000u;
     static constexpr uint32_t StartupSelectDelaySamples = 12000u;
@@ -668,7 +667,7 @@ private:
             return;
 
         uint32_t offset = 6;
-        uint8_t slot = sysexBuffer[offset++] & 0x07u;
+        offset++; // One card slot byte is accepted for editor compatibility.
         offset += 16; // Names stay in the browser; firmware stores shape only.
 
         EnvelopeProgram next = {};
@@ -695,9 +694,9 @@ private:
         if (ampMax == 0 || ampTotal < MinWebMidiEnvelopeSamples)
             return;
 
-        customEnvelopes[slot] = next;
-        customEnvelopeLoaded[slot] = true;
-        envelopePreset = CustomEnvelopePreset + slot;
+        customEnvelope = next;
+        customEnvelopeLoaded = true;
+        envelopePreset = CustomEnvelopePreset;
         envelopeActive = false;
     }
 
@@ -799,12 +798,8 @@ private:
             {0, 1}, {0, 1}, {0, 1}, {0, 1}
         }};
 
-        if (envelopePreset >= CustomEnvelopePreset)
-        {
-            uint8_t slot = envelopePreset - CustomEnvelopePreset;
-            if (slot < CustomEnvelopeSlotCount && customEnvelopeLoaded[slot])
-                return customEnvelopes[slot];
-        }
+        if (envelopePreset == CustomEnvelopePreset && customEnvelopeLoaded)
+            return customEnvelope;
 
         switch ((EnvelopePreset)envelopePreset)
         {
@@ -1661,8 +1656,8 @@ private:
     bool midiNoteActive = false;
     bool midiNoteReleased = false;
     volatile uint8_t midiInChannel = 0;
-    EnvelopeProgram customEnvelopes[CustomEnvelopeSlotCount] = {};
-    bool customEnvelopeLoaded[CustomEnvelopeSlotCount] = {};
+    EnvelopeProgram customEnvelope = {};
+    bool customEnvelopeLoaded = false;
     uint8_t sysexBuffer[WebMidiMaxSysexLength] = {};
     uint32_t sysexLength = 0;
     bool sysexReceiving = false;

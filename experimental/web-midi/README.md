@@ -91,6 +91,106 @@ The attempted audio headroom guard made the card less stable. It has been
 removed from the active firmware source and the UF2 has been archived as a
 failed test.
 
+Current envelope-efficiency test UF2:
+
+```text
+experimental/web-midi/C1ZZL3_reverb15_midi_envelope_static_experimental.uf2
+```
+
+This build starts from the knob-pickup test and leaves the oscillator/ring/noise
+path unchanged. The only envelope change is that factory envelope preset data is
+held as static data instead of being copied every audio sample while an envelope
+is active.
+
+Previous hardware-passed recovery point:
+
+```text
+experimental/web-midi/recovery/envelope_static_passed_20260612/
+```
+
+This recovery folder contains the passed envelope-static UF2, matching source,
+build file, USB MIDI support files, and checksum. It is intentionally retained
+as the pre-Web-MIDI-channel rollback point.
+
+Current Web MIDI channel test UF2:
+
+```text
+experimental/web-midi/C1ZZL3_reverb15_midi_web_channel_experimental.uf2
+```
+
+This build starts from the envelope-static recovery point and adds only Web
+MIDI input-channel setting. The browser sends a small private SysEx frame with
+one payload byte: MIDI input channel 0-15. Turing MIDI output remains absent,
+and Web MIDI envelope transfer/custom envelope flash are still not part of this
+test build.
+
+Current Web MIDI ring/noise test UF2:
+
+```text
+experimental/web-midi/C1ZZL3_reverb15_midi_web_ring_noise_experimental.uf2
+```
+
+This build starts from the channel-only Web MIDI recovery point and extends the
+same small settings SysEx frame to include ring and noise as 14-bit values,
+followed by MIDI input channel 0-15. Turing MIDI output remains absent, and Web
+MIDI envelope transfer/custom envelope flash are still not part of this test
+build.
+
+Current startup-pickup test UF2:
+
+```text
+experimental/web-midi/C1ZZL3_reverb15_midi_web_ring_noise_startup_pickup_experimental.uf2
+```
+
+This build starts from the hardware-passed ring/noise Web MIDI recovery point
+and adds only startup protection for the switch-down ring/noise edit controls.
+If the card is reset with the switch down, X and Y should not immediately set
+ring and noise to the physical knob positions.
+
+Current neutral-startup ring/noise test UF2:
+
+```text
+experimental/web-midi/C1ZZL3_reverb15_midi_web_ring_noise_neutral_startup_experimental.uf2
+```
+
+This build goes further than the startup-pickup test. Ring and noise are not
+loaded from flash on reset, and the saved performance block writes neutral
+ring/noise values. If the card starts with the switch down, ring/noise editing
+is blocked until the switch has first left the down position.
+
+Current hardware-passed recovery point:
+
+```text
+experimental/web-midi/recovery/web_envelope_8slot_volatile_passed_20260613/
+```
+
+This recovery folder contains the passed eight-slot volatile-envelope Web MIDI
+UF2, matching source, matching editor files, build file, USB MIDI support files,
+and checksum. Use it as the rollback point before adding persistence or other
+Web MIDI envelope features.
+
+Current volatile envelope test UF2:
+
+```text
+experimental/web-midi/C1ZZL3_reverb15_midi_web_envelope_volatile_experimental.uf2
+```
+
+This build starts from the hardware-passed neutral-startup ring/noise recovery
+point and adds one RAM-only custom envelope slot. The editor `Send` button loads
+that volatile slot and selects it for the next trigger. Factory presets are not
+overwritten. Envelope flash/persistence is intentionally disabled in this build.
+
+Current eight-slot volatile envelope test UF2:
+
+```text
+experimental/web-midi/C1ZZL3_reverb15_midi_web_envelope_8slot_volatile_experimental.uf2
+```
+
+This build starts from the hardware-passed one-slot volatile envelope recovery
+point and expands Web MIDI envelope send to eight RAM-only custom slots. Factory
+presets remain intact. Envelope flash/persistence remains disabled, and all
+custom slots are lost on reset.
+
 Previous MIDI/Web MIDI test builds have been moved into `archive/` as
 historical artifacts. They should not be treated as stable baselines.
 
@@ -106,6 +206,38 @@ historical artifacts. They should not be treated as stable baselines.
   interface test UF2.
 - `C1ZZL3_reverb15_midi_knob_pickup_experimental.uf2`: current test build with
   mode-change knob pickup added.
+- `C1ZZL3_reverb15_midi_envelope_static_experimental.uf2`: current test build
+  with static factory envelope data to reduce envelope overhead.
+- `C1ZZL3_reverb15_midi_web_channel_experimental.uf2`: current test build with
+  channel-only Web MIDI settings.
+- `C1ZZL3_reverb15_midi_web_ring_noise_experimental.uf2`: current test build
+  with Web MIDI ring/noise plus MIDI input channel settings.
+- `C1ZZL3_reverb15_midi_web_ring_noise_startup_pickup_experimental.uf2`:
+  current test build with reset/startup pickup protection for switch-down
+  ring/noise editing.
+- `C1ZZL3_reverb15_midi_web_ring_noise_neutral_startup_experimental.uf2`:
+  current test build with neutral ring/noise reset and switch-down edit lockout
+  until the switch has left down once.
+- `C1ZZL3_reverb15_midi_web_envelope_volatile_experimental.uf2`: current test
+  build with one RAM-only Web MIDI custom envelope slot and no envelope flash
+  persistence.
+- `C1ZZL3_reverb15_midi_web_envelope_8slot_volatile_experimental.uf2`: current
+  test build with eight RAM-only Web MIDI custom envelope slots and no envelope
+  flash persistence.
+- `recovery/web_envelope_8slot_volatile_passed_20260613/`: hardware-passed
+  rollback copy of the eight-slot volatile Web MIDI envelope test build.
+- `recovery/web_envelope_volatile_passed_20260613/`: hardware-passed rollback
+  copy of the previous one-slot volatile Web MIDI envelope test build.
+- `recovery/web_ring_noise_neutral_startup_passed_20260612/`:
+  hardware-passed rollback copy of the previous neutral-startup ring/noise Web
+  MIDI test build.
+- `recovery/web_ring_noise_passed_20260612/`: hardware-passed rollback copy of
+  the previous Web MIDI ring/noise test build.
+- `recovery/web_channel_passed_20260612/`: hardware-passed rollback copy of the
+  previous channel-only Web MIDI test build.
+- `recovery/envelope_static_passed_20260612/`: hardware-passed rollback copy of
+  the previous envelope-static MIDI interface test build, before Web MIDI
+  channel setting.
 - `recovery/reverb15_midi_passed_20260612/`: hardware-passed rollback copy of
   the current MIDI interface test build.
 - `archive/`: old MIDI/Web MIDI UF2s, previous backups, failed test builds,
@@ -113,8 +245,7 @@ historical artifacts. They should not be treated as stable baselines.
 
 ## Running The Editor Locally
 
-The web editor is not part of the current Reverb+ 1.5 style MIDI interface
-test firmware. These notes are retained only for archived Web MIDI development.
+The web editor is part of the current volatile-envelope experimental test build.
 
 ```sh
 python3 -m http.server 5173 --directory web-midi/editor
@@ -129,10 +260,9 @@ http://localhost:5173
 After pressing `MIDI`, choose the C1ZZL3 device in the `MIDI output` selector
 before pressing `Send`.
 
-## Archived MIDI/Web MIDI Notes
+## Current MIDI/Web MIDI Notes
 
-This section describes the previous intended Web MIDI feature set. It does not
-describe the current Reverb+ 1.5 style MIDI interface test firmware.
+This section describes the active experimental Web MIDI feature set.
 
 The editor can:
 
@@ -152,12 +282,10 @@ The main firmware can:
   the USB port is downstream-facing
 - receive C1ZZL3 SysEx preview frames from the browser editor
 - decode the transmitted amplitude and phase-distortion stages
-- load the transmitted envelope into one of eight RAM-only custom preset slots
-- keep factory presets 0-8 intact and only enumerate custom slots after them
-- immediately trigger the received envelope for auditioning
-- flash all six LEDs for accepted SysEx frames
-- alternate even/odd LEDs for rejected SysEx frames
-- persist a custom slot to flash when the editor sends the `Flash` command
+- load the transmitted envelope into one RAM-only custom preset slot
+- keep factory presets 0-8 intact
+- select the received envelope for the next Pulse 2 or MIDI note trigger
+- leave envelope flash/persistence disabled
 - apply ring/noise/MIDI channel settings from the editor
 - receive USB MIDI note on/off from a DAW or other USB MIDI host on the selected
   channel, using note-on to pitch the synth and retrigger the selected envelope
@@ -166,7 +294,7 @@ The main firmware can:
   being investigated
 
 The editor keeps custom preset names in browser local storage. The card firmware
-persists custom envelope shapes only; it does not store or display names.
+does not store custom envelope names or persist custom envelope shapes.
 
 ## Testing Notes
 
@@ -175,9 +303,8 @@ persists custom envelope shapes only; it does not store or display names.
 - After any overload, reset the card before judging the next test.
 - Test one variable at a time where possible: first X/Y, then ring/noise, then
   detune, then Pulse 2 triggering, then MIDI/Web MIDI.
-- A valid SysEx frame will switch the active envelope to the chosen custom slot
-  for auditioning in normal conditions. In guarded extreme states, the firmware
-  may accept/store the envelope without switching the active sound.
+- A valid SysEx frame switches the active envelope to the single volatile custom
+  slot for the next trigger.
 - Factory presets 0-8 are not overwritten by SysEx.
 - Preset 0 / Off and fully silent amplitude envelopes are not sent or accepted
   as custom slots.
@@ -186,8 +313,8 @@ persists custom envelope shapes only; it does not store or display names.
   using `Send`.
 - Envelope retriggers use the original 9 June behaviour: the envelope restarts
   from zero and the oscillators sync on Pulse 2 / MIDI note-on.
-- `Send` previews a custom slot in RAM. `Flash` writes the chosen custom slot to
-  the card's flash sector for power-cycle testing.
+- `Send` loads the single volatile custom slot in RAM. `Flash` is disabled in
+  this build.
 - `Set` applies ring/noise/MIDI channel settings in RAM. `Save Set` writes those
   settings to the card's flash sector.
 - This clean rebuild keeps the original 9 June oscillator, waveform, envelope,

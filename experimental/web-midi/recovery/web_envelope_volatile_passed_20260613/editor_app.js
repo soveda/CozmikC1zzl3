@@ -521,7 +521,7 @@ async function sendSysex(command = SYSEX_COMMAND_PREVIEW) {
   el.sendSysex.disabled = true;
   el.flashSysex.disabled = true;
   output.send(frame);
-  setStatus(`${frame.length} byte SysEx sent to ${output.name || "MIDI output"} as Volatile ${Number(el.customSlot.value) + 1}. Amp max ${summary.ampMax}, ${summary.seconds}s.`);
+  setStatus(`Sent ${frame.length} byte SysEx to ${output.name || "MIDI output"} as Volatile 1. Amp max ${summary.ampMax}, ${summary.seconds}s.`);
 
   window.setTimeout(() => {
     sendingSysex = false;
@@ -535,7 +535,7 @@ function buildSysex(command) {
     throw new Error("Cannot build SysEx for preset 0, a silent envelope, or a very short envelope.");
   }
 
-  const slot = clampInt(el.customSlot.value, 0, CUSTOM_SLOT_COUNT - 1);
+  const slot = 0;
   const payload = [slot & 0x7f, ...encodeName(presets[selected].name)];
   appendStages(payload, presets[selected].amp);
   appendStages(payload, presets[selected].pd);
@@ -764,7 +764,7 @@ el.copySysex.addEventListener("click", async () => {
   }
 
   await navigator.clipboard.writeText(sysexHex());
-  setStatus(`SysEx preview frame copied for Volatile ${Number(el.customSlot.value) + 1}.`);
+  setStatus("SysEx preview frame copied for Volatile 1.");
 });
 el.sendSysex.addEventListener("click", () => sendSysex(SYSEX_COMMAND_PREVIEW));
 el.flashSysex.addEventListener("click", () => setStatus("Flash is disabled in this RAM-only test build."));

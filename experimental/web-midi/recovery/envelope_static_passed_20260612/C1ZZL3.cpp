@@ -6,15 +6,6 @@
 #include "tusb.h"
 #include "usb_midi_host.h"
 
-static constexpr uint8_t WebMidiManufacturer = 0x7Du;
-static constexpr uint8_t WebMidiId[4] = {0x43u, 0x31u, 0x5Au, 0x33u}; // C1Z3
-static constexpr uint8_t WebMidiCommandPreview = 0x01u;
-static constexpr uint8_t WebMidiCommandSettings = 0x03u;
-static constexpr uint8_t WebMidiCommandSaveSettings = 0x04u;
-static constexpr uint32_t WebMidiSettingsPayloadLength = 5u;
-static constexpr uint32_t WebMidiEnvelopePayloadLength = 97u;
-static constexpr uint32_t WebMidiMaxSysexLength = 112u;
-
 class C1ZZL3 : public ComputerCard
 {
 public:
@@ -35,41 +26,6 @@ public:
     }
 
     void ProcessUsbMidiByte(uint8_t byte)
-    {
-        if (byte == 0xF0u)
-        {
-            sysexReceiving = true;
-            sysexLength = 0;
-            sysexOverflow = false;
-            return;
-        }
-
-        if (!sysexReceiving)
-        {
-            processMidiVoiceByte(byte);
-            return;
-        }
-
-        if (byte == 0xF7u)
-        {
-            sysexReceiving = false;
-            if (!sysexOverflow)
-                handleWebMidiSysex();
-            return;
-        }
-
-        if (sysexLength < sizeof(sysexBuffer))
-            sysexBuffer[sysexLength++] = byte;
-        else
-            sysexOverflow = true;
-    }
-
-    uint8_t MidiInChannel() const
-    {
-        return midiInChannel;
-    }
-
-    void ProcessUsbMidiVoiceByte(uint8_t byte)
     {
         processMidiVoiceByte(byte);
     }
@@ -104,21 +60,6 @@ public:
             return;
         }
 
-        if (!modePickupInitialized)
-        {
-            modePickupInitialized = true;
-            if (mode == Switch::Down)
-            {
-                resetAltPickup(main, x, y);
-                resetSaveGesture();
-                previousMode = mode;
-                lastMode = mode;
-            }
-        }
-
-        if (mode != Switch::Down)
-            downEditUnlocked = true;
-
         if (previousMode == Switch::Up && mode == Switch::Down)
             tapTuringClock();
 
@@ -145,8 +86,7 @@ public:
                     resetAltPickup(main, x, y);
                 }
 
-                if (downEditUnlocked)
-                    updateAltControls(main, x, y);
+                updateAltControls(main, x, y);
             }
 
             // -------------------------
@@ -268,10 +208,6 @@ private:
     static constexpr int32_t MaxPitchUnits = 7 * PitchUnitsPerOctave;
     static constexpr uint32_t C2PhaseIncrement = 5852465u;
     static constexpr uint8_t EnvelopePresetCount = 9;
-    static constexpr uint8_t CustomEnvelopePreset = EnvelopePresetCount;
-    static constexpr uint8_t CustomEnvelopeSlotCount = 8;
-    static constexpr uint32_t MinWebMidiEnvelopeSamples = 960u;
-    static constexpr uint32_t MaxWebMidiStageSamples = 192000u;
     static constexpr uint32_t StartupSelectDelaySamples = 12000u;
     static constexpr uint32_t StartupSelectWindowSamples = 24000u;
     static constexpr uint32_t SaveMagic = 0x43315A33u; // C1Z3
@@ -612,119 +548,6 @@ private:
         return ((int32_t)note - 36) * PitchUnitsPerOctave / 12;
     }
 
-    void handleWebMidiSysex()
-    {
-        if (!webMidiHeaderMatches())
-            return;
-
-        uint8_t command = sysexBuffer[5];
-
-        if (command == WebMidiCommandSettings ||
-            command == WebMidiCommandSaveSettings)
-        {
-            handleWebMidiSettings();
-            return;
-        }
-
-        if (command == WebMidiCommandPreview)
-            handleWebMidiEnvelopePreview();
-    }
-
-    bool webMidiHeaderMatches()
-    {
-        if (sysexLength < 6u)
-            return false;
-
-        if (sysexBuffer[0] != WebMidiManufacturer)
-            return false;
-
-        for (uint32_t i = 0; i < 4u; ++i)
-        {
-            if (sysexBuffer[1u + i] != WebMidiId[i])
-                return false;
-        }
-
-        return true;
-    }
-
-    void handleWebMidiSettings()
-    {
-        if (sysexLength != WebMidiSettingsPayloadLength + 6u)
-            return;
-
-        uint32_t offset = 6;
-        int32_t ring = decodeWebMidiUint14(offset);
-        int32_t noise = decodeWebMidiUint14(offset);
-        uint8_t channel = sysexBuffer[offset] & 0x0Fu;
-
-        osc2Ring = ring;
-        osc2Noise = noise;
-        midiInChannel = channel;
-    }
-
-    void handleWebMidiEnvelopePreview()
-    {
-        if (sysexLength != WebMidiEnvelopePayloadLength + 6u)
-            return;
-
-        uint32_t offset = 6;
-        uint8_t slot = sysexBuffer[offset++] & 0x07u;
-        offset += 16; // Names stay in the browser; firmware stores shape only.
-
-        EnvelopeProgram next = {};
-        uint32_t ampTotal = 0;
-        uint16_t ampMax = 0;
-
-        for (uint32_t i = 0; i < 8u; ++i)
-        {
-            uint16_t level = decodeWebMidiUint14(offset);
-            uint32_t time = decodeWebMidiUint21(offset);
-            next.amp[i] = {level, time};
-            ampTotal += time;
-            if (level > ampMax)
-                ampMax = level;
-        }
-
-        for (uint32_t i = 0; i < 8u; ++i)
-        {
-            uint16_t level = decodeWebMidiUint14(offset);
-            uint32_t time = decodeWebMidiUint21(offset);
-            next.pd[i] = {level, time};
-        }
-
-        if (ampMax == 0 || ampTotal < MinWebMidiEnvelopeSamples)
-            return;
-
-        customEnvelopes[slot] = next;
-        customEnvelopeLoaded[slot] = true;
-        envelopePreset = CustomEnvelopePreset + slot;
-        envelopeActive = false;
-    }
-
-    int32_t decodeWebMidiUint14(uint32_t& offset)
-    {
-        int32_t value =
-            (int32_t)(sysexBuffer[offset] & 0x7Fu) |
-            ((int32_t)(sysexBuffer[offset + 1] & 0x7Fu) << 7);
-        offset += 2;
-        return clamp12(value);
-    }
-
-    uint32_t decodeWebMidiUint21(uint32_t& offset)
-    {
-        uint32_t value =
-            (uint32_t)(sysexBuffer[offset] & 0x7Fu) |
-            ((uint32_t)(sysexBuffer[offset + 1] & 0x7Fu) << 7) |
-            ((uint32_t)(sysexBuffer[offset + 2] & 0x7Fu) << 14);
-        offset += 3;
-
-        if (value < 1u)
-            return 1u;
-        if (value > MaxWebMidiStageSamples)
-            return MaxWebMidiStageSamples;
-        return value;
-    }
-
     const EnvelopeProgram& envelopeProgram()
     {
         static const EnvelopeProgram pluck = {{
@@ -798,13 +621,6 @@ private:
             {0, 1}, {0, 1}, {0, 1}, {0, 1},
             {0, 1}, {0, 1}, {0, 1}, {0, 1}
         }};
-
-        if (envelopePreset >= CustomEnvelopePreset)
-        {
-            uint8_t slot = envelopePreset - CustomEnvelopePreset;
-            if (slot < CustomEnvelopeSlotCount && customEnvelopeLoaded[slot])
-                return customEnvelopes[slot];
-        }
 
         switch ((EnvelopePreset)envelopePreset)
         {
@@ -1354,12 +1170,9 @@ private:
         state.size = sizeof(SavedPerformanceState);
         state.osc2Detune = osc2Detune;
         state.osc2Level = osc2Level;
-        state.osc2Ring = 0;
-        state.osc2Noise = 0;
-        state.envelopePreset =
-            envelopePreset < EnvelopePresetCount ?
-            envelopePreset :
-            (uint8_t)EnvelopePreset::Off;
+        state.osc2Ring = osc2Ring;
+        state.osc2Noise = osc2Noise;
+        state.envelopePreset = envelopePreset;
         state.reserved[0] = 0;
         state.reserved[1] = 0;
         state.reserved[2] = 0;
@@ -1416,8 +1229,8 @@ private:
 
         osc2Detune = state.osc2Detune;
         osc2Level = clamp12(state.osc2Level);
-        osc2Ring = 0;
-        osc2Noise = 0;
+        osc2Ring = clamp12(state.osc2Ring);
+        osc2Noise = clamp12(state.osc2Noise);
         envelopePreset = state.envelopePreset < EnvelopePresetCount ?
             state.envelopePreset :
             (uint8_t)EnvelopePreset::Off;
@@ -1645,8 +1458,6 @@ private:
     uint32_t saveConfirmSamples = 0;
     bool saveHoldCanSave = false;
     bool saveCompletedThisHold = false;
-    bool modePickupInitialized = false;
-    bool downEditUnlocked = false;
     Switch lastMode = Switch::Middle;
 
     uint8_t midiRunningStatus = 0;
@@ -1660,13 +1471,7 @@ private:
     int32_t midiPitchBend = 0;
     bool midiNoteActive = false;
     bool midiNoteReleased = false;
-    volatile uint8_t midiInChannel = 0;
-    EnvelopeProgram customEnvelopes[CustomEnvelopeSlotCount] = {};
-    bool customEnvelopeLoaded[CustomEnvelopeSlotCount] = {};
-    uint8_t sysexBuffer[WebMidiMaxSysexLength] = {};
-    uint32_t sysexLength = 0;
-    bool sysexReceiving = false;
-    bool sysexOverflow = false;
+    uint8_t midiInChannel = 0;
 };
 
 // =========================================================

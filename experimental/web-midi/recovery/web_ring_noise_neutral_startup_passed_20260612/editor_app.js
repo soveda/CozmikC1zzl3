@@ -8,6 +8,7 @@ const MIN_SEND_SAMPLES = 960;
 const SYSEX_MANUFACTURER = 0x7d;
 const SYSEX_ID = [0x43, 0x31, 0x5a, 0x33];
 const SYSEX_COMMAND_PREVIEW = 0x01;
+const SYSEX_COMMAND_SAVE = 0x02;
 const SYSEX_COMMAND_SETTINGS = 0x03;
 
 const factoryPresets = [
@@ -515,18 +516,19 @@ async function sendSysex(command = SYSEX_COMMAND_PREVIEW) {
   }
 
   const frame = buildSysex(command);
-  const sendCooldownMs = 250;
+  const action = command === SYSEX_COMMAND_SAVE ? "Flash" : "Sent";
+  const sendCooldownMs = command === SYSEX_COMMAND_SAVE ? 1800 : 250;
   const summary = frameSummary();
   sendingSysex = true;
   el.sendSysex.disabled = true;
   el.flashSysex.disabled = true;
   output.send(frame);
-  setStatus(`${frame.length} byte SysEx sent to ${output.name || "MIDI output"} as Volatile ${Number(el.customSlot.value) + 1}. Amp max ${summary.ampMax}, ${summary.seconds}s.`);
+  setStatus(`${action} ${frame.length} byte SysEx to ${output.name || "MIDI output"} as Custom ${Number(el.customSlot.value) + 1}. Amp max ${summary.ampMax}, ${summary.seconds}s.`);
 
   window.setTimeout(() => {
     sendingSysex = false;
     el.sendSysex.disabled = false;
-    el.flashSysex.disabled = true;
+    el.flashSysex.disabled = false;
   }, sendCooldownMs);
 }
 
@@ -764,10 +766,10 @@ el.copySysex.addEventListener("click", async () => {
   }
 
   await navigator.clipboard.writeText(sysexHex());
-  setStatus(`SysEx preview frame copied for Volatile ${Number(el.customSlot.value) + 1}.`);
+  setStatus(`SysEx preview frame copied for Custom ${Number(el.customSlot.value) + 1}.`);
 });
 el.sendSysex.addEventListener("click", () => sendSysex(SYSEX_COMMAND_PREVIEW));
-el.flashSysex.addEventListener("click", () => setStatus("Flash is disabled in this RAM-only test build."));
+el.flashSysex.addEventListener("click", () => sendSysex(SYSEX_COMMAND_SAVE));
 el.sendSettings.addEventListener("click", () => sendPerformanceSettings(SYSEX_COMMAND_SETTINGS));
 el.ringControl.addEventListener("input", () => updatePerformanceSetting("ring", el.ringControl.value));
 el.noiseControl.addEventListener("input", () => updatePerformanceSetting("noise", el.noiseControl.value));

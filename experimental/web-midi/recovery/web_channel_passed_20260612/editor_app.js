@@ -8,6 +8,7 @@ const MIN_SEND_SAMPLES = 960;
 const SYSEX_MANUFACTURER = 0x7d;
 const SYSEX_ID = [0x43, 0x31, 0x5a, 0x33];
 const SYSEX_COMMAND_PREVIEW = 0x01;
+const SYSEX_COMMAND_SAVE = 0x02;
 const SYSEX_COMMAND_SETTINGS = 0x03;
 
 const factoryPresets = [
@@ -74,8 +75,6 @@ const el = {
   sendSettings: document.querySelector("#sendSettings"),
   downloadJson: document.querySelector("#downloadJson"),
   resetPreset: document.querySelector("#resetPreset"),
-  ringControl: document.querySelector("#ringControl"),
-  noiseControl: document.querySelector("#noiseControl"),
   midiInChannel: document.querySelector("#midiInChannel")
 };
 
@@ -133,8 +132,6 @@ function loadPerformanceSettings() {
     const saved = JSON.parse(localStorage.getItem("c1zzl3-performance-settings"));
     if (saved && typeof saved === "object") {
       return {
-        ring: clampInt(saved.ring, 0, MAX_LEVEL),
-        noise: clampInt(saved.noise, 0, MAX_LEVEL),
         midiInChannel: clampInt(saved.midiInChannel, 1, 16)
       };
     }
@@ -142,7 +139,7 @@ function loadPerformanceSettings() {
     /* Keep defaults if saved data is malformed. */
   }
 
-  return { ring: 0, noise: 0, midiInChannel: 1 };
+  return { midiInChannel: 1 };
 }
 
 function savePerformanceSettings() {
@@ -165,8 +162,6 @@ function render() {
 }
 
 function renderPerformanceSettings() {
-  el.ringControl.value = performanceSettings.ring;
-  el.noiseControl.value = performanceSettings.noise;
   el.midiInChannel.value = performanceSettings.midiInChannel;
 }
 
@@ -515,18 +510,19 @@ async function sendSysex(command = SYSEX_COMMAND_PREVIEW) {
   }
 
   const frame = buildSysex(command);
-  const sendCooldownMs = 250;
+  const action = command === SYSEX_COMMAND_SAVE ? "Flash" : "Sent";
+  const sendCooldownMs = command === SYSEX_COMMAND_SAVE ? 1800 : 250;
   const summary = frameSummary();
   sendingSysex = true;
   el.sendSysex.disabled = true;
   el.flashSysex.disabled = true;
   output.send(frame);
-  setStatus(`${frame.length} byte SysEx sent to ${output.name || "MIDI output"} as Volatile ${Number(el.customSlot.value) + 1}. Amp max ${summary.ampMax}, ${summary.seconds}s.`);
+  setStatus(`${action} ${frame.length} byte SysEx to ${output.name || "MIDI output"} as Custom ${Number(el.customSlot.value) + 1}. Amp max ${summary.ampMax}, ${summary.seconds}s.`);
 
   window.setTimeout(() => {
     sendingSysex = false;
     el.sendSysex.disabled = false;
-    el.flashSysex.disabled = true;
+    el.flashSysex.disabled = false;
   }, sendCooldownMs);
 }
 
@@ -544,8 +540,6 @@ function buildSysex(command) {
 
 function buildSettingsSysex(command) {
   const payload = [];
-  payload.push(...packUint14(performanceSettings.ring));
-  payload.push(...packUint14(performanceSettings.noise));
   payload.push(clampInt(performanceSettings.midiInChannel, 1, 16) - 1);
   return [0xf0, SYSEX_MANUFACTURER, ...SYSEX_ID, command, ...payload, 0xf7];
 }
@@ -695,8 +689,6 @@ function updateDraggedStage(event) {
 function updatePerformanceSetting(key, value) {
   if (key === "midiInChannel") {
     performanceSettings[key] = clampInt(value, 1, 16);
-  } else if (key === "ring" || key === "noise") {
-    performanceSettings[key] = clampInt(value, 0, MAX_LEVEL);
   }
 
   savePerformanceSettings();
@@ -715,7 +707,7 @@ async function sendPerformanceSettings(command = SYSEX_COMMAND_SETTINGS) {
 
   const frame = buildSettingsSysex(command);
   output.send(frame);
-  setStatus(`Set ring ${performanceSettings.ring}, noise ${performanceSettings.noise}, MIDI in ch ${performanceSettings.midiInChannel} on ${output.name || "MIDI output"}.`);
+  setStatus(`Set MIDI input channel ${performanceSettings.midiInChannel} on ${output.name || "MIDI output"}.`);
 }
 
 el.addPreset.addEventListener("click", () => {
@@ -764,13 +756,11 @@ el.copySysex.addEventListener("click", async () => {
   }
 
   await navigator.clipboard.writeText(sysexHex());
-  setStatus(`SysEx preview frame copied for Volatile ${Number(el.customSlot.value) + 1}.`);
+  setStatus(`SysEx preview frame copied for Custom ${Number(el.customSlot.value) + 1}.`);
 });
 el.sendSysex.addEventListener("click", () => sendSysex(SYSEX_COMMAND_PREVIEW));
-el.flashSysex.addEventListener("click", () => setStatus("Flash is disabled in this RAM-only test build."));
+el.flashSysex.addEventListener("click", () => sendSysex(SYSEX_COMMAND_SAVE));
 el.sendSettings.addEventListener("click", () => sendPerformanceSettings(SYSEX_COMMAND_SETTINGS));
-el.ringControl.addEventListener("input", () => updatePerformanceSetting("ring", el.ringControl.value));
-el.noiseControl.addEventListener("input", () => updatePerformanceSetting("noise", el.noiseControl.value));
 el.midiInChannel.addEventListener("input", () => updatePerformanceSetting("midiInChannel", el.midiInChannel.value));
 el.canvas.addEventListener("pointerdown", (event) => {
   const target = findDragTarget(canvasPoint(event));
