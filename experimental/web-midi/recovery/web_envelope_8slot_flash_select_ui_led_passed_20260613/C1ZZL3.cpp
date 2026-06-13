@@ -84,6 +84,7 @@ public:
         applyPendingMidiNote();
 
         int32_t in1 = AudioIn1();
+        int32_t in2 = AudioIn2();
 
         int32_t cv1 = CVIn1();
         int32_t cv2 = CVIn2();
@@ -155,11 +156,13 @@ public:
             // -------------------------
             int32_t freq = smoothPitch(pitchFrequency(currentPitchUnits(pitchControl, in1)));
 
-            int32_t pd = clamp12(pdControl + (cv1 << 1));
-            int32_t wave = clamp12(waveControl + (cv2 << 1));
+            int32_t pd = clamp12(pdControl + (in2 << 1));
+            int32_t wave = clamp12(waveControl + (cv1 << 1));
 
-            int32_t ring = clamp12(osc2Ring);
-            int32_t noiseAmt = clamp12(osc2Noise);
+            int32_t ring =
+                clamp12(osc2Ring + (alt && cv2 > 0 ? cv2 << 1 : 0));
+            int32_t noiseAmt =
+                clamp12(osc2Noise + (alt && cv2 < 0 ? (-cv2) << 1 : 0));
 
             bool pulse2Trigger = PulseIn2RisingEdge();
             if (pulse2Trigger)
@@ -221,7 +224,7 @@ public:
             CVOut1(turingCv);
             CVOut2(turingModCv);
 
-            outputTuringSynthVoice(cv1, cv2);
+            outputTuringSynthVoice();
 
             PulseOut1(turingPulse);
             PulseOut2(turingAltPulse);
@@ -260,9 +263,6 @@ private:
     static constexpr int32_t TuringCvOffset = 512;
     static constexpr int32_t TuringAudioPitchDepth = 2048;
     static constexpr uint32_t TuringClockLedSamples = 1200u;
-    static constexpr int32_t TuringToneMin = 256;
-    static constexpr int32_t TuringToneMax = 3840;
-    static constexpr int32_t TuringCvInputLimit = 1024;
     static constexpr int32_t PitchUnitsPerOctave = 4096;
     static constexpr int32_t MainPitchOctaves = 5;
     static constexpr int32_t PitchInputCountsPerVolt = 341;
@@ -385,14 +385,14 @@ private:
         outputSynthVoice(freq, pd, wave, osc2Ring, osc2Noise);
     }
 
-    void outputTuringSynthVoice(int32_t cv1, int32_t cv2)
+    void outputTuringSynthVoice()
     {
         int32_t pitchOffset =
             (turingCv * TuringAudioPitchDepth * MainPitchOctaves) >> 12;
         int32_t freq = smoothPitch(
             pitchFrequency(pitchUnits(pitchControl, 0) + pitchOffset));
-        int32_t pd = clampTuringTone(pdControl + turingCvToneOffset(cv1));
-        int32_t wave = clampTuringTone(waveControl + turingCvToneOffset(cv2));
+        int32_t pd = clamp12(pdControl);
+        int32_t wave = clamp12(waveControl);
 
         outputSynthVoice(freq, pd, wave, osc2Ring, osc2Noise);
     }
@@ -1295,23 +1295,6 @@ private:
         if (x < 0) return 0;
         if (x > 4095) return 4095;
         return x;
-    }
-
-    int32_t clampTuringTone(int32_t x)
-    {
-        if (x < TuringToneMin) return TuringToneMin;
-        if (x > TuringToneMax) return TuringToneMax;
-        return x;
-    }
-
-    int32_t turingCvToneOffset(int32_t cv)
-    {
-        if (cv < -TuringCvInputLimit)
-            cv = -TuringCvInputLimit;
-        else if (cv > TuringCvInputLimit)
-            cv = TuringCvInputLimit;
-
-        return cv << 1;
     }
 
     void updateAltControls(int32_t main, int32_t x, int32_t y)

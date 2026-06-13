@@ -1,105 +1,80 @@
 C1ZZL3 Quick Reference
+======================
 
-Startup Envelope Preset Select
+Production candidate: Web MIDI build promoted 2026-06-13
+UF2: uf2/C1ZZL3.uf2
 
-Enter:
+Stability boundary
+------------------
+- This build is at the practical stable limit for the RP2040 card format.
+- Turing MIDI output is intentionally absent.
+- Turing clock does not continue running in synth mode.
+- When leaving Turing mode, CV/pulse outputs hold their last values.
+
+Switch middle: PD synth
+-----------------------
+Main: pitch
+X: phase distortion
+Y: wave shape
+Audio/CV In 1: 1V/oct pitch
+CV In 1: adds phase distortion
+CV In 2: adds wave control
+Audio In 2: unused
+Pulse In 2: trigger selected envelope and oscillator sync
+
+Switch down: performance edit
+-----------------------------
+Main: oscillator 2 detune
+X: ring modulation
+Y: noise/grit
+Ring/noise start neutral after reset.
+If powered with switch down, ring/noise edit is locked until the switch leaves down.
+
+Switch up: Turing
+-----------------
+Main: mutation
+X: sequence length, 2-16 steps
+Y: clock speed
+Pulse In 1: external clock
+CV Out 1: stepped Turing CV
+CV Out 2: smoothed Turing CV
+Pulse Out 1: main Turing pulse
+Pulse Out 2: alternate bit pulse
+CV In 1: clamped PD modulation
+CV In 2: clamped wave modulation
+
+Startup envelope select
+-----------------------
 Hold switch down during startup.
-Release the startup hold before selecting or exiting.
+Main selects factory presets and saved custom slots.
+Short down press exits.
+Long down hold saves selected preset.
+LED 5 marks custom slots; LEDs 0-2 show custom slot number.
 
-Controls:
-Main: select envelope preset
-LEDs 0-5: selected preset number in binary
-Short down press: exit preset select for this session
-Long down hold: save selected preset to flash
+Web MIDI
+--------
+Run editor:
+python3 -m http.server 5173 --directory web-midi/editor
 
-Presets:
-0: Off
-1: Pluck
-2: Double pluck
-3: Bounce
-4: Bell
-5: Brass
-6: Strings
-7: Reverse swell
-8: Evolving digital
+Open:
+http://localhost:5173
 
-Switch Middle: PD Synth
+Editor supports:
+- eight custom envelope slots
+- Load to RAM
+- Save to card flash
+- ring/noise/channel Set
+- browser audition
+- SysEx/C++ copy
 
-Controls:
-Main: oscillator pitch, octave-based range
-X: phase-distortion amount
-Y: waveform morph across 8 CZ-inspired waveforms
-
-Waveforms:
-1: Saw
-2: Square
-3: Needle pulse
-4: Double sine
-5: Saw-pulse curve
-6: Resonance I, saw window
-7: Resonance II, triangle window
-8: Resonance III, trapezoid window
-
-Inputs:
-Audio/CV in 1: pitch modulation, hardware-tested 1V/oct scale
-Audio/CV in 2: phase-distortion amount modulation
-CV in 1: waveform morph modulation
-CV in 2: no normal middle-mode function
-Pulse in 1: no synth-mode function
-Pulse in 2: triggers the selected envelope preset and softened oscillator sync if preset 1-8 is active
-Preset 0 ignores Pulse in 2
-Active envelope presets make the oscillator silent between triggers
-
-Outputs:
-Audio out 1: oscillator 1
-Audio out 2: oscillator 2
-CV out 1: scaled stepped Turing CV
-CV out 2: smoothed scaled Turing CV
-Pulse out 1: main Turing pulse
-Pulse out 2: alternate Turing bit pulse
-
-
-Hold Switch Down: Performance Edit
-
-Controls:
-Main: oscillator 2 detune and level from centre
-X: latched ring modulation amount
-Y: latched CZ-style noise/grit amount
-
-Notes:
-Main, X, and Y use soft pickup.
-Normal pitch, PD amount, and waveform settings are held while editing.
-Hold switch down from middle synth mode for 8 seconds to save latched detune, ring, and noise settings to flash.
-
-Inputs:
-CV in 2 positive: increases ring modulation while held
-CV in 2 negative: increases noise/grit while held
-
-Outputs:
-Same as PD Synth mode
-
-
-Switch Up: Turing Machine
-
-Controls:
-Main: mutation/lock amount; centre is most random, extremes are more locked
-X: sequence length, 2 to 16 steps
-Y: internal clock speed
-
-Inputs:
-Pulse in 1: external Turing clock
-Pulse in 2: no Turing-mode function
-
-Outputs:
-CV out 1: scaled stepped Turing CV
-CV out 2: smoothed scaled Turing CV
-Pulse out 1: main Turing pulse
-Pulse out 2: alternate Turing bit pulse
-Audio out 1: self-playing stepped oscillator 1
-Audio out 2: self-playing stepped oscillator 2
-
-Extra:
-Flick switch down from Turing mode to tap the internal clock tempo.
-The stepped voice uses the last PD synth sound, with the Turing pattern added to pitch.
-If an envelope preset is active, the main Turing pulse self-triggers it without oscillator sync.
-LED 5 flashes on every Turing clock step.
+Factory envelopes
+-----------------
+0 Off
+1 Pluck
+2 Double pluck
+3 Bounce
+4 Bell
+5 Brass
+6 Strings
+7 Reverse swell
+8 Evolving digital

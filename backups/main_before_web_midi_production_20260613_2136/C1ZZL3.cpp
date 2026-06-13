@@ -9,12 +9,11 @@
 static constexpr uint8_t WebMidiManufacturer = 0x7Du;
 static constexpr uint8_t WebMidiId[4] = {0x43u, 0x31u, 0x5Au, 0x33u}; // C1Z3
 static constexpr uint8_t WebMidiCommandPreview = 0x01u;
-static constexpr uint8_t WebMidiCommandSaveEnvelope = 0x02u;
+static constexpr uint8_t WebMidiCommandSave = 0x02u;
 static constexpr uint8_t WebMidiCommandSettings = 0x03u;
 static constexpr uint8_t WebMidiCommandSaveSettings = 0x04u;
-static constexpr uint32_t WebMidiSettingsPayloadLength = 5u;
 static constexpr uint32_t WebMidiEnvelopePayloadLength = 97u;
-static constexpr uint32_t WebMidiMaxSysexLength = 112u;
+static constexpr uint32_t WebMidiSettingsPayloadLength = 7u;
 
 class C1ZZL3 : public ComputerCard
 {
@@ -28,7 +27,6 @@ public:
         noise = 1;
 
         loadPerformanceState();
-        loadCustomEnvelopeState();
     }
 
     bool ShouldBootUsbHost()
@@ -66,24 +64,16 @@ public:
             sysexOverflow = true;
     }
 
-    uint8_t MidiInChannel() const
-    {
-        return midiInChannel;
-    }
-
-    void ProcessUsbMidiVoiceByte(uint8_t byte)
-    {
-        processMidiVoiceByte(byte);
-    }
-
     // =========================================================
     // AUDIO CALLBACK
     // =========================================================
     void ProcessSample() override
     {
+        applyPendingWebEnvelope();
         applyPendingMidiNote();
 
         int32_t in1 = AudioIn1();
+        int32_t in2 = AudioIn2();
 
         int32_t cv1 = CVIn1();
         int32_t cv2 = CVIn2();
@@ -101,30 +91,22 @@ public:
         if (envelopeSelectMode)
         {
             updateEnvelopeSelectMode(main, mode, previousMode);
+            updateWebMidiFeedback();
             lastMode = mode;
             return;
         }
 
-        if (!modePickupInitialized)
+        if (!startupSelectChecked && mode == Switch::Down)
         {
-            modePickupInitialized = true;
-            if (mode == Switch::Down)
-            {
-                resetAltPickup(main, x, y);
-                resetSaveGesture();
-                previousMode = mode;
-                lastMode = mode;
-            }
+            resetAltPickup(main, x, y);
+            resetSaveGesture();
+            lastMode = mode;
+            updateWebMidiFeedback();
+            return;
         }
-
-        if (mode != Switch::Down)
-            downEditUnlocked = true;
 
         if (previousMode == Switch::Up && mode == Switch::Down)
             tapTuringClock();
-
-        if (mode != previousMode)
-            resetModePickup(mode, previousMode, main, x, y);
         lastMode = mode;
 
         // =========================
@@ -136,7 +118,10 @@ public:
 
             if (!alt)
             {
-                updateSynthModeControls(main, x, y);
+                if (previousMode != Switch::Middle)
+                    resetSynthPickup(main, x, y);
+
+                updateSynthControls(main, x, y);
             }
             else
             {
@@ -146,8 +131,7 @@ public:
                     resetAltPickup(main, x, y);
                 }
 
-                if (downEditUnlocked)
-                    updateAltControls(main, x, y);
+                updateAltControls(main, x, y);
             }
 
             // -------------------------
@@ -155,11 +139,13 @@ public:
             // -------------------------
             int32_t freq = smoothPitch(pitchFrequency(currentPitchUnits(pitchControl, in1)));
 
-            int32_t pd = clamp12(pdControl + (cv1 << 1));
-            int32_t wave = clamp12(waveControl + (cv2 << 1));
+            int32_t pd = clamp12(pdControl + (in2 << 1));
+            int32_t wave = clamp12(waveControl + (cv1 << 1));
 
-            int32_t ring = clamp12(osc2Ring);
-            int32_t noiseAmt = clamp12(osc2Noise);
+            int32_t ring =
+                clamp12(osc2Ring + (alt && cv2 > 0 ? cv2 << 1 : 0));
+            int32_t noiseAmt =
+                clamp12(osc2Noise + (alt && cv2 < 0 ? (-cv2) << 1 : 0));
 
             bool pulse2Trigger = PulseIn2RisingEdge();
             if (pulse2Trigger)
@@ -189,10 +175,16 @@ public:
         {
             resetSaveGesture();
 
-            updateTuringModeControls(main, x, y);
+            if (previousMode != Switch::Up)
+                resetTuringPickup(main, x, y);
 
+            updateTuringControls(main, x, y);
+
+            uint32_t previousTuringLength = turingLength;
             turingLength = 2 + ((turingLengthControl * 14) >> 12);
             if (turingLength > 16) turingLength = 16;
+            if (turingLength != previousTuringLength)
+                turingLengthDisplaySamples = WebMidiFeedbackSamples;
 
             bool externalClock = PulseIn1RisingEdge();
             bool clocked = false;
@@ -207,13 +199,14 @@ public:
                 if (externalClockAge < 96000u)
                     externalClockAge++;
                 else
-                    clocked = internalTuringClock(turingClockControl);
+                    clocked = internalTuringClock(turingClockSpeedControl);
             }
 
             if (clocked)
             {
                 stepTuring(turingMutationControl);
                 triggerTuringEnvelope();
+                queueTuringMidiNote();
             }
 
             updateTuringPulseAge();
@@ -221,13 +214,15 @@ public:
             CVOut1(turingCv);
             CVOut2(turingModCv);
 
-            outputTuringSynthVoice(cv1, cv2);
+            outputTuringSynthVoice();
 
             PulseOut1(turingPulse);
             PulseOut2(turingAltPulse);
 
             updateTuringLEDs();
         }
+
+        updateWebMidiFeedback();
     }
 
 private:
@@ -241,7 +236,15 @@ private:
         Brass,
         Strings,
         ReverseSwell,
-        EvolvingDigital
+        EvolvingDigital,
+        Custom1,
+        Custom2,
+        Custom3,
+        Custom4,
+        Custom5,
+        Custom6,
+        Custom7,
+        Custom8
     };
 
     struct EnvelopeStage
@@ -260,31 +263,25 @@ private:
     static constexpr int32_t TuringCvOffset = 512;
     static constexpr int32_t TuringAudioPitchDepth = 2048;
     static constexpr uint32_t TuringClockLedSamples = 1200u;
-    static constexpr int32_t TuringToneMin = 256;
-    static constexpr int32_t TuringToneMax = 3840;
-    static constexpr int32_t TuringCvInputLimit = 1024;
     static constexpr int32_t PitchUnitsPerOctave = 4096;
     static constexpr int32_t MainPitchOctaves = 5;
     static constexpr int32_t PitchInputCountsPerVolt = 341;
     static constexpr int32_t MinPitchUnits = -2 * PitchUnitsPerOctave;
     static constexpr int32_t MaxPitchUnits = 7 * PitchUnitsPerOctave;
     static constexpr uint32_t C2PhaseIncrement = 5852465u;
-    static constexpr uint8_t EnvelopePresetCount = 9;
-    static constexpr uint8_t CustomEnvelopePreset = EnvelopePresetCount;
-    static constexpr uint8_t CustomEnvelopeSlotCount = 8;
-    static constexpr uint32_t MinWebMidiEnvelopeSamples = 960u;
-    static constexpr uint32_t MaxWebMidiStageSamples = 192000u;
+    static constexpr uint8_t FactoryEnvelopePresetCount = 9;
+    static constexpr uint8_t CustomEnvelopePresetCount = 8;
+    static constexpr uint8_t FirstCustomEnvelopePreset = (uint8_t)EnvelopePreset::Custom1;
+    static constexpr uint8_t EnvelopePresetCount =
+        FactoryEnvelopePresetCount + CustomEnvelopePresetCount;
     static constexpr uint32_t StartupSelectDelaySamples = 12000u;
     static constexpr uint32_t StartupSelectWindowSamples = 24000u;
+    static constexpr uint32_t WebMidiFeedbackSamples = 24000u;
     static constexpr uint32_t SaveMagic = 0x43315A33u; // C1Z3
-    static constexpr uint16_t SaveVersion = 2;
+    static constexpr uint16_t SaveVersion = 5;
     static constexpr uint32_t SaveFlashOffset =
         (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE) &
         ~(FLASH_SECTOR_SIZE - 1u);
-    static constexpr uint32_t CustomEnvelopeMagic = 0x4331454Eu; // C1EN
-    static constexpr uint16_t CustomEnvelopeSaveVersion = 1;
-    static constexpr uint32_t CustomEnvelopeFlashOffset =
-        SaveFlashOffset - FLASH_SECTOR_SIZE;
     static constexpr uint32_t SaveHoldSamples = 384000u;
     static constexpr uint32_t SaveConfirmSamples = 48000u;
 
@@ -298,20 +295,17 @@ private:
         int32_t osc2Ring;
         int32_t osc2Noise;
         uint8_t envelopePreset;
+        uint8_t customEnvelopePersist[CustomEnvelopePresetCount];
+        uint8_t midiInChannel;
+        uint8_t midiOutChannel;
+        uint8_t midiFlags;
         uint8_t reserved[3];
+        EnvelopeProgram customEnvelopePrograms[CustomEnvelopePresetCount];
         uint32_t checksum;
     };
 
-    struct SavedCustomEnvelopeState
-    {
-        uint32_t magic;
-        uint16_t version;
-        uint16_t size;
-        uint8_t loadedMask;
-        uint8_t reserved[7];
-        EnvelopeProgram slots[CustomEnvelopeSlotCount];
-        uint32_t checksum;
-    };
+    static_assert(sizeof(SavedPerformanceState) <= FLASH_SECTOR_SIZE,
+        "SavedPerformanceState must fit in one flash sector");
 
     // =========================================================
     // CZ OSCILLATOR
@@ -385,14 +379,14 @@ private:
         outputSynthVoice(freq, pd, wave, osc2Ring, osc2Noise);
     }
 
-    void outputTuringSynthVoice(int32_t cv1, int32_t cv2)
+    void outputTuringSynthVoice()
     {
         int32_t pitchOffset =
             (turingCv * TuringAudioPitchDepth * MainPitchOctaves) >> 12;
         int32_t freq = smoothPitch(
             pitchFrequency(pitchUnits(pitchControl, 0) + pitchOffset));
-        int32_t pd = clampTuringTone(pdControl + turingCvToneOffset(cv1));
-        int32_t wave = clampTuringTone(waveControl + turingCvToneOffset(cv2));
+        int32_t pd = clamp12(pdControl);
+        int32_t wave = clamp12(waveControl);
 
         outputSynthVoice(freq, pd, wave, osc2Ring, osc2Noise);
     }
@@ -406,26 +400,33 @@ private:
     {
         int32_t envelopeLevel = updateEnvelope();
         pd = applyEnvelopeToPd(pd, envelopeLevel);
+        wave = safeWaveControl(wave);
 
         int32_t osc1 =
             oscCZ(phase1, freq, pd, wave, noiseAmt);
 
-        int32_t freq2 =
-            applyDetune(freq, osc2Detune);
+        int32_t osc2Raw = 0;
+        int32_t osc2 = 0;
 
-        int32_t osc2 =
-            oscCZ(phase2, freq2, pd, wave, noiseAmt);
+        if (osc2Level > 0 || ring > 0)
+        {
+            int32_t freq2 =
+                applyDetune(freq, osc2Detune);
 
-        int32_t osc2Raw = osc2;
-        osc2 = (osc2Raw * osc2Level) >> 12;
+            osc2Raw = oscCZ(phase2, freq2, pd, wave, noiseAmt);
+            osc2 = (osc2Raw * osc2Level) >> 12;
+        }
 
-        int32_t ringDrive = osc2Level;
-        if (ringDrive < 2048)
-            ringDrive = 2048;
-        int32_t ringCarrier = (osc2Raw * ringDrive) >> 12;
-        int32_t ringSig = clip((osc1 * ringCarrier) >> 10);
-        int32_t ringMix = (ring * 3840) >> 12;
-        osc1 = mix(osc1, ringSig, ringMix);
+        if (ring > 0)
+        {
+            int32_t ringDrive = osc2Level;
+            if (ringDrive < 2048)
+                ringDrive = 2048;
+            int32_t ringCarrier = (osc2Raw * ringDrive) >> 12;
+            int32_t ringSig = clip((osc1 * ringCarrier) >> 10);
+            int32_t ringMix = (ring * 3840) >> 12;
+            osc1 = mix(osc1, ringSig, ringMix);
+        }
 
         int32_t ampScale = envelopeAmpScale(envelopeLevel);
         ampScale = (ampScale * updateSyncFade()) >> 12;
@@ -454,6 +455,9 @@ private:
         int32_t pdCurve = responseCurve(noisyPd);
 
         int32_t sine = getSine(renderPhase);
+        if (pdCurve == 0)
+            return sine;
+
         int32_t target = morphWave(renderPhase, wave);
 
         return mix(sine, target, pdCurve);
@@ -468,12 +472,22 @@ private:
             heldPhaseNoise = ((int32_t)fastNoise() - 128);
         }
 
-        int32_t noiseCurve = (responseCurve(amount) * 11) / 20;
+        int32_t noiseCurve = (responseCurve(amount) * 563) >> 10;
         int32_t pdJitter = (heldPdNoise * noiseCurve) >> 10;
         int32_t phaseJitter = heldPhaseNoise * (noiseCurve >> 6);
 
         pd = clamp12(pd + pdJitter);
         phase += (uint32_t)phaseJitter;
+    }
+
+    int32_t safeWaveControl(int32_t wave)
+    {
+        wave = clamp12(wave);
+
+        if (wave > 3984)
+            return 3984;
+
+        return wave;
     }
 
     void triggerEnvelope()
@@ -503,7 +517,7 @@ private:
         if (envelopePreset == (uint8_t)EnvelopePreset::Off || !envelopeActive)
             return 0;
 
-        const EnvelopeProgram& program = envelopeProgram();
+        EnvelopeProgram program = envelopeProgram();
 
         bool ampDone = updateEnvelopeRunner(
             program.amp,
@@ -541,6 +555,123 @@ private:
             return 4095;
 
         return clamp12(level);
+    }
+
+    EnvelopeProgram envelopeProgram()
+    {
+        uint8_t preset = envelopePreset;
+        if (preset >= FirstCustomEnvelopePreset && preset < EnvelopePresetCount)
+        {
+            uint8_t customSlot = preset - FirstCustomEnvelopePreset;
+            if (customEnvelopeValid[customSlot])
+                return customEnvelopePrograms[customSlot];
+        }
+
+        switch ((EnvelopePreset)envelopePreset)
+        {
+            case EnvelopePreset::Pluck:
+                return {{
+                    {4095, 480}, {0, 12000}, {0, 1}, {0, 1},
+                    {0, 1}, {0, 1}, {0, 1}, {0, 1}
+                }, {
+                    {1024, 480}, {0, 12000}, {0, 1}, {0, 1},
+                    {0, 1}, {0, 1}, {0, 1}, {0, 1}
+                }};
+            case EnvelopePreset::DoublePluck:
+                return {{
+                    {4095, 180}, {700, 4800}, {0, 2400}, {3600, 180},
+                    {900, 6000}, {350, 6000}, {120, 6000}, {0, 12000}
+                }, {
+                    {1600, 180}, {500, 4800}, {0, 2400}, {2200, 180},
+                    {700, 6000}, {300, 6000}, {120, 6000}, {0, 12000}
+                }};
+            case EnvelopePreset::Bounce:
+                return {{
+                    {4095, 120}, {1200, 3600}, {3300, 3600}, {1700, 4800},
+                    {2600, 4800}, {900, 7200}, {1600, 7200}, {0, 12000}
+                }, {
+                    {2500, 120}, {800, 3600}, {2200, 3600}, {700, 4800},
+                    {1600, 4800}, {500, 7200}, {1200, 7200}, {0, 12000}
+                }};
+            case EnvelopePreset::Bell:
+                return {{
+                    {4095, 240}, {2600, 12000}, {1200, 24000}, {0, 36000},
+                    {0, 1}, {0, 1}, {0, 1}, {0, 1}
+                }, {
+                    {2048, 240}, {1600, 6000}, {700, 24000}, {0, 42000},
+                    {0, 1}, {0, 1}, {0, 1}, {0, 1}
+                }};
+            case EnvelopePreset::Brass:
+                return {{
+                    {4095, 4800}, {3400, 30000}, {0, 18000}, {0, 1},
+                    {0, 1}, {0, 1}, {0, 1}, {0, 1}
+                }, {
+                    {1792, 4800}, {900, 30000}, {0, 18000}, {0, 1},
+                    {0, 1}, {0, 1}, {0, 1}, {0, 1}
+                }};
+            case EnvelopePreset::Strings:
+                return {{
+                    {2200, 24000}, {3600, 24000}, {3800, 48000}, {3600, 48000},
+                    {3400, 48000}, {3000, 48000}, {1800, 48000}, {0, 96000}
+                }, {
+                    {400, 12000}, {900, 36000}, {1200, 36000}, {900, 48000},
+                    {700, 48000}, {500, 48000}, {400, 48000}, {300, 96000}
+                }};
+            case EnvelopePreset::ReverseSwell:
+                return {{
+                    {200, 12000}, {900, 18000}, {1800, 18000}, {3000, 18000},
+                    {4095, 12000}, {2600, 2400}, {900, 2400}, {0, 4800}
+                }, {
+                    {200, 12000}, {500, 18000}, {1000, 18000}, {1800, 18000},
+                    {2600, 12000}, {1300, 2400}, {500, 2400}, {0, 4800}
+                }};
+            case EnvelopePreset::EvolvingDigital:
+                return {{
+                    {4095, 480}, {3900, 12000}, {3800, 12000}, {3600, 12000},
+                    {3200, 18000}, {2600, 18000}, {1600, 24000}, {0, 36000}
+                }, {
+                    {3000, 480}, {800, 12000}, {3600, 12000}, {1200, 12000},
+                    {2600, 18000}, {600, 18000}, {1800, 24000}, {0, 36000}
+                }};
+            case EnvelopePreset::Off:
+            default:
+                return {{
+                    {0, 1}, {0, 1}, {0, 1}, {0, 1},
+                    {0, 1}, {0, 1}, {0, 1}, {0, 1}
+                }, {
+                    {0, 1}, {0, 1}, {0, 1}, {0, 1},
+                    {0, 1}, {0, 1}, {0, 1}, {0, 1}
+                }};
+        }
+    }
+
+    bool updateEnvelopeRunner(
+        const EnvelopeStage* stages,
+        uint8_t& stage,
+        uint32_t& sample,
+        int32_t& level,
+        int32_t& startLevel)
+    {
+        if (stage >= 8)
+            return true;
+
+        uint32_t time = stages[stage].time;
+        if (time == 0)
+            time = 1;
+
+        sample++;
+        int32_t target = stages[stage].level;
+        level = startLevel + (((target - startLevel) * (int32_t)sample) / (int32_t)time);
+
+        if (sample >= time)
+        {
+            level = target;
+            stage++;
+            sample = 0;
+            startLevel = level;
+        }
+
+        return stage >= 8;
     }
 
     void processMidiVoiceByte(uint8_t byte)
@@ -629,247 +760,249 @@ private:
         return ((int32_t)note - 36) * PitchUnitsPerOctave / 12;
     }
 
-    void handleWebMidiSysex()
+    void queueTuringMidiNote()
     {
-        if (!webMidiHeaderMatches())
+        if (!turingMidiOutEnabled)
             return;
 
-        uint8_t command = sysexBuffer[5];
+        pendingMidiOutNote = 36u + (uint8_t)(((uint32_t)clamp12(turingCv) * 48u) >> 12);
+        pendingMidiOutVelocity = turingPulse ? 100u : 48u;
+        if (activeMidiOutNote < 128u)
+            pendingMidiOutOff = true;
+        pendingMidiOutOn = true;
+        turingMidiGateSamples = TuringClockLedSamples;
+    }
 
-        if (command == WebMidiCommandSettings ||
-            command == WebMidiCommandSaveSettings)
+public:
+    bool TakePendingMidiOut(uint8_t& channel, uint8_t& note, uint8_t& velocity, bool& on)
+    {
+        if (pendingMidiOutOff)
         {
-            handleWebMidiSettings();
+            pendingMidiOutOff = false;
+            channel = midiOutChannel;
+            note = activeMidiOutNote;
+            velocity = 0;
+            on = false;
+            bool valid = activeMidiOutNote < 128u;
+            activeMidiOutNote = 255u;
+            return valid;
+        }
+
+        if (pendingMidiOutOn)
+        {
+            pendingMidiOutOn = false;
+            channel = midiOutChannel;
+            note = pendingMidiOutNote;
+            velocity = pendingMidiOutVelocity;
+            activeMidiOutNote = note;
+            on = true;
+            return true;
+        }
+
+        return false;
+    }
+
+private:
+    void handleWebMidiSysex()
+    {
+        if (sysexLength < 6u)
+        {
+            flashWebMidiRejected();
             return;
         }
 
-        if (command == WebMidiCommandPreview ||
-            command == WebMidiCommandSaveEnvelope)
-            handleWebMidiEnvelope(command == WebMidiCommandSaveEnvelope);
-    }
-
-    bool webMidiHeaderMatches()
-    {
-        if (sysexLength < 6u)
-            return false;
-
         if (sysexBuffer[0] != WebMidiManufacturer)
-            return false;
+        {
+            flashWebMidiRejected();
+            return;
+        }
 
         for (uint32_t i = 0; i < 4u; ++i)
         {
             if (sysexBuffer[1u + i] != WebMidiId[i])
+            {
+                flashWebMidiRejected();
+                return;
+            }
+        }
+
+        uint8_t command = sysexBuffer[5];
+        if (command == WebMidiCommandPreview || command == WebMidiCommandSave)
+        {
+            handleWebMidiEnvelope(command);
+            return;
+        }
+
+        if (command == WebMidiCommandSettings || command == WebMidiCommandSaveSettings)
+        {
+            handleWebMidiSettings(command);
+            return;
+        }
+
+        flashWebMidiRejected();
+    }
+
+    void handleWebMidiEnvelope(uint8_t command)
+    {
+        if (sysexLength != WebMidiEnvelopePayloadLength + 6u)
+        {
+            flashWebMidiRejected();
+            return;
+        }
+
+        uint8_t customSlot = sysexBuffer[6];
+        if (customSlot >= CustomEnvelopePresetCount)
+        {
+            flashWebMidiRejected();
+            return;
+        }
+
+        EnvelopeProgram decoded;
+        uint32_t offset = 6u + 1u + 16u;
+
+        if (!decodeWebMidiStages(decoded.amp, offset))
+        {
+            flashWebMidiRejected();
+            return;
+        }
+
+        if (!hasAudibleAmpStage(decoded.amp))
+        {
+            flashWebMidiRejected();
+            return;
+        }
+
+        if (!decodeWebMidiStages(decoded.pd, offset))
+        {
+            flashWebMidiRejected();
+            return;
+        }
+
+        customEnvelopePrograms[customSlot] = decoded;
+        customEnvelopeValid[customSlot] = true;
+        pendingWebEnvelopeSlot = customSlot;
+        pendingWebEnvelopeShouldSave = command == WebMidiCommandSave;
+
+        if (pendingWebEnvelopeShouldSave)
+        {
+            customEnvelopePersist[customSlot] = true;
+            savePerformanceStateIfChanged();
+        }
+
+        pendingWebEnvelopeReady = true;
+        flashWebMidiAccepted();
+    }
+
+    void handleWebMidiSettings(uint8_t command)
+    {
+        if (sysexLength != WebMidiSettingsPayloadLength + 6u)
+        {
+            flashWebMidiRejected();
+            return;
+        }
+
+        uint32_t ring =
+            ((uint32_t)sysexBuffer[6]) |
+            ((uint32_t)sysexBuffer[7] << 7);
+        uint32_t noiseAmt =
+            ((uint32_t)sysexBuffer[8]) |
+            ((uint32_t)sysexBuffer[9] << 7);
+        uint8_t inChannel = sysexBuffer[10];
+        uint8_t outChannel = sysexBuffer[11];
+        uint8_t flags = sysexBuffer[12];
+
+        if (ring > 4095u || noiseAmt > 4095u || inChannel > 15u || outChannel > 15u)
+        {
+            flashWebMidiRejected();
+            return;
+        }
+
+        osc2Ring = ring;
+        osc2Noise = noiseAmt;
+        midiInChannel = inChannel;
+        midiOutChannel = outChannel;
+        turingMidiOutEnabled = (flags & 1u) != 0;
+
+        if (command == WebMidiCommandSaveSettings)
+            savePerformanceStateIfChanged();
+
+        flashWebMidiAccepted();
+    }
+
+    bool decodeWebMidiStages(EnvelopeStage* stages, uint32_t& offset)
+    {
+        for (uint32_t i = 0; i < 8u; ++i)
+        {
+            uint32_t level =
+                ((uint32_t)sysexBuffer[offset]) |
+                ((uint32_t)sysexBuffer[offset + 1u] << 7);
+            offset += 2u;
+
+            uint32_t time =
+                ((uint32_t)sysexBuffer[offset]) |
+                ((uint32_t)sysexBuffer[offset + 1u] << 7) |
+                ((uint32_t)sysexBuffer[offset + 2u] << 14);
+            offset += 3u;
+
+            if (level > 4095u)
                 return false;
+
+            if (time == 0u)
+                time = 1u;
+
+            stages[i].level = (uint16_t)level;
+            stages[i].time = time;
         }
 
         return true;
     }
 
-    void handleWebMidiSettings()
+    bool hasAudibleAmpStage(const EnvelopeStage* stages)
     {
-        if (sysexLength != WebMidiSettingsPayloadLength + 6u)
-            return;
-
-        uint32_t offset = 6;
-        int32_t ring = decodeWebMidiUint14(offset);
-        int32_t noise = decodeWebMidiUint14(offset);
-        uint8_t channel = sysexBuffer[offset] & 0x0Fu;
-
-        osc2Ring = ring;
-        osc2Noise = noise;
-        midiInChannel = channel;
-    }
-
-    void handleWebMidiEnvelope(bool persist)
-    {
-        if (sysexLength != WebMidiEnvelopePayloadLength + 6u)
-            return;
-
-        uint32_t offset = 6;
-        uint8_t slot = sysexBuffer[offset++] & 0x07u;
-        offset += 16; // Names stay in the browser; firmware stores shape only.
-
-        EnvelopeProgram next = {};
-        uint32_t ampTotal = 0;
-        uint16_t ampMax = 0;
-
         for (uint32_t i = 0; i < 8u; ++i)
         {
-            uint16_t level = decodeWebMidiUint14(offset);
-            uint32_t time = decodeWebMidiUint21(offset);
-            next.amp[i] = {level, time};
-            ampTotal += time;
-            if (level > ampMax)
-                ampMax = level;
+            if (stages[i].level > 0)
+                return true;
         }
 
-        for (uint32_t i = 0; i < 8u; ++i)
-        {
-            uint16_t level = decodeWebMidiUint14(offset);
-            uint32_t time = decodeWebMidiUint21(offset);
-            next.pd[i] = {level, time};
-        }
+        return false;
+    }
 
-        if (ampMax == 0 || ampTotal < MinWebMidiEnvelopeSamples)
+    void applyPendingWebEnvelope()
+    {
+        if (!pendingWebEnvelopeReady)
             return;
 
-        customEnvelopes[slot] = next;
-        customEnvelopeLoaded[slot] = true;
-        envelopePreset = CustomEnvelopePreset + slot;
-        envelopeActive = false;
+        uint8_t customSlot = pendingWebEnvelopeSlot;
+        if (customSlot >= CustomEnvelopePresetCount)
+            customSlot = 0;
 
-        if (persist)
-            saveCustomEnvelopeState();
-    }
+        pendingWebEnvelopeReady = false;
+        envelopePreset = FirstCustomEnvelopePreset + customSlot;
+        triggerEnvelope();
 
-    int32_t decodeWebMidiUint14(uint32_t& offset)
-    {
-        int32_t value =
-            (int32_t)(sysexBuffer[offset] & 0x7Fu) |
-            ((int32_t)(sysexBuffer[offset + 1] & 0x7Fu) << 7);
-        offset += 2;
-        return clamp12(value);
-    }
-
-    uint32_t decodeWebMidiUint21(uint32_t& offset)
-    {
-        uint32_t value =
-            (uint32_t)(sysexBuffer[offset] & 0x7Fu) |
-            ((uint32_t)(sysexBuffer[offset + 1] & 0x7Fu) << 7) |
-            ((uint32_t)(sysexBuffer[offset + 2] & 0x7Fu) << 14);
-        offset += 3;
-
-        if (value < 1u)
-            return 1u;
-        if (value > MaxWebMidiStageSamples)
-            return MaxWebMidiStageSamples;
-        return value;
-    }
-
-    const EnvelopeProgram& envelopeProgram()
-    {
-        static const EnvelopeProgram pluck = {{
-            {4095, 480}, {0, 12000}, {0, 1}, {0, 1},
-            {0, 1}, {0, 1}, {0, 1}, {0, 1}
-        }, {
-            {1024, 480}, {0, 12000}, {0, 1}, {0, 1},
-            {0, 1}, {0, 1}, {0, 1}, {0, 1}
-        }};
-
-        static const EnvelopeProgram doublePluck = {{
-            {4095, 180}, {700, 4800}, {0, 2400}, {3600, 180},
-            {900, 6000}, {350, 6000}, {120, 6000}, {0, 12000}
-        }, {
-            {1600, 180}, {500, 4800}, {0, 2400}, {2200, 180},
-            {700, 6000}, {300, 6000}, {120, 6000}, {0, 12000}
-        }};
-
-        static const EnvelopeProgram bounce = {{
-            {4095, 120}, {1200, 3600}, {3300, 3600}, {1700, 4800},
-            {2600, 4800}, {900, 7200}, {1600, 7200}, {0, 12000}
-        }, {
-            {2500, 120}, {800, 3600}, {2200, 3600}, {700, 4800},
-            {1600, 4800}, {500, 7200}, {1200, 7200}, {0, 12000}
-        }};
-
-        static const EnvelopeProgram bell = {{
-            {4095, 240}, {2600, 12000}, {1200, 24000}, {0, 36000},
-            {0, 1}, {0, 1}, {0, 1}, {0, 1}
-        }, {
-            {2048, 240}, {1600, 6000}, {700, 24000}, {0, 42000},
-            {0, 1}, {0, 1}, {0, 1}, {0, 1}
-        }};
-
-        static const EnvelopeProgram brass = {{
-            {4095, 4800}, {3400, 30000}, {0, 18000}, {0, 1},
-            {0, 1}, {0, 1}, {0, 1}, {0, 1}
-        }, {
-            {1792, 4800}, {900, 30000}, {0, 18000}, {0, 1},
-            {0, 1}, {0, 1}, {0, 1}, {0, 1}
-        }};
-
-        static const EnvelopeProgram strings = {{
-            {2200, 24000}, {3600, 24000}, {3800, 48000}, {3600, 48000},
-            {3400, 48000}, {3000, 48000}, {1800, 48000}, {0, 96000}
-        }, {
-            {400, 12000}, {900, 36000}, {1200, 36000}, {900, 48000},
-            {700, 48000}, {500, 48000}, {400, 48000}, {300, 96000}
-        }};
-
-        static const EnvelopeProgram reverseSwell = {{
-            {200, 12000}, {900, 18000}, {1800, 18000}, {3000, 18000},
-            {4095, 12000}, {2600, 2400}, {900, 2400}, {0, 4800}
-        }, {
-            {200, 12000}, {500, 18000}, {1000, 18000}, {1800, 18000},
-            {2600, 12000}, {1300, 2400}, {500, 2400}, {0, 4800}
-        }};
-
-        static const EnvelopeProgram evolvingDigital = {{
-            {4095, 480}, {3900, 12000}, {3800, 12000}, {3600, 12000},
-            {3200, 18000}, {2600, 18000}, {1600, 24000}, {0, 36000}
-        }, {
-            {3000, 480}, {800, 12000}, {3600, 12000}, {1200, 12000},
-            {2600, 18000}, {600, 18000}, {1800, 24000}, {0, 36000}
-        }};
-
-        static const EnvelopeProgram off = {{
-            {0, 1}, {0, 1}, {0, 1}, {0, 1},
-            {0, 1}, {0, 1}, {0, 1}, {0, 1}
-        }, {
-            {0, 1}, {0, 1}, {0, 1}, {0, 1},
-            {0, 1}, {0, 1}, {0, 1}, {0, 1}
-        }};
-
-        if (envelopePreset >= CustomEnvelopePreset)
+        if (pendingWebEnvelopeShouldSave)
         {
-            uint8_t slot = envelopePreset - CustomEnvelopePreset;
-            if (slot < CustomEnvelopeSlotCount && customEnvelopeLoaded[slot])
-                return customEnvelopes[slot];
+            customEnvelopePersist[customSlot] = true;
+            pendingWebEnvelopeShouldSave = false;
+        }
+        else
+        {
+            customEnvelopePersist[customSlot] = false;
         }
 
-        switch ((EnvelopePreset)envelopePreset)
-        {
-            case EnvelopePreset::Pluck: return pluck;
-            case EnvelopePreset::DoublePluck: return doublePluck;
-            case EnvelopePreset::Bounce: return bounce;
-            case EnvelopePreset::Bell: return bell;
-            case EnvelopePreset::Brass: return brass;
-            case EnvelopePreset::Strings: return strings;
-            case EnvelopePreset::ReverseSwell: return reverseSwell;
-            case EnvelopePreset::EvolvingDigital: return evolvingDigital;
-            case EnvelopePreset::Off:
-            default:
-                return off;
-        }
     }
 
-    bool updateEnvelopeRunner(
-        const EnvelopeStage* stages,
-        uint8_t& stage,
-        uint32_t& sample,
-        int32_t& level,
-        int32_t& startLevel)
+    void flashWebMidiAccepted()
     {
-        if (stage >= 8)
-            return true;
+        webMidiFeedbackKind = 1;
+        webMidiFeedbackSamples = WebMidiFeedbackSamples;
+    }
 
-        uint32_t time = stages[stage].time;
-        if (time == 0)
-            time = 1;
-
-        sample++;
-        int32_t target = stages[stage].level;
-        level = startLevel + (((target - startLevel) * (int32_t)sample) / (int32_t)time);
-
-        if (sample >= time)
-        {
-            level = target;
-            stage++;
-            sample = 0;
-            startLevel = level;
-        }
-
-        return stage >= 8;
+    void flashWebMidiRejected()
+    {
+        webMidiFeedbackKind = 2;
+        webMidiFeedbackSamples = WebMidiFeedbackSamples;
     }
 
     inline int32_t morphWave(uint32_t phase, int32_t wave)
@@ -886,17 +1019,12 @@ private:
 
     inline int32_t czWave(uint32_t phase, uint32_t wave)
     {
-        int32_t saw = ((int32_t)(phase >> 20) & 4095) - 2048;
-        int32_t square = (phase & 0x80000000u) ? 2047 : -2048;
-        int32_t pulse = narrowPulseWave(phase);
-        int32_t doubleSine = getSine(phase << 1);
-
         switch (wave)
         {
-            case 0: return saw;
-            case 1: return square;
-            case 2: return pulse;
-            case 3: return doubleSine;
+            case 0: return ((int32_t)(phase >> 20) & 4095) - 2048;
+            case 1: return (phase & 0x80000000u) ? 2047 : -2048;
+            case 2: return narrowPulseWave(phase);
+            case 3: return getSine(phase << 1);
             case 4: return sawPulseWave(phase);
             case 5: return resonantSawWindowWave(phase);
             case 6: return resonantTriangleWindowWave(phase);
@@ -1040,6 +1168,9 @@ private:
         if (turingClockLedAge < TuringClockLedSamples)
             turingClockLedAge++;
 
+        if (turingMidiGateSamples > 0 && --turingMidiGateSamples == 0)
+            pendingMidiOutOff = true;
+
         if ((turingPulse || turingAltPulse) && ++turingPulseAge > 1200)
         {
             turingPulse = false;
@@ -1067,6 +1198,14 @@ private:
 
     void updateTuringLEDs()
     {
+        if (turingLengthDisplaySamples > 0)
+        {
+            turingLengthDisplaySamples--;
+            for (uint32_t i = 0; i < 6; ++i)
+                LedBrightness(i, (turingLength & (1u << i)) ? 4095 : 0);
+            return;
+        }
+
         LedBrightness(0, turing & 1 ? 4095 : 0);
         LedBrightness(1, turing & 2 ? 4095 : 0);
         LedBrightness(2, turing & 4 ? 4095 : 0);
@@ -1083,6 +1222,30 @@ private:
         LedBrightness(3, osc2Ring);
         LedBrightness(4, osc2Noise);
         LedBrightness(5, alt ? 4095 : 0);
+    }
+
+    void updateWebMidiFeedback()
+    {
+        if (webMidiFeedbackSamples == 0)
+            return;
+
+        uint32_t age = WebMidiFeedbackSamples - webMidiFeedbackSamples;
+        webMidiFeedbackSamples--;
+
+        if (webMidiFeedbackKind == 1)
+        {
+            bool on = (age & 2048u) < 1536u;
+            for (uint32_t i = 0; i < 6; ++i)
+                LedBrightness(i, on ? 4095 : 0);
+            return;
+        }
+
+        bool phase = (age & 2048u) != 0;
+        for (uint32_t i = 0; i < 6; ++i)
+        {
+            bool even = (i & 1u) == 0;
+            LedBrightness(i, even == phase ? 4095 : 0);
+        }
     }
 
     void updateStartupEnvelopeSelect(Switch mode)
@@ -1115,9 +1278,12 @@ private:
         PulseOut1(false);
         PulseOut2(false);
 
-        uint8_t selectedIndex =
-            (uint8_t)(((uint32_t)clamp12(main) * selectableEnvelopeCount()) >> 12);
-        envelopePreset = envelopePresetForSelection(selectedIndex);
+        uint8_t selected =
+            (uint8_t)(((uint32_t)clamp12(main) * EnvelopePresetCount) >> 12);
+        if (selected >= EnvelopePresetCount)
+            selected = EnvelopePresetCount - 1;
+
+        envelopePreset = selected;
         showEnvelopePresetLeds(envelopePreset);
 
         bool down = mode == Switch::Down;
@@ -1163,64 +1329,8 @@ private:
 
     void showEnvelopePresetLeds(uint8_t preset)
     {
-        if (preset >= CustomEnvelopePreset)
-        {
-            uint8_t slot = (preset - CustomEnvelopePreset) + 1u;
-            LedBrightness(0, slot & 1u ? 4095 : 0);
-            LedBrightness(1, slot & 2u ? 4095 : 0);
-            LedBrightness(2, slot & 4u ? 4095 : 0);
-            LedBrightness(3, 0);
-            LedBrightness(4, 0);
-            LedBrightness(5, 4095);
-            return;
-        }
-
         for (uint32_t i = 0; i < 6; ++i)
             LedBrightness(i, (preset & (1u << i)) ? 4095 : 0);
-    }
-
-    uint8_t selectableEnvelopeCount()
-    {
-        return EnvelopePresetCount + loadedCustomEnvelopeCount();
-    }
-
-    uint8_t loadedCustomEnvelopeCount()
-    {
-        uint8_t count = 0;
-        for (uint32_t i = 0; i < CustomEnvelopeSlotCount; ++i)
-        {
-            if (customEnvelopeLoaded[i])
-                count++;
-        }
-
-        return count;
-    }
-
-    uint8_t envelopePresetForSelection(uint8_t selected)
-    {
-        uint8_t count = selectableEnvelopeCount();
-        if (count == 0)
-            return (uint8_t)EnvelopePreset::Off;
-
-        if (selected >= count)
-            selected = count - 1;
-
-        if (selected < EnvelopePresetCount)
-            return selected;
-
-        uint8_t customIndex = selected - EnvelopePresetCount;
-        for (uint32_t slot = 0; slot < CustomEnvelopeSlotCount; ++slot)
-        {
-            if (!customEnvelopeLoaded[slot])
-                continue;
-
-            if (customIndex == 0)
-                return CustomEnvelopePreset + slot;
-
-            customIndex--;
-        }
-
-        return (uint8_t)EnvelopePreset::Off;
     }
 
     void resetEnvelopeSelectHold()
@@ -1297,23 +1407,6 @@ private:
         return x;
     }
 
-    int32_t clampTuringTone(int32_t x)
-    {
-        if (x < TuringToneMin) return TuringToneMin;
-        if (x > TuringToneMax) return TuringToneMax;
-        return x;
-    }
-
-    int32_t turingCvToneOffset(int32_t cv)
-    {
-        if (cv < -TuringCvInputLimit)
-            cv = -TuringCvInputLimit;
-        else if (cv > TuringCvInputLimit)
-            cv = TuringCvInputLimit;
-
-        return cv << 1;
-    }
-
     void updateAltControls(int32_t main, int32_t x, int32_t y)
     {
         if (altMainPickedUp ||
@@ -1335,64 +1428,6 @@ private:
         if (altYPickedUp ||
             pickupAltControl(y, altYEntry, osc2Noise, altYPickedUp))
             osc2Noise = y;
-    }
-
-    void updateSynthModeControls(int32_t main, int32_t x, int32_t y)
-    {
-        if (synthMainPickedUp ||
-            pickupModeControl(main, synthMainEntry, pitchControl, synthMainPickedUp))
-            pitchControl = main;
-
-        if (synthXPickedUp ||
-            pickupModeControl(x, synthXEntry, pdControl, synthXPickedUp))
-            pdControl = x;
-
-        if (synthYPickedUp ||
-            pickupModeControl(y, synthYEntry, waveControl, synthYPickedUp))
-            waveControl = y;
-    }
-
-    void updateTuringModeControls(int32_t main, int32_t x, int32_t y)
-    {
-        if (turingMainPickedUp ||
-            pickupModeControl(main, turingMainEntry, turingMutationControl, turingMainPickedUp))
-            turingMutationControl = main;
-
-        if (turingXPickedUp ||
-            pickupModeControl(x, turingXEntry, turingLengthControl, turingXPickedUp))
-            turingLengthControl = x;
-
-        if (turingYPickedUp ||
-            pickupModeControl(y, turingYEntry, turingClockControl, turingYPickedUp))
-            turingClockControl = y;
-    }
-
-    void resetModePickup(Switch mode, Switch previousMode, int32_t main, int32_t x, int32_t y)
-    {
-        if (mode == Switch::Middle && previousMode != Switch::Middle)
-            resetSynthPickup(main, x, y);
-        else if (mode == Switch::Up && previousMode != Switch::Up)
-            resetTuringPickup(main, x, y);
-    }
-
-    void resetSynthPickup(int32_t main, int32_t x, int32_t y)
-    {
-        synthMainPickedUp = false;
-        synthXPickedUp = false;
-        synthYPickedUp = false;
-        synthMainEntry = main;
-        synthXEntry = x;
-        synthYEntry = y;
-    }
-
-    void resetTuringPickup(int32_t main, int32_t x, int32_t y)
-    {
-        turingMainPickedUp = false;
-        turingXPickedUp = false;
-        turingYPickedUp = false;
-        turingMainEntry = main;
-        turingXEntry = x;
-        turingYEntry = y;
     }
 
     void resetAltPickup(int32_t main, int32_t x, int32_t y)
@@ -1421,7 +1456,57 @@ private:
         return pickedUp;
     }
 
-    bool pickupModeControl(int32_t knob, int32_t entry, int32_t target, bool& pickedUp)
+    void updateSynthControls(int32_t main, int32_t x, int32_t y)
+    {
+        if (synthMainPickedUp ||
+            pickupControl(main, synthMainEntry, pitchControl, synthMainPickedUp))
+            pitchControl = main;
+
+        if (synthXPickedUp ||
+            pickupControl(x, synthXEntry, pdControl, synthXPickedUp))
+            pdControl = x;
+
+        if (synthYPickedUp ||
+            pickupControl(y, synthYEntry, waveControl, synthYPickedUp))
+            waveControl = y;
+    }
+
+    void resetSynthPickup(int32_t main, int32_t x, int32_t y)
+    {
+        synthMainPickedUp = false;
+        synthXPickedUp = false;
+        synthYPickedUp = false;
+        synthMainEntry = main;
+        synthXEntry = x;
+        synthYEntry = y;
+    }
+
+    void updateTuringControls(int32_t main, int32_t x, int32_t y)
+    {
+        if (turingMainPickedUp ||
+            pickupControl(main, turingMainEntry, turingMutationControl, turingMainPickedUp))
+            turingMutationControl = main;
+
+        if (turingXPickedUp ||
+            pickupControl(x, turingXEntry, turingLengthControl, turingXPickedUp))
+            turingLengthControl = x;
+
+        if (turingYPickedUp ||
+            pickupControl(y, turingYEntry, turingClockSpeedControl, turingYPickedUp))
+            turingClockSpeedControl = y;
+    }
+
+    void resetTuringPickup(int32_t main, int32_t x, int32_t y)
+    {
+        turingMainPickedUp = false;
+        turingXPickedUp = false;
+        turingYPickedUp = false;
+        turingMainEntry = main;
+        turingXEntry = x;
+        turingYEntry = y;
+    }
+
+    bool pickupControl(int32_t knob, int32_t entry, int32_t target, bool& pickedUp)
     {
         int32_t moved = knob - entry;
         if (moved < 0)
@@ -1445,12 +1530,19 @@ private:
         state.size = sizeof(SavedPerformanceState);
         state.osc2Detune = osc2Detune;
         state.osc2Level = osc2Level;
-        state.osc2Ring = 0;
-        state.osc2Noise = 0;
-        state.envelopePreset =
-            envelopePreset < EnvelopePresetCount ?
+        state.osc2Ring = osc2Ring;
+        state.osc2Noise = osc2Noise;
+        state.envelopePreset = envelopePreset < FactoryEnvelopePresetCount ?
             envelopePreset :
             (uint8_t)EnvelopePreset::Off;
+        state.midiInChannel = midiInChannel;
+        state.midiOutChannel = midiOutChannel;
+        state.midiFlags = turingMidiOutEnabled ? 1u : 0u;
+        for (uint32_t i = 0; i < CustomEnvelopePresetCount; ++i)
+        {
+            state.customEnvelopePersist[i] = customEnvelopePersist[i] ? 1 : 0;
+            state.customEnvelopePrograms[i] = customEnvelopePrograms[i];
+        }
         state.reserved[0] = 0;
         state.reserved[1] = 0;
         state.reserved[2] = 0;
@@ -1474,58 +1566,10 @@ private:
         return checksum;
     }
 
-    SavedCustomEnvelopeState currentCustomEnvelopeState()
-    {
-        SavedCustomEnvelopeState state = {};
-        state.magic = CustomEnvelopeMagic;
-        state.version = CustomEnvelopeSaveVersion;
-        state.size = sizeof(SavedCustomEnvelopeState);
-        state.loadedMask = customEnvelopeMask();
-
-        for (uint32_t i = 0; i < CustomEnvelopeSlotCount; ++i)
-            state.slots[i] = customEnvelopes[i];
-
-        state.checksum = 0;
-        state.checksum = checksumCustomEnvelopeState(state);
-        return state;
-    }
-
-    uint8_t customEnvelopeMask()
-    {
-        uint8_t mask = 0;
-        for (uint32_t i = 0; i < CustomEnvelopeSlotCount; ++i)
-        {
-            if (customEnvelopeLoaded[i])
-                mask |= 1u << i;
-        }
-
-        return mask;
-    }
-
-    uint32_t checksumCustomEnvelopeState(const SavedCustomEnvelopeState& state)
-    {
-        const uint8_t* bytes = reinterpret_cast<const uint8_t*>(&state);
-        uint32_t checksum = 2166136261u;
-
-        for (uint32_t i = 0; i < sizeof(SavedCustomEnvelopeState) - sizeof(uint32_t); ++i)
-        {
-            checksum ^= bytes[i];
-            checksum *= 16777619u;
-        }
-
-        return checksum;
-    }
-
     const SavedPerformanceState& flashPerformanceState()
     {
         return *reinterpret_cast<const SavedPerformanceState*>(
             XIP_BASE + SaveFlashOffset);
-    }
-
-    const SavedCustomEnvelopeState& flashCustomEnvelopeState()
-    {
-        return *reinterpret_cast<const SavedCustomEnvelopeState*>(
-            XIP_BASE + CustomEnvelopeFlashOffset);
     }
 
     bool isValidSavedState(const SavedPerformanceState& state)
@@ -1537,41 +1581,45 @@ private:
             state.checksum == checksumState(state);
     }
 
-    bool isValidCustomEnvelopeState(const SavedCustomEnvelopeState& state)
+    bool savedStateMatches(const SavedPerformanceState& a, const SavedPerformanceState& b)
     {
-        return
-            state.magic == CustomEnvelopeMagic &&
-            state.version == CustomEnvelopeSaveVersion &&
-            state.size == sizeof(SavedCustomEnvelopeState) &&
-            state.checksum == checksumCustomEnvelopeState(state);
-    }
+        bool performanceMatches =
+            a.osc2Detune == b.osc2Detune &&
+            a.osc2Level == b.osc2Level &&
+            a.osc2Ring == b.osc2Ring &&
+            a.osc2Noise == b.osc2Noise &&
+            a.envelopePreset == b.envelopePreset &&
+            a.midiInChannel == b.midiInChannel &&
+            a.midiOutChannel == b.midiOutChannel &&
+            a.midiFlags == b.midiFlags;
 
-    bool customEnvelopeStateMatches(
-        const SavedCustomEnvelopeState& a,
-        const SavedCustomEnvelopeState& b)
-    {
-        if (a.loadedMask != b.loadedMask)
+        if (!performanceMatches)
             return false;
 
-        const uint8_t* aBytes = reinterpret_cast<const uint8_t*>(a.slots);
-        const uint8_t* bBytes = reinterpret_cast<const uint8_t*>(b.slots);
-        for (uint32_t i = 0; i < sizeof(a.slots); ++i)
+        for (uint32_t i = 0; i < CustomEnvelopePresetCount; ++i)
         {
-            if (aBytes[i] != bBytes[i])
+            if (a.customEnvelopePersist[i] != b.customEnvelopePersist[i])
+                return false;
+
+            if (!envelopeProgramsMatch(a.customEnvelopePrograms[i], b.customEnvelopePrograms[i]))
                 return false;
         }
 
         return true;
     }
 
-    bool savedStateMatches(const SavedPerformanceState& a, const SavedPerformanceState& b)
+    bool envelopeProgramsMatch(const EnvelopeProgram& a, const EnvelopeProgram& b)
     {
-        return
-            a.osc2Detune == b.osc2Detune &&
-            a.osc2Level == b.osc2Level &&
-            a.osc2Ring == b.osc2Ring &&
-            a.osc2Noise == b.osc2Noise &&
-            a.envelopePreset == b.envelopePreset;
+        for (uint32_t i = 0; i < 8u; ++i)
+        {
+            if (a.amp[i].level != b.amp[i].level || a.amp[i].time != b.amp[i].time)
+                return false;
+
+            if (a.pd[i].level != b.pd[i].level || a.pd[i].time != b.pd[i].time)
+                return false;
+        }
+
+        return true;
     }
 
     void loadPerformanceState()
@@ -1582,23 +1630,21 @@ private:
 
         osc2Detune = state.osc2Detune;
         osc2Level = clamp12(state.osc2Level);
-        osc2Ring = 0;
-        osc2Noise = 0;
-        envelopePreset = state.envelopePreset < EnvelopePresetCount ?
+        osc2Ring = clamp12(state.osc2Ring);
+        osc2Noise = clamp12(state.osc2Noise);
+        envelopePreset = state.envelopePreset < FactoryEnvelopePresetCount ?
             state.envelopePreset :
             (uint8_t)EnvelopePreset::Off;
-    }
+        midiInChannel = state.midiInChannel < 16u ? state.midiInChannel : 0u;
+        midiOutChannel = state.midiOutChannel < 16u ? state.midiOutChannel : 0u;
+        turingMidiOutEnabled = (state.midiFlags & 1u) != 0;
 
-    void loadCustomEnvelopeState()
-    {
-        const SavedCustomEnvelopeState& state = flashCustomEnvelopeState();
-        if (!isValidCustomEnvelopeState(state))
-            return;
-
-        for (uint32_t i = 0; i < CustomEnvelopeSlotCount; ++i)
+        for (uint32_t i = 0; i < CustomEnvelopePresetCount; ++i)
         {
-            customEnvelopes[i] = state.slots[i];
-            customEnvelopeLoaded[i] = (state.loadedMask & (1u << i)) != 0;
+            customEnvelopePersist[i] = state.customEnvelopePersist[i] != 0;
+            customEnvelopeValid[i] = customEnvelopePersist[i];
+            if (customEnvelopePersist[i])
+                customEnvelopePrograms[i] = state.customEnvelopePrograms[i];
         }
     }
 
@@ -1610,8 +1656,8 @@ private:
         if (isValidSavedState(saved) && savedStateMatches(state, saved))
             return;
 
-        uint8_t page[FLASH_PAGE_SIZE];
-        for (uint32_t i = 0; i < FLASH_PAGE_SIZE; ++i)
+        uint8_t page[FLASH_SECTOR_SIZE];
+        for (uint32_t i = 0; i < FLASH_SECTOR_SIZE; ++i)
             page[i] = 0xFF;
 
         const uint8_t* stateBytes = reinterpret_cast<const uint8_t*>(&state);
@@ -1620,43 +1666,7 @@ private:
 
         uint32_t interrupts = save_and_disable_interrupts();
         flash_range_erase(SaveFlashOffset, FLASH_SECTOR_SIZE);
-        flash_range_program(SaveFlashOffset, page, FLASH_PAGE_SIZE);
-        restore_interrupts(interrupts);
-    }
-
-    void saveCustomEnvelopeState()
-    {
-        SavedCustomEnvelopeState state = currentCustomEnvelopeState();
-        const SavedCustomEnvelopeState& saved = flashCustomEnvelopeState();
-
-        if (isValidCustomEnvelopeState(saved) &&
-            customEnvelopeStateMatches(state, saved))
-            return;
-
-        uint8_t page[FLASH_PAGE_SIZE];
-        const uint8_t* stateBytes = reinterpret_cast<const uint8_t*>(&state);
-        uint32_t bytesWritten = 0;
-
-        uint32_t interrupts = save_and_disable_interrupts();
-        flash_range_erase(CustomEnvelopeFlashOffset, FLASH_SECTOR_SIZE);
-
-        while (bytesWritten < sizeof(SavedCustomEnvelopeState))
-        {
-            for (uint32_t i = 0; i < FLASH_PAGE_SIZE; ++i)
-                page[i] = 0xFF;
-
-            for (uint32_t i = 0;
-                 i < FLASH_PAGE_SIZE && bytesWritten + i < sizeof(SavedCustomEnvelopeState);
-                 ++i)
-                page[i] = stateBytes[bytesWritten + i];
-
-            flash_range_program(
-                CustomEnvelopeFlashOffset + bytesWritten,
-                page,
-                FLASH_PAGE_SIZE);
-            bytesWritten += FLASH_PAGE_SIZE;
-        }
-
+        flash_range_program(SaveFlashOffset, page, FLASH_SECTOR_SIZE);
         restore_interrupts(interrupts);
     }
 
@@ -1800,6 +1810,7 @@ private:
     uint32_t turingPulseAge = 0;
     uint32_t turingClockLedAge = TuringClockLedSamples;
     uint32_t turingLength = 16;
+    uint32_t turingLengthDisplaySamples = 0;
     uint32_t externalClockAge = 96000u;
     bool turingPulse = false;
     bool turingAltPulse = false;
@@ -1826,13 +1837,45 @@ private:
     bool envelopeSelectReady = false;
     bool envelopeSelectHoldActive = false;
     bool envelopeSelectSaved = false;
+    volatile uint32_t webMidiFeedbackSamples = 0;
+    volatile uint8_t webMidiFeedbackKind = 0;
+    EnvelopeProgram customEnvelopePrograms[CustomEnvelopePresetCount] = {};
+    bool customEnvelopeValid[CustomEnvelopePresetCount] = {};
+    bool customEnvelopePersist[CustomEnvelopePresetCount] = {};
+    volatile uint8_t pendingWebEnvelopeSlot = 0;
+    volatile bool pendingWebEnvelopeShouldSave = false;
+    volatile bool pendingWebEnvelopeReady = false;
+    uint8_t sysexBuffer[128] = {};
+    uint32_t sysexLength = 0;
+    bool sysexReceiving = false;
+    bool sysexOverflow = false;
+    uint8_t midiRunningStatus = 0;
+    uint8_t midiData[2] = {};
+    uint8_t midiDataCount = 0;
+    volatile uint8_t pendingMidiNote = 60;
+    volatile uint8_t pendingMidiVelocity = 100;
+    volatile bool pendingMidiNoteOn = false;
+    uint8_t midiNote = 60;
+    uint8_t midiVelocity = 100;
+    int32_t midiPitchBend = 0;
+    bool midiNoteActive = false;
+    bool midiNoteReleased = false;
+    uint8_t midiInChannel = 0;
+    uint8_t midiOutChannel = 0;
+    bool turingMidiOutEnabled = false;
+    volatile uint8_t pendingMidiOutNote = 60;
+    volatile uint8_t pendingMidiOutVelocity = 100;
+    volatile bool pendingMidiOutOn = false;
+    volatile bool pendingMidiOutOff = false;
+    uint8_t activeMidiOutNote = 255;
+    uint32_t turingMidiGateSamples = 0;
 
     int32_t pitchControl = 2048;
     int32_t pdControl = 0;
     int32_t waveControl = 0;
     int32_t turingMutationControl = 2048;
     int32_t turingLengthControl = 4095;
-    int32_t turingClockControl = 2048;
+    int32_t turingClockSpeedControl = 2048;
     int32_t smoothedFreq = 0;
     int32_t osc2Detune = 0;
     int32_t osc2Level = 0;
@@ -1860,28 +1903,7 @@ private:
     uint32_t saveConfirmSamples = 0;
     bool saveHoldCanSave = false;
     bool saveCompletedThisHold = false;
-    bool modePickupInitialized = false;
-    bool downEditUnlocked = false;
     Switch lastMode = Switch::Middle;
-
-    uint8_t midiRunningStatus = 0;
-    uint8_t midiData[2] = {};
-    uint8_t midiDataCount = 0;
-    volatile uint8_t pendingMidiNote = 60;
-    volatile uint8_t pendingMidiVelocity = 100;
-    volatile bool pendingMidiNoteOn = false;
-    uint8_t midiNote = 60;
-    uint8_t midiVelocity = 100;
-    int32_t midiPitchBend = 0;
-    bool midiNoteActive = false;
-    bool midiNoteReleased = false;
-    volatile uint8_t midiInChannel = 0;
-    EnvelopeProgram customEnvelopes[CustomEnvelopeSlotCount] = {};
-    bool customEnvelopeLoaded[CustomEnvelopeSlotCount] = {};
-    uint8_t sysexBuffer[WebMidiMaxSysexLength] = {};
-    uint32_t sysexLength = 0;
-    bool sysexReceiving = false;
-    bool sysexOverflow = false;
 };
 
 // =========================================================
@@ -1889,6 +1911,7 @@ private:
 // =========================================================
 C1ZZL3 card;
 static volatile uint8_t hostMidiDeviceAddress = 0;
+static volatile int8_t hostMidiOutputCable = -1;
 
 extern "C" void tuh_midi_mount_cb(
     uint8_t dev_addr,
@@ -1900,10 +1923,12 @@ extern "C" void tuh_midi_mount_cb(
     (void)in_ep;
     (void)out_ep;
     (void)num_cables_rx;
-    (void)num_cables_tx;
 
     if (hostMidiDeviceAddress == 0)
+    {
         hostMidiDeviceAddress = dev_addr;
+        hostMidiOutputCable = num_cables_tx > 0 ? (int8_t)(num_cables_tx - 1u) : -1;
+    }
 }
 
 extern "C" void tuh_midi_umount_cb(uint8_t dev_addr, uint8_t instance)
@@ -1911,7 +1936,10 @@ extern "C" void tuh_midi_umount_cb(uint8_t dev_addr, uint8_t instance)
     (void)instance;
 
     if (dev_addr == hostMidiDeviceAddress)
+    {
         hostMidiDeviceAddress = 0;
+        hostMidiOutputCable = -1;
+    }
 }
 
 extern "C" void tuh_midi_rx_cb(uint8_t dev_addr, uint32_t num_packets)
@@ -1937,6 +1965,48 @@ extern "C" void tuh_midi_tx_cb(uint8_t dev_addr)
     (void)dev_addr;
 }
 
+static void sendPendingMidiOutToDevice()
+{
+    uint8_t channel;
+    uint8_t note;
+    uint8_t velocity;
+    bool on;
+    if (!card.TakePendingMidiOut(channel, note, velocity, on))
+        return;
+
+    uint8_t message[3] = {
+        (uint8_t)((on ? 0x90u : 0x80u) | (channel & 0x0Fu)),
+        (uint8_t)(note & 0x7Fu),
+        (uint8_t)(velocity & 0x7Fu)
+    };
+    tud_midi_stream_write(0, message, sizeof(message));
+}
+
+static void sendPendingMidiOutToHostDevice()
+{
+    uint8_t channel;
+    uint8_t note;
+    uint8_t velocity;
+    bool on;
+    if (!card.TakePendingMidiOut(channel, note, velocity, on))
+        return;
+
+    if (hostMidiDeviceAddress == 0 || hostMidiOutputCable < 0)
+        return;
+
+    uint8_t message[3] = {
+        (uint8_t)((on ? 0x90u : 0x80u) | (channel & 0x0Fu)),
+        (uint8_t)(note & 0x7Fu),
+        (uint8_t)(velocity & 0x7Fu)
+    };
+    tuh_midi_stream_write(
+        hostMidiDeviceAddress,
+        (uint8_t)hostMidiOutputCable,
+        message,
+        sizeof(message));
+    tuh_midi_stream_flush(hostMidiDeviceAddress);
+}
+
 void usbMidiWorker()
 {
     sleep_ms(100);
@@ -1952,6 +2022,7 @@ void usbMidiWorker()
         if (hostMode)
         {
             tuh_task();
+            sendPendingMidiOutToHostDevice();
         }
         else
         {
@@ -1961,6 +2032,8 @@ void usbMidiWorker()
             uint32_t count = tud_midi_stream_read(bytes, sizeof(bytes));
             for (uint32_t i = 0; i < count; ++i)
                 card.ProcessUsbMidiByte(bytes[i]);
+
+            sendPendingMidiOutToDevice();
         }
     }
 }
