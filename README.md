@@ -9,6 +9,12 @@ Language: C++ / Pico SDK
 Framework: ComputerCard  
 Creator: Adrian Vos
 
+For a simpler user-facing description of the card, see:
+
+```text
+CARD_README.md
+```
+
 ## Production Build
 
 Current promoted UF2:
@@ -173,32 +179,32 @@ Factory presets:
 8. Evolving digital
 
 Eight custom slots can be loaded from the Web editor and selected after the
-factory presets during startup envelope selection. LED 5 marks the custom bank,
-and LEDs 0-2 show the custom slot number.
+factory presets during startup envelope selection. LED 6 marks the custom bank,
+and LEDs 1-3 show the custom slot number.
 
 ## LED Feedback
 
 In synth mode:
 
-- LED 0 shows phase-distortion amount.
-- LED 1 shows waveform position.
-- LED 2 shows oscillator 2 level.
-- LED 3 shows ring modulation amount.
-- LED 4 shows noise amount.
-- LED 5 lights while the switch is held down.
+- LED 1 shows phase-distortion amount.
+- LED 2 shows waveform position.
+- LED 3 shows oscillator 2 level.
+- LED 4 shows ring modulation amount.
+- LED 5 shows noise amount.
+- LED 6 lights while the switch is held down.
 
 In Turing mode:
 
-- LEDs 0-2 show low bits of the Turing pattern.
-- LED 3 follows Pulse in 1.
-- LED 4 shows sequence length.
-- LED 5 flashes on each Turing clock step.
+- LEDs 1-3 show low bits of the Turing pattern.
+- LED 4 follows Pulse in 1.
+- LED 5 shows sequence length.
+- LED 6 flashes on each Turing clock step.
 - Turning X briefly displays sequence length as binary on the LEDs.
 
 In startup envelope selection:
 
 - Factory presets use the existing binary LED display.
-- Custom slots light LED 5 and use LEDs 0-2 for the custom slot number.
+- Custom slots light LED 6 and use LEDs 1-3 for the custom slot number.
 
 ## Hardware Test Coverage
 
