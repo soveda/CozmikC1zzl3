@@ -35,6 +35,18 @@ The exact experimental production-candidate UF2 is also retained:
 uf2/C1ZZL3_web_midi_production_candidate_20260613.uf2
 ```
 
+Rollback build with Turing tap tempo still present:
+
+```text
+uf2/C1ZZL3_with_tap_tempo_rollback_20260615.uf2
+```
+
+Matching source for that rollback is archived in:
+
+```text
+backups/rollback_with_tap_tempo_20260615/
+```
+
 The previous main build was archived before promotion:
 
 ```text
@@ -69,6 +81,8 @@ The stable production behaviour is therefore:
 - When switching back to synth mode, the last Turing CV and pulse values are
   held.
 - The Turing clock does not continue running in synth mode.
+- Turing tap tempo has been removed; Y is the only internal clock-speed
+  control.
 - Turing MIDI output is intentionally absent.
 
 Avoid adding background work to the audio callback unless another feature is
@@ -105,7 +119,6 @@ removed or simplified.
 - X controls sequence length from 2 to 16 steps.
 - Y controls internal clock speed.
 - Pulse in 1 acts as an external clock.
-- Flicking down from Turing mode taps the internal clock tempo.
 - CV out 1 carries scaled stepped Turing CV.
 - CV out 2 carries smoothed Turing CV.
 - Pulse out 1 carries the main Turing pulse.

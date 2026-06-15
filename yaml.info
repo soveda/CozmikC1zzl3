@@ -48,7 +48,8 @@ manual: |
   and CV In 2 add clamped phase-distortion and wave modulation in Turing mode.
 
   When leaving Turing mode, the last Turing CV and pulse values are held. The
-  Turing clock does not continue running in synth mode.
+  Turing clock does not continue running in synth mode. Tap tempo has been
+  removed; Y is the only internal Turing clock-speed control.
 
   Hold the switch down during startup to enter envelope preset select. Factory
   presets are followed by any saved custom Web MIDI slots. LED 6 marks the
@@ -133,11 +134,6 @@ controls:
       y:
         name: Y
         description: Internal Turing clock speed
-
-    - when: { z: up, gesture: flick-down }
-      main:
-        name: Switch Down
-        description: Tap internal Turing clock tempo
 
     - when: { startup: switch-down }
       main:

@@ -53,6 +53,8 @@ When you leave Turing mode, the CV and pulse outputs hold their last values.
 The Turing clock does not keep running in synth mode; this is intentional for
 stability on the RP2040 card format.
 
+Tap tempo has been removed. Y is the internal Turing clock-speed control.
+
 ## Web MIDI Editor
 
 The editor is in:

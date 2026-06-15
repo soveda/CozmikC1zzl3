@@ -120,6 +120,9 @@ public:
         if (mode != Switch::Down)
             downEditUnlocked = true;
 
+        if (previousMode == Switch::Up && mode == Switch::Down)
+            tapTuringClock();
+
         if (mode != previousMode)
             resetModePickup(mode, previousMode, main, x, y);
         lastMode = mode;
@@ -1008,12 +1011,20 @@ private:
 
     bool internalTuringClock(int32_t speed)
     {
+        int32_t moved = speed - lastClockSpeed;
+        if (moved < 0) moved = -moved;
+        if (moved > 64)
+            useTappedClock = false;
+        lastClockSpeed = speed;
+
         uint32_t inverseSpeed = 4095u - (uint32_t)clamp12(speed);
         uint32_t period =
             3000u +
             (((inverseSpeed * inverseSpeed) >> 12) * 57000u >> 12);
         if (period < 3000u) period = 3000u;
-        turingClockPeriod = period;
+
+        if (!useTappedClock)
+            turingClockPeriod = period;
 
         if (++turingClock >= turingClockPeriod)
         {
@@ -1034,6 +1045,18 @@ private:
             turingPulse = false;
             turingAltPulse = false;
         }
+    }
+
+    void tapTuringClock()
+    {
+        if (turingClock > 2400u && turingClock < 96000u)
+        {
+            tappedClockPeriod = turingClock;
+            turingClockPeriod = tappedClockPeriod;
+            useTappedClock = true;
+        }
+
+        turingClock = 0;
     }
 
     int32_t smooth(int32_t x)
@@ -1772,12 +1795,15 @@ private:
     int32_t turingModCv = 0;
     uint32_t turingClock = 0;
     uint32_t turingClockPeriod = 12000;
+    uint32_t tappedClockPeriod = 12000;
+    int32_t lastClockSpeed = 2048;
     uint32_t turingPulseAge = 0;
     uint32_t turingClockLedAge = TuringClockLedSamples;
     uint32_t turingLength = 16;
     uint32_t externalClockAge = 96000u;
     bool turingPulse = false;
     bool turingAltPulse = false;
+    bool useTappedClock = false;
 
     uint32_t noise = 1;
     uint32_t noiseHoldCounter = 0;
