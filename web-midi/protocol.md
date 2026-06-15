@@ -37,6 +37,7 @@ F0 7D 43 31 5A 33 cc payload... F7
 | `02` | Save custom envelope to flash |
 | `03` | Apply ring/noise/MIDI channel settings |
 | `04` | Reserved settings-save command; currently applies settings like `03` |
+| `05` | Delete saved custom envelope slot from flash |
 
 ## Envelope Payload
 
@@ -88,6 +89,23 @@ time = time_lsb7 | (time_mid7 << 7) | (time_msb7 << 14)
 ```
 
 Firmware treats `time == 0` as `1` sample and caps very long stages internally.
+
+## Delete Envelope Payload
+
+Delete command `05` uses a 1-byte payload:
+
+```text
+ss
+```
+
+| Byte | Meaning |
+| --- | --- |
+| `ss` | custom slot target, `0..7` for Custom 1..8 |
+
+The firmware clears the selected custom slot, removes it from the saved custom
+slot mask, and writes the updated custom envelope state to flash. If the deleted
+slot is currently selected on the card, the active envelope preset is changed to
+`Off`.
 
 ## Performance Settings Payload
 

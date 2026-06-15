@@ -36,6 +36,7 @@ select the C1ZZL3 MIDI output, then use:
 
 - `Load` to send the selected envelope to a custom RAM slot
 - `Save` to write the selected custom slot to card flash
+- `Delete` to clear the selected custom slot from card flash
 - `Set` to apply ring, noise, and MIDI input channel settings
 - `SysEx` to copy the current envelope frame for inspection
 

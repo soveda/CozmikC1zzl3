@@ -10,6 +10,7 @@ const SYSEX_ID = [0x43, 0x31, 0x5a, 0x33];
 const SYSEX_COMMAND_PREVIEW = 0x01;
 const SYSEX_COMMAND_SAVE = 0x02;
 const SYSEX_COMMAND_SETTINGS = 0x03;
+const SYSEX_COMMAND_DELETE = 0x05;
 
 const factoryPresets = [
   preset("Off", fill(0, 1), fill(0, 1)),
@@ -72,6 +73,7 @@ const el = {
   copySysex: document.querySelector("#copySysex"),
   sendSysex: document.querySelector("#sendSysex"),
   flashSysex: document.querySelector("#flashSysex"),
+  deleteSlot: document.querySelector("#deleteSlot"),
   sendSettings: document.querySelector("#sendSettings"),
   downloadJson: document.querySelector("#downloadJson"),
   resetPreset: document.querySelector("#resetPreset"),
@@ -211,6 +213,15 @@ function removeCustomPreset(index) {
   savePresets();
   render();
   setStatus("Custom preset removed.");
+}
+
+function removeLocalCustomPresetForSlot(slot) {
+  const index = FACTORY_PRESET_COUNT + slot;
+  if (index >= presets.length) return;
+  presets.splice(index, 1);
+  selected = Math.min(selected, presets.length - 1);
+  savePresets();
+  render();
 }
 
 function renderStages(lane, container) {
@@ -522,6 +533,7 @@ async function sendSysex(command = SYSEX_COMMAND_PREVIEW) {
   sendingSysex = true;
   el.sendSysex.disabled = true;
   el.flashSysex.disabled = true;
+  el.deleteSlot.disabled = true;
   output.send(frame);
   const slotLabel = `Custom ${Number(el.customSlot.value) + 1}`;
   const status = isFlash
@@ -533,7 +545,42 @@ async function sendSysex(command = SYSEX_COMMAND_PREVIEW) {
     sendingSysex = false;
     el.sendSysex.disabled = false;
     el.flashSysex.disabled = false;
+    el.deleteSlot.disabled = false;
   }, sendCooldownMs);
+}
+
+async function deleteCustomSlot() {
+  if (sendingSysex) {
+    setStatus("SysEx send already in progress.");
+    return;
+  }
+
+  if (!midiAccess) {
+    await connectMidi();
+  }
+
+  const output = selectedMidiOutput();
+  if (!output) {
+    setStatus("No MIDI output found for custom slot delete.");
+    return;
+  }
+
+  const slot = clampInt(el.customSlot.value, 0, CUSTOM_SLOT_COUNT - 1);
+  const frame = buildDeleteSlotSysex(slot);
+  sendingSysex = true;
+  el.sendSysex.disabled = true;
+  el.flashSysex.disabled = true;
+  el.deleteSlot.disabled = true;
+  output.send(frame);
+  removeLocalCustomPresetForSlot(slot);
+  setStatus(`Deleted Custom ${slot + 1} from card flash. ${frame.length} byte SysEx to ${output.name || "MIDI output"}.`);
+
+  window.setTimeout(() => {
+    sendingSysex = false;
+    el.sendSysex.disabled = false;
+    el.flashSysex.disabled = false;
+    el.deleteSlot.disabled = false;
+  }, 1800);
 }
 
 function buildSysex(command) {
@@ -554,6 +601,10 @@ function buildSettingsSysex(command) {
   payload.push(...packUint14(performanceSettings.noise));
   payload.push(clampInt(performanceSettings.midiInChannel, 1, 16) - 1);
   return [0xf0, SYSEX_MANUFACTURER, ...SYSEX_ID, command, ...payload, 0xf7];
+}
+
+function buildDeleteSlotSysex(slot) {
+  return [0xf0, SYSEX_MANUFACTURER, ...SYSEX_ID, SYSEX_COMMAND_DELETE, slot & 0x7f, 0xf7];
 }
 
 function canSendSelectedEnvelope() {
@@ -774,6 +825,7 @@ el.copySysex.addEventListener("click", async () => {
 });
 el.sendSysex.addEventListener("click", () => sendSysex(SYSEX_COMMAND_PREVIEW));
 el.flashSysex.addEventListener("click", () => sendSysex(SYSEX_COMMAND_SAVE));
+el.deleteSlot.addEventListener("click", deleteCustomSlot);
 el.sendSettings.addEventListener("click", () => sendPerformanceSettings(SYSEX_COMMAND_SETTINGS));
 el.ringControl.addEventListener("input", () => updatePerformanceSetting("ring", el.ringControl.value));
 el.noiseControl.addEventListener("input", () => updatePerformanceSetting("noise", el.noiseControl.value));
