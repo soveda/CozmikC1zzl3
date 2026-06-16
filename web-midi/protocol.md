@@ -35,7 +35,7 @@ F0 7D 43 31 5A 33 cc payload... F7
 | --- | --- |
 | `01` | Load custom envelope into RAM |
 | `02` | Save custom envelope to flash |
-| `03` | Apply ring/noise/MIDI channel settings |
+| `03` | Apply ring/noise/MIDI channel/Turing range settings |
 | `04` | Reserved settings-save command; currently applies settings like `03` |
 | `05` | Delete saved custom envelope slot from flash |
 
@@ -109,10 +109,11 @@ slot is currently selected on the card, the active envelope preset is changed to
 
 ## Performance Settings Payload
 
-Settings commands `03` and `04` use a 5-byte payload:
+Settings commands `03` and `04` use a 6-byte payload. Firmware also accepts the
+older 5-byte payload and leaves the Turing range unchanged.
 
 ```text
-rr rr nn nn ic
+rr rr nn nn ic tr
 ```
 
 | Bytes | Meaning |
@@ -120,8 +121,12 @@ rr rr nn nn ic
 | `rr rr` | ring modulation amount, 14-bit packed, `0..4095` |
 | `nn nn` | noise amount, 14-bit packed, `0..4095` |
 | `ic` | MIDI input channel encoded as `0..15` for channels `1..16` |
+| `tr` | Turing CV output range in octaves, `1..8`; default is `2` |
 
 There is no MIDI acknowledgement frame.
+
+The same range can be controlled live with MIDI CC20 on the selected MIDI input
+channel. CC value `0` maps to 1 octave and `127` maps to 8 octaves.
 
 ## Current Limitations
 
@@ -131,5 +136,5 @@ There is no MIDI acknowledgement frame.
 - USB role is selected only at boot/reset.
 - Web MIDI SysEx editing is only available in USB MIDI device mode.
 - Turing MIDI output is intentionally absent for stability.
-- The Turing clock does not continue running in synth mode; CV and pulse outputs
-  hold the last Turing values.
+- In the overclock experimental build, the Turing clock can continue running in
+  synth mode while the Turing audio voice and Turing MIDI output remain absent.

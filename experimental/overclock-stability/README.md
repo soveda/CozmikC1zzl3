@@ -36,8 +36,8 @@ The ComputerCard framework runs audio at a fixed 48 kHz audio rate.
 - `ComputerCard::BufferFull()` runs from the ADC/DMA interrupt path.
 - `C1ZZL3::ProcessSample()` is called once per audio sample.
 - USB MIDI device/host work runs on core 1 in `usbMidiWorker()`.
-- Current synth mode does not run the Turing clock in the background.
-- Current synth mode only holds the last Turing CV and pulse values.
+- This experimental branch runs the Turing clock in synth mode.
+- Synth mode still does not render the Turing audio voice.
 - Flash writes for custom envelopes still stop ADC/DMA via the framework flash
   safety path, so overclocking should not be expected to make flash operations
   invisible.
@@ -45,36 +45,76 @@ The ComputerCard framework runs audio at a fixed 48 kHz audio rate.
 The main cost risk is therefore per-sample DSP and control work in
 `ProcessSample()`, not the Web MIDI editor itself.
 
+## Current Optimisation Experiments
+
+The branch now includes lookup tables for the eight PD target waveforms and
+restores synth-mode Turing clock persistence.
+
+Previous behaviour:
+
+- `morphWave()` selected two adjacent target waves.
+- `czWave()` generated each target in the audio path.
+- The more complex waves called sine harmonics and envelope/window maths for
+  every oscillator sample.
+
+Experimental behaviour:
+
+- `pdWaveLUT[8][4096]` stores all eight 12-bit phase target waves.
+- `czWave()` now reads `pdWaveLUT[wave][phase12]`.
+- The table was generated from the existing integer waveform formulas and the
+  existing `sineLUT`.
+- Oscillator 2 is output at full level; the detune amount is still retained for
+  LED/ring behaviour.
+- Web MIDI performance settings can scale Turing CV output range from 1 to 8
+  octaves, defaulting to 2 octaves.
+- MIDI CC20 on the selected input channel controls the same Turing CV octave
+  range live.
+- The synth output now has a fixed first-order output filter: 40 Hz high-pass
+  followed by 7 kHz low-pass, both 6 dB/octave.
+- Turing MIDI output is enabled as an experimental device-mode note stream.
+  Each Turing step sends note-off for the previous Turing note and note-on for
+  the new CV-derived note on the selected MIDI channel.
+
+Expected tradeoff:
+
+- More flash use: about 64 KB extra table data.
+- Less per-sample CPU work: especially for the resonant/windowed PD target
+  waves, and because the target waveform is rendered for both oscillators.
+- No intentional feature change.
+
+### Synth-Mode Turing Clock Persistence
+
+The branch now updates the Turing clock, CV, and pulse state in synth mode. This
+means `CV Out 1`, `CV Out 2`, `Pulse Out 1`, and `Pulse Out 2` continue changing
+after switching from Turing mode back to synth mode.
+
+To keep the experiment focused:
+
+- the Turing audio voice is not rendered in synth mode;
+- no extra tap-tempo behaviour is added;
+- synth-mode Turing clocking does not trigger the synth envelope.
+- Turing MIDI output follows the Turing step stream in USB device mode.
+
 ## Features Removed Or Avoided For Stability
 
 These are the known removals or deliberate omissions from the production build:
 
 1. Synth-mode Turing clock persistence
-   - Removed because clock-persistence builds locked up at maximum settings.
+   - Previously removed because clock-persistence builds locked up at maximum
+     settings.
    - Reduced noise depth and MIDI setting clamps did not make that branch
      reliable.
-   - Current behaviour: CV and pulse outputs hold the last Turing values after
-     leaving Turing mode.
+   - Reintroduced on this branch for overclocked testing.
 
 2. Turing MIDI output
-   - Deliberately not included.
-   - It would add cross-core MIDI/event work and more state to maintain for a
-     feature that is not essential to the card.
+   - Reintroduced on this branch as a device-mode note stream for testing.
+   - It remains absent from production until hardware and DAW testing confirm
+     that the extra cross-core event work is stable.
 
-3. Tap tempo
-   - Removed from the current production build.
-   - The retained rollback UF2 is archived at:
-     `uf2/archive/previous-versions-20260615/C1ZZL3_with_tap_tempo_rollback_20260615.uf2`
-   - Current behaviour: Y is the only internal Turing clock-speed control.
-
-4. Audio In 2 utility
+3. Audio In 2 utility
    - Currently unused in synth mode.
    - This was kept out to reduce routing complexity and preserve the tested
      control scheme.
-
-5. Background Turing CV updates in synth mode
-   - Not present in production.
-   - This is closely related to synth-mode Turing clock persistence.
 
 ## Overclocking Relevance
 
@@ -107,11 +147,16 @@ removed features.
 Initial branch setting:
 
 ```text
-C1ZZL3_EXPERIMENTAL_OVERCLOCK_KHZ=150000
+C1ZZL3_EXPERIMENTAL_OVERCLOCK_KHZ=192000
 ```
 
-This requests a conservative 150 MHz system clock before core 1 USB/MIDI is
-launched and before the ComputerCard audio framework starts.
+This requests a 192 MHz system clock before core 1 USB/MIDI is launched and
+before the ComputerCard audio framework starts.
+
+Clock speeds should be chosen as multiples of 48 MHz where possible. The
+ComputerCard audio path is built around 48 kHz audio and an ADC clock derived
+from 48 MHz, so 192 MHz keeps that clean clock relationship while adding one
+more 48 MHz step beyond the tested 144 MHz build.
 
 Test:
 
@@ -128,8 +173,9 @@ If this fails, do not continue with feature reintroduction.
 
 ### Stage 1: Re-test Synth-Mode Turing Clock Persistence
 
-If Stage 0 passes, reintroduce only the background Turing clock/CV update while
-leaving Turing MIDI output and tap tempo absent.
+This is now implemented on the branch. It reintroduces the background Turing
+clock/CV/pulse update and, in this build, sends a matching USB MIDI note stream
+in computer/device mode.
 
 This should be the first meaningful overclock experiment because it is the most
 musically useful removed behaviour and it directly targets the known stability
@@ -144,18 +190,19 @@ Test:
 - MIDI notes and Pulse 2 envelope triggers while clock continues;
 - Web MIDI ring/noise Set while clock continues.
 
-### Stage 2: Re-test Tap Tempo Only
+### Stage 2: Turing MIDI Output Trial
 
-If Stage 1 passes, test tap tempo separately. Keep Turing MIDI output absent.
+Turing MIDI output is present in this branch as a deliberately small trial. The
+audio core queues only the latest note number; core 1 sends note-off/note-on
+over USB MIDI device mode.
 
-Tap tempo is lower value than clock persistence but may be acceptable if it does
-not add meaningful load.
+## Oscillator 2 Level Note
 
-### Stage 3: Avoid Turing MIDI Output Unless Strongly Needed
-
-Turing MIDI output should remain out unless there is a clear musical need. It
-adds more cross-core/event work and another class of timing failure for less
-benefit than CV/pulse persistence.
+Oscillator 2 full-level detune was considered for this experiment. It is mostly
+a gain/headroom and patching decision rather than a CPU optimisation: oscillator
+2 is already rendered in the synth path, and the current level multiply is
+cheap. Keeping oscillator 2 level unchanged avoids adding another variable to
+this hardware test.
 
 ## Recommended Implementation Shape
 
@@ -175,35 +222,26 @@ Place it at the start of `main()` before `multicore_launch_core1()` and
 Build as an explicitly named UF2, for example:
 
 ```text
-C1ZZL3_overclock_150mhz_no_feature_changes_experimental.uf2
+C1ZZL3_overclock_192mhz_turing_clock_persistence_experimental.uf2
 ```
 
-Only after that passes should feature reintroduction begin.
+Only after the overclock-only test passes should the Turing clock persistence
+test be treated as meaningful.
 
 ## Open Questions Before Coding
 
-- What exact overclock target should be tested first?
-- Does the Workshop Computer card format have a known safe system clock used by
-  other cards?
-- Should the first test use conservative 150 MHz rather than a larger jump?
+- Does this 192 MHz build remain stable in both USB device mode and USB host
+  mode?
 - Do we want an LED startup indication for overclocked experimental builds?
 - Should overclocked builds refuse flash writes during active MIDI playback, or
   is the current flash safety path sufficient?
 
 ## Branch Note
 
-The intended branch name for this work is:
+This work is currently isolated on:
 
 ```text
 codex/overclock-stability-experiment
 ```
 
-This environment currently cannot create Git branches because `.git` is
-read-only to the sandbox. Create the branch locally with:
-
-```sh
-git switch -c codex/overclock-stability-experiment
-```
-
-Then keep any overclock code and UF2s on that branch until hardware testing
-passes.
+Keep overclock code and UF2s on this branch until hardware testing passes.

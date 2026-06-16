@@ -79,7 +79,8 @@ const el = {
   resetPreset: document.querySelector("#resetPreset"),
   ringControl: document.querySelector("#ringControl"),
   noiseControl: document.querySelector("#noiseControl"),
-  midiInChannel: document.querySelector("#midiInChannel")
+  midiInChannel: document.querySelector("#midiInChannel"),
+  turingRange: document.querySelector("#turingRange")
 };
 
 function preset(name, amp, pd) {
@@ -138,14 +139,15 @@ function loadPerformanceSettings() {
       return {
         ring: clampInt(saved.ring, 0, MAX_LEVEL),
         noise: clampInt(saved.noise, 0, MAX_LEVEL),
-        midiInChannel: clampInt(saved.midiInChannel, 1, 16)
+        midiInChannel: clampInt(saved.midiInChannel, 1, 16),
+        turingRange: clampInt(saved.turingRange ?? 2, 1, 8)
       };
     }
   } catch {
     /* Keep defaults if saved data is malformed. */
   }
 
-  return { ring: 0, noise: 0, midiInChannel: 1 };
+  return { ring: 0, noise: 0, midiInChannel: 1, turingRange: 2 };
 }
 
 function savePerformanceSettings() {
@@ -171,6 +173,7 @@ function renderPerformanceSettings() {
   el.ringControl.value = performanceSettings.ring;
   el.noiseControl.value = performanceSettings.noise;
   el.midiInChannel.value = performanceSettings.midiInChannel;
+  el.turingRange.value = performanceSettings.turingRange;
 }
 
 function renderPresetList() {
@@ -600,6 +603,7 @@ function buildSettingsSysex(command) {
   payload.push(...packUint14(performanceSettings.ring));
   payload.push(...packUint14(performanceSettings.noise));
   payload.push(clampInt(performanceSettings.midiInChannel, 1, 16) - 1);
+  payload.push(clampInt(performanceSettings.turingRange, 1, 8));
   return [0xf0, SYSEX_MANUFACTURER, ...SYSEX_ID, command, ...payload, 0xf7];
 }
 
@@ -752,6 +756,8 @@ function updateDraggedStage(event) {
 function updatePerformanceSetting(key, value) {
   if (key === "midiInChannel") {
     performanceSettings[key] = clampInt(value, 1, 16);
+  } else if (key === "turingRange") {
+    performanceSettings[key] = clampInt(value, 1, 8);
   } else if (key === "ring" || key === "noise") {
     performanceSettings[key] = clampInt(value, 0, MAX_LEVEL);
   }
@@ -772,7 +778,7 @@ async function sendPerformanceSettings(command = SYSEX_COMMAND_SETTINGS) {
 
   const frame = buildSettingsSysex(command);
   output.send(frame);
-  setStatus(`Set ring ${performanceSettings.ring}, noise ${performanceSettings.noise}, MIDI in ch ${performanceSettings.midiInChannel} on ${output.name || "MIDI output"}.`);
+  setStatus(`Set ring ${performanceSettings.ring}, noise ${performanceSettings.noise}, MIDI in ch ${performanceSettings.midiInChannel}, Turing ${performanceSettings.turingRange} oct on ${output.name || "MIDI output"}.`);
 }
 
 el.addPreset.addEventListener("click", () => {
@@ -830,6 +836,7 @@ el.sendSettings.addEventListener("click", () => sendPerformanceSettings(SYSEX_CO
 el.ringControl.addEventListener("input", () => updatePerformanceSetting("ring", el.ringControl.value));
 el.noiseControl.addEventListener("input", () => updatePerformanceSetting("noise", el.noiseControl.value));
 el.midiInChannel.addEventListener("input", () => updatePerformanceSetting("midiInChannel", el.midiInChannel.value));
+el.turingRange.addEventListener("input", () => updatePerformanceSetting("turingRange", el.turingRange.value));
 el.canvas.addEventListener("pointerdown", (event) => {
   const target = findDragTarget(canvasPoint(event));
   if (!target) return;

@@ -14,7 +14,8 @@ static constexpr uint8_t WebMidiCommandSaveEnvelope = 0x02u;
 static constexpr uint8_t WebMidiCommandSettings = 0x03u;
 static constexpr uint8_t WebMidiCommandSaveSettings = 0x04u;
 static constexpr uint8_t WebMidiCommandDeleteEnvelope = 0x05u;
-static constexpr uint32_t WebMidiSettingsPayloadLength = 5u;
+static constexpr uint32_t WebMidiSettingsPayloadLength = 6u;
+static constexpr uint32_t WebMidiLegacySettingsPayloadLength = 5u;
 static constexpr uint32_t WebMidiEnvelopePayloadLength = 97u;
 static constexpr uint32_t WebMidiDeleteEnvelopePayloadLength = 1u;
 static constexpr uint32_t WebMidiMaxSysexLength = 112u;
@@ -77,6 +78,36 @@ public:
     void ProcessUsbMidiVoiceByte(uint8_t byte)
     {
         processMidiVoiceByte(byte);
+    }
+
+    void SendPendingUsbMidiOutput()
+    {
+        if (!pendingTuringMidiNoteOn)
+            return;
+
+        uint8_t note = pendingTuringMidiNote;
+        pendingTuringMidiNoteOn = false;
+
+        uint8_t channel = midiInChannel & 0x0Fu;
+        if (turingMidiNoteActive)
+        {
+            uint8_t off[3] = {
+                (uint8_t)(0x80u | channel),
+                turingMidiLastNote,
+                0
+            };
+            tud_midi_stream_write(0, off, sizeof(off));
+        }
+
+        uint8_t on[3] = {
+            (uint8_t)(0x90u | channel),
+            note,
+            96
+        };
+        tud_midi_stream_write(0, on, sizeof(on));
+
+        turingMidiLastNote = note;
+        turingMidiNoteActive = true;
     }
 
     // =========================================================
@@ -161,6 +192,8 @@ public:
             int32_t ring = clamp12(osc2Ring);
             int32_t noiseAmt = clamp12(osc2Noise);
 
+            updateTuringClockState(false);
+
             bool pulse2Trigger = PulseIn2RisingEdge();
             if (pulse2Trigger)
             {
@@ -191,32 +224,7 @@ public:
 
             updateTuringModeControls(main, x, y);
 
-            turingLength = 2 + ((turingLengthControl * 14) >> 12);
-            if (turingLength > 16) turingLength = 16;
-
-            bool externalClock = PulseIn1RisingEdge();
-            bool clocked = false;
-
-            if (externalClock)
-            {
-                externalClockAge = 0;
-                clocked = true;
-            }
-            else
-            {
-                if (externalClockAge < 96000u)
-                    externalClockAge++;
-                else
-                    clocked = internalTuringClock(turingClockControl);
-            }
-
-            if (clocked)
-            {
-                stepTuring(turingMutationControl);
-                triggerTuringEnvelope();
-            }
-
-            updateTuringPulseAge();
+            updateTuringClockState(true);
 
             CVOut1(turingCv);
             CVOut2(turingModCv);
@@ -256,8 +264,10 @@ private:
         EnvelopeStage pd[8];
     };
 
-    static constexpr int32_t TuringCvScale = 3072;
-    static constexpr int32_t TuringCvOffset = 512;
+    static constexpr uint8_t DefaultTuringCvOctaveRange = 2;
+    static constexpr uint8_t MinTuringCvOctaveRange = 1;
+    static constexpr uint8_t MaxTuringCvOctaveRange = 8;
+    static constexpr uint8_t MidiCcTuringCvOctaveRange = 20;
     static constexpr int32_t TuringAudioPitchDepth = 2048;
     static constexpr uint32_t TuringClockLedSamples = 1200u;
     static constexpr int32_t TuringToneMin = 256;
@@ -278,6 +288,8 @@ private:
     static constexpr uint32_t StartupSelectWindowSamples = 24000u;
     static constexpr uint32_t SaveMagic = 0x43315A33u; // C1Z3
     static constexpr uint16_t SaveVersion = 2;
+    static constexpr int32_t OutputLowpassAlphaQ12 = 2458; // 7 kHz at 48 kHz.
+    static constexpr int32_t OutputHighpassAlphaQ12 = 4075; // 40 Hz at 48 kHz.
     static constexpr uint32_t SaveFlashOffset =
         (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE) &
         ~(FLASH_SECTOR_SIZE - 1u);
@@ -417,7 +429,7 @@ private:
             oscCZ(phase2, freq2, pd, wave, noiseAmt);
 
         int32_t osc2Raw = osc2;
-        osc2 = (osc2Raw * osc2Level) >> 12;
+        osc2 = osc2Raw;
 
         int32_t ringDrive = osc2Level;
         if (ringDrive < 2048)
@@ -432,8 +444,36 @@ private:
         osc1 = (osc1 * ampScale) >> 12;
         osc2 = (osc2 * ampScale) >> 12;
 
-        AudioOut1(clip(osc1));
-        AudioOut2(clip(osc2));
+        outputFilteredAudio(osc1, osc2);
+    }
+
+    void outputFilteredAudio(int32_t left, int32_t right)
+    {
+        AudioOut1(filterOutputSample(left, outputFilterLeft));
+        AudioOut2(filterOutputSample(right, outputFilterRight));
+    }
+
+    struct OutputFilterState
+    {
+        int32_t highpassPreviousInput = 0;
+        int32_t highpassOutput = 0;
+        int32_t lowpassOutput = 0;
+    };
+
+    int32_t filterOutputSample(int32_t input, OutputFilterState& state)
+    {
+        input = clip(input);
+
+        int32_t highpass =
+            (OutputHighpassAlphaQ12 *
+             (state.highpassOutput + input - state.highpassPreviousInput)) >> 12;
+        state.highpassPreviousInput = input;
+        state.highpassOutput = highpass;
+
+        state.lowpassOutput +=
+            (OutputLowpassAlphaQ12 * (highpass - state.lowpassOutput)) >> 12;
+
+        return clip(state.lowpassOutput);
     }
 
     inline int32_t oscCZ(
@@ -556,7 +596,7 @@ private:
         }
 
         uint8_t type = midiRunningStatus & 0xF0u;
-        if (type != 0x80u && type != 0x90u && type != 0xE0u)
+        if (type != 0x80u && type != 0x90u && type != 0xB0u && type != 0xE0u)
             return;
 
         midiData[midiDataCount++] = byte & 0x7Fu;
@@ -585,6 +625,14 @@ private:
                 else
                     midiNoteReleased = true;
             }
+            return;
+        }
+
+        if (type == 0xB0u)
+        {
+            if (midiData[0] == MidiCcTuringCvOctaveRange)
+                turingCvOctaveRange =
+                    1u + (uint8_t)(((uint32_t)midiData[1] * 7u) / 127u);
             return;
         }
 
@@ -639,7 +687,7 @@ private:
         if (command == WebMidiCommandSettings ||
             command == WebMidiCommandSaveSettings)
         {
-            handleWebMidiSettings();
+            handleWebMidiSettings(command == WebMidiCommandSaveSettings);
             return;
         }
 
@@ -671,19 +719,27 @@ private:
         return true;
     }
 
-    void handleWebMidiSettings()
+    void handleWebMidiSettings(bool persist)
     {
-        if (sysexLength != WebMidiSettingsPayloadLength + 6u)
+        if (sysexLength != WebMidiSettingsPayloadLength + 6u &&
+            sysexLength != WebMidiLegacySettingsPayloadLength + 6u)
             return;
 
         uint32_t offset = 6;
         int32_t ring = decodeWebMidiUint14(offset);
         int32_t noise = decodeWebMidiUint14(offset);
         uint8_t channel = sysexBuffer[offset] & 0x0Fu;
+        offset++;
 
         osc2Ring = ring;
         osc2Noise = noise;
         midiInChannel = channel;
+
+        if (sysexLength == WebMidiSettingsPayloadLength + 6u)
+            turingCvOctaveRange = clampTuringCvOctaveRange(sysexBuffer[offset]);
+
+        if (persist)
+            savePerformanceStateIfChanged();
     }
 
     void handleWebMidiEnvelope(bool persist)
@@ -910,97 +966,44 @@ private:
 
     inline int32_t czWave(uint32_t phase, uint32_t wave)
     {
-        int32_t saw = ((int32_t)(phase >> 20) & 4095) - 2048;
-        int32_t square = (phase & 0x80000000u) ? 2047 : -2048;
-        int32_t pulse = narrowPulseWave(phase);
-        int32_t doubleSine = getSine(phase << 1);
-
-        switch (wave)
-        {
-            case 0: return saw;
-            case 1: return square;
-            case 2: return pulse;
-            case 3: return doubleSine;
-            case 4: return sawPulseWave(phase);
-            case 5: return resonantSawWindowWave(phase);
-            case 6: return resonantTriangleWindowWave(phase);
-            default: return resonantTrapezoidWindowWave(phase);
-        }
-    }
-
-    inline int32_t narrowPulseWave(uint32_t phase)
-    {
         uint32_t p = (phase >> 20) & 4095;
-
-        if (p < 128)
-            return 2047;
-
-        if (p >= 2048 && p < 2176)
-            return -2048;
-
-        return getSine(phase) >> 3;
-    }
-
-    inline int32_t sawPulseWave(uint32_t phase)
-    {
-        uint32_t p = (phase >> 20) & 4095;
-
-        if (p < 2304)
-        {
-            int32_t rise = ((int32_t)p * 4095) / 2304;
-            int32_t curve = 4095 - (((4095 - rise) * (4095 - rise)) >> 12);
-            return curve - 2048;
-        }
-
-        return -2048;
-    }
-
-    inline int32_t resonantSawWindowWave(uint32_t phase)
-    {
-        uint32_t p = (phase >> 20) & 4095;
-        int32_t envelope = (int32_t)(4095 - p);
-        int32_t overtone = getSine(phase * 6);
-        int32_t body = (((int32_t)p - 2048) * envelope) >> 13;
-
-        return clip(body + ((overtone * envelope) >> 12));
-    }
-
-    inline int32_t resonantTriangleWindowWave(uint32_t phase)
-    {
-        uint32_t p = (phase >> 20) & 4095;
-        int32_t envelope =
-            p < 2048 ? (int32_t)p << 1 : (int32_t)(4095 - p) << 1;
-        int32_t triangle = p < 2048 ?
-            ((int32_t)p << 1) - 2048 :
-            6143 - ((int32_t)p << 1);
-        int32_t overtone = getSine(phase * 5);
-        int32_t body = (triangle * envelope) >> 14;
-
-        return clip(body + ((overtone * envelope) >> 12));
-    }
-
-    inline int32_t resonantTrapezoidWindowWave(uint32_t phase)
-    {
-        uint32_t p = (phase >> 20) & 4095;
-        int32_t envelope;
-
-        if (p < 768)
-            envelope = ((int32_t)p * 4095) / 768;
-        else if (p < 3072)
-            envelope = 4095;
-        else
-            envelope = ((int32_t)(4095 - p) * 4095) / 1023;
-
-        int32_t overtone =
-            (getSine(phase * 7) + (getSine(phase * 8) >> 1)) >> 1;
-        int32_t body = envelope >> 4;
-
-        return clip(body + ((overtone * envelope) >> 12));
+        return pdWaveLUT[wave & 7u][p];
     }
 
     // =========================================================
     // TURING MACHINE
     // =========================================================
+    void updateTuringClockState(bool triggerAudioEnvelope)
+    {
+        turingLength = 2 + ((turingLengthControl * 14) >> 12);
+        if (turingLength > 16) turingLength = 16;
+
+        bool externalClock = PulseIn1RisingEdge();
+        bool clocked = false;
+
+        if (externalClock)
+        {
+            externalClockAge = 0;
+            clocked = true;
+        }
+        else
+        {
+            if (externalClockAge < 96000u)
+                externalClockAge++;
+            else
+                clocked = internalTuringClock(turingClockControl);
+        }
+
+        if (clocked)
+        {
+            stepTuring(turingMutationControl);
+            if (triggerAudioEnvelope)
+                triggerTuringEnvelope();
+        }
+
+        updateTuringPulseAge();
+    }
+
     void stepTuring(int32_t knob)
     {
         uint32_t mask = (1u << turingLength) - 1u;
@@ -1017,8 +1020,23 @@ private:
         turingClockLedAge = 0;
 
         int32_t unipolar = (int32_t)((turing * 4095u) / mask);
-        turingCv = clip((((unipolar - 2048) * TuringCvScale) >> 12) + TuringCvOffset);
+        int32_t scale =
+            (int32_t)turingCvOctaveRange * PitchInputCountsPerVolt;
+        turingCv = clip((unipolar * scale) / 4095);
         turingModCv = smooth(turingCv);
+        queueTuringMidiNote();
+    }
+
+    void queueTuringMidiNote()
+    {
+        int32_t note = 36 + ((turingCv * 12) / PitchInputCountsPerVolt);
+        if (note < 0)
+            note = 0;
+        else if (note > 127)
+            note = 127;
+
+        pendingTuringMidiNote = (uint8_t)note;
+        pendingTuringMidiNoteOn = true;
     }
 
     uint8_t turingMutationChance(int32_t knob)
@@ -1455,8 +1473,8 @@ private:
             envelopePreset < EnvelopePresetCount ?
             envelopePreset :
             (uint8_t)EnvelopePreset::Off;
-        state.reserved[0] = 0;
-        state.reserved[1] = 0;
+        state.reserved[0] = turingCvOctaveRange;
+        state.reserved[1] = midiInChannel;
         state.reserved[2] = 0;
         state.checksum = 0;
         state.checksum = checksumState(state);
@@ -1575,7 +1593,9 @@ private:
             a.osc2Level == b.osc2Level &&
             a.osc2Ring == b.osc2Ring &&
             a.osc2Noise == b.osc2Noise &&
-            a.envelopePreset == b.envelopePreset;
+            a.envelopePreset == b.envelopePreset &&
+            a.reserved[0] == b.reserved[0] &&
+            a.reserved[1] == b.reserved[1];
     }
 
     void loadPerformanceState()
@@ -1588,9 +1608,20 @@ private:
         osc2Level = clamp12(state.osc2Level);
         osc2Ring = 0;
         osc2Noise = 0;
+        turingCvOctaveRange = clampTuringCvOctaveRange(state.reserved[0]);
+        midiInChannel = state.reserved[1] & 0x0Fu;
         envelopePreset = state.envelopePreset < EnvelopePresetCount ?
             state.envelopePreset :
             (uint8_t)EnvelopePreset::Off;
+    }
+
+    uint8_t clampTuringCvOctaveRange(uint8_t range)
+    {
+        if (range < MinTuringCvOctaveRange)
+            return DefaultTuringCvOctaveRange;
+        if (range > MaxTuringCvOctaveRange)
+            return MaxTuringCvOctaveRange;
+        return range;
     }
 
     void loadCustomEnvelopeState()
@@ -1792,6 +1823,8 @@ private:
     uint32_t phase1 = 0;
     uint32_t phase2 = 0;
     uint32_t syncFadeSamples = 0;
+    OutputFilterState outputFilterLeft = {};
+    OutputFilterState outputFilterRight = {};
 
     uint32_t turing = 0xACE1u;
     int32_t turingSmooth = 0;
@@ -1834,6 +1867,7 @@ private:
     int32_t turingMutationControl = 2048;
     int32_t turingLengthControl = 4095;
     int32_t turingClockControl = 2048;
+    uint8_t turingCvOctaveRange = DefaultTuringCvOctaveRange;
     int32_t smoothedFreq = 0;
     int32_t osc2Detune = 0;
     int32_t osc2Level = 0;
@@ -1871,6 +1905,10 @@ private:
     volatile uint8_t pendingMidiNote = 60;
     volatile uint8_t pendingMidiVelocity = 100;
     volatile bool pendingMidiNoteOn = false;
+    volatile uint8_t pendingTuringMidiNote = 60;
+    volatile bool pendingTuringMidiNoteOn = false;
+    uint8_t turingMidiLastNote = 60;
+    bool turingMidiNoteActive = false;
     uint8_t midiNote = 60;
     uint8_t midiVelocity = 100;
     int32_t midiPitchBend = 0;
@@ -1957,6 +1995,7 @@ void usbMidiWorker()
         else
         {
             tud_task();
+            card.SendPendingUsbMidiOutput();
 
             uint8_t bytes[64];
             uint32_t count = tud_midi_stream_read(bytes, sizeof(bytes));

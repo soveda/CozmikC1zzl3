@@ -147,12 +147,15 @@ The Web MIDI editor can:
 - load a custom envelope into RAM
 - save a custom envelope to card flash
 - delete a saved custom envelope slot from card flash
-- set ring, noise, and MIDI input channel
+- set ring, noise, MIDI input channel, and Turing CV octave range
 - audition envelopes in the browser
 - copy SysEx or C++ envelope data for inspection
 
 Factory presets are never overwritten. The card stores custom envelope shapes;
 custom names are kept in browser local storage.
+
+MIDI CC20 on the selected input channel also controls the Turing CV octave
+range live, mapped from 1 to 8 octaves.
 
 ## Running The Web Editor
 
