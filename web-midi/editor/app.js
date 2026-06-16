@@ -12,6 +12,8 @@ const SYSEX_COMMAND_SAVE = 0x02;
 const SYSEX_COMMAND_SETTINGS = 0x03;
 const SYSEX_COMMAND_SAVE_SETTINGS = 0x04;
 const SYSEX_COMMAND_DELETE = 0x05;
+const SYSEX_COMMAND_REQUEST_SETTINGS = 0x06;
+const SYSEX_COMMAND_SETTINGS_RESPONSE = 0x07;
 
 const factoryPresets = [
   preset("Off", fill(0, 1), fill(0, 1)),
@@ -75,6 +77,7 @@ const el = {
   sendSysex: document.querySelector("#sendSysex"),
   flashSysex: document.querySelector("#flashSysex"),
   deleteSlot: document.querySelector("#deleteSlot"),
+  requestSettings: document.querySelector("#requestSettings"),
   sendSettings: document.querySelector("#sendSettings"),
   downloadJson: document.querySelector("#downloadJson"),
   resetPreset: document.querySelector("#resetPreset"),
@@ -627,6 +630,10 @@ function buildDeleteSlotSysex(slot) {
   return [0xf0, SYSEX_MANUFACTURER, ...SYSEX_ID, SYSEX_COMMAND_DELETE, slot & 0x7f, 0xf7];
 }
 
+function buildRequestSettingsSysex() {
+  return [0xf0, SYSEX_MANUFACTURER, ...SYSEX_ID, SYSEX_COMMAND_REQUEST_SETTINGS, 0xf7];
+}
+
 function canSendSelectedEnvelope() {
   return selected !== 0 &&
     presets[selected].amp.some((stage) => stage.level > 0) &&
@@ -653,6 +660,10 @@ function packUint14(value) {
   return [v & 0x7f, (v >> 7) & 0x7f];
 }
 
+function unpackUint14(data, offset) {
+  return (data[offset] & 0x7f) | ((data[offset + 1] & 0x7f) << 7);
+}
+
 function packUint21(value) {
   const v = clampInt(value, 0, 0x1fffff);
   return [v & 0x7f, (v >> 7) & 0x7f, (v >> 14) & 0x7f];
@@ -672,6 +683,11 @@ function sysexHex() {
 }
 
 function handleMidi(event) {
+  if (event.data[0] === 0xf0) {
+    handleSysexResponse(event.data);
+    return;
+  }
+
   const [status, note, velocity] = event.data;
   const type = status & 0xf0;
   if (type === 0x90 && velocity > 0) {
@@ -681,6 +697,32 @@ function handleMidi(event) {
   if (type === 0x80 || (type === 0x90 && velocity === 0)) {
     stopAudio();
   }
+}
+
+function handleSysexResponse(data) {
+  if (data.length !== 16 ||
+      data[0] !== 0xf0 ||
+      data[1] !== SYSEX_MANUFACTURER ||
+      data[2] !== SYSEX_ID[0] ||
+      data[3] !== SYSEX_ID[1] ||
+      data[4] !== SYSEX_ID[2] ||
+      data[5] !== SYSEX_ID[3] ||
+      data[6] !== SYSEX_COMMAND_SETTINGS_RESPONSE ||
+      data[15] !== 0xf7) {
+    return;
+  }
+
+  performanceSettings = {
+    ring: clampInt(unpackUint14(data, 7), 0, MAX_LEVEL),
+    noise: clampInt(unpackUint14(data, 9), 0, MAX_LEVEL),
+    midiInChannel: clampInt((data[11] & 0x0f) + 1, 1, 16),
+    turingRange: clampInt(data[12], 1, 8),
+    turingMidiOut: (data[13] & 0x01) !== 0,
+    turingMidiChannel: clampInt((data[14] & 0x0f) + 1, 1, 16)
+  };
+  savePerformanceSettings();
+  renderPerformanceSettings();
+  setStatus(`Loaded settings from card: ring ${performanceSettings.ring}, noise ${performanceSettings.noise}, MIDI in ch ${performanceSettings.midiInChannel}, Turing ${performanceSettings.turingRange} oct, Turing MIDI ${performanceSettings.turingMidiOut ? "on" : "off"} ch ${performanceSettings.turingMidiChannel}.`);
 }
 
 function downloadJson() {
@@ -802,6 +844,21 @@ async function sendPerformanceSettings(command = SYSEX_COMMAND_SETTINGS) {
   setStatus(`${action} ring ${performanceSettings.ring}, noise ${performanceSettings.noise}, MIDI in ch ${performanceSettings.midiInChannel}, Turing ${performanceSettings.turingRange} oct, Turing MIDI ${performanceSettings.turingMidiOut ? "on" : "off"} ch ${performanceSettings.turingMidiChannel} on ${output.name || "MIDI output"}.`);
 }
 
+async function requestPerformanceSettings() {
+  if (!midiAccess) {
+    await connectMidi();
+  }
+
+  const output = selectedMidiOutput();
+  if (!output) {
+    setStatus("No MIDI output found for settings request.");
+    return;
+  }
+
+  output.send(buildRequestSettingsSysex());
+  setStatus(`Requested settings from ${output.name || "MIDI output"}.`);
+}
+
 el.addPreset.addEventListener("click", () => {
   if (customPresetCount() >= CUSTOM_SLOT_COUNT) {
     setStatus("Custom preset limit reached.");
@@ -853,6 +910,7 @@ el.copySysex.addEventListener("click", async () => {
 el.sendSysex.addEventListener("click", () => sendSysex(SYSEX_COMMAND_PREVIEW));
 el.flashSysex.addEventListener("click", () => sendSysex(SYSEX_COMMAND_SAVE));
 el.deleteSlot.addEventListener("click", deleteCustomSlot);
+el.requestSettings.addEventListener("click", requestPerformanceSettings);
 el.sendSettings.addEventListener("click", () => sendPerformanceSettings(SYSEX_COMMAND_SAVE_SETTINGS));
 el.ringControl.addEventListener("input", () => updatePerformanceSetting("ring", el.ringControl.value));
 el.noiseControl.addEventListener("input", () => updatePerformanceSetting("noise", el.noiseControl.value));

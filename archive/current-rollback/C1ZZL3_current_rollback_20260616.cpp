@@ -14,8 +14,6 @@ static constexpr uint8_t WebMidiCommandSaveEnvelope = 0x02u;
 static constexpr uint8_t WebMidiCommandSettings = 0x03u;
 static constexpr uint8_t WebMidiCommandSaveSettings = 0x04u;
 static constexpr uint8_t WebMidiCommandDeleteEnvelope = 0x05u;
-static constexpr uint8_t WebMidiCommandRequestSettings = 0x06u;
-static constexpr uint8_t WebMidiCommandSettingsResponse = 0x07u;
 static constexpr uint32_t WebMidiSettingsPayloadLength = 8u;
 static constexpr uint32_t WebMidiRangeSettingsPayloadLength = 6u;
 static constexpr uint32_t WebMidiLegacySettingsPayloadLength = 5u;
@@ -155,8 +153,6 @@ public:
         int32_t x    = KnobVal(Knob::X);
         int32_t y    = KnobVal(Knob::Y);
 
-        applyMidiControlPickupResets(main, x, y);
-
         Switch previousMode = lastMode;
 
         updateStartupEnvelopeSelect(mode);
@@ -215,8 +211,8 @@ public:
             // -------------------------
             int32_t freq = smoothPitch(pitchFrequency(currentPitchUnits(pitchControl, in1)));
 
-            int32_t pd = clamp12(pdControl + (cv1 << 1));
-            int32_t wave = clamp12(waveControl + (cv2 << 1));
+            int32_t pd = clamp12(midiScaledPdControl() + (cv1 << 1));
+            int32_t wave = clamp12(midiScaledWaveControl() + (cv2 << 1));
 
             int32_t ring = clamp12(osc2Ring);
             int32_t noiseAmt = clamp12(osc2Noise);
@@ -296,12 +292,9 @@ private:
     static constexpr uint8_t DefaultTuringCvOctaveRange = 2;
     static constexpr uint8_t MinTuringCvOctaveRange = 1;
     static constexpr uint8_t MaxTuringCvOctaveRange = 8;
-    static constexpr uint8_t MidiCcDetune = 20;
-    static constexpr uint8_t MidiCcRingAmount = 21;
-    static constexpr uint8_t MidiCcNoiseAmount = 22;
+    static constexpr uint8_t MidiCcTuringCvOctaveRange = 20;
     static constexpr uint8_t MidiCcPdAmount = 1;
     static constexpr uint8_t MidiCcWaveAmount = 23;
-    static constexpr uint8_t MidiCcTuringCvOctaveRange = 24;
     static constexpr int32_t TuringAudioPitchDepth = 2048;
     static constexpr uint32_t TuringClockLedSamples = 1200u;
     static constexpr int32_t TuringToneMin = 256;
@@ -425,8 +418,8 @@ private:
     void outputSynthVoice()
     {
         int32_t freq = smoothPitch(pitchFrequency(pitchUnits(pitchControl, 0)));
-        int32_t pd = clamp12(pdControl);
-        int32_t wave = clamp12(waveControl);
+        int32_t pd = clamp12(midiScaledPdControl());
+        int32_t wave = clamp12(midiScaledWaveControl());
 
         outputSynthVoice(freq, pd, wave, osc2Ring, osc2Noise);
     }
@@ -437,8 +430,10 @@ private:
             (turingCv * TuringAudioPitchDepth * MainPitchOctaves) >> 12;
         int32_t freq = smoothPitch(
             pitchFrequency(pitchUnits(pitchControl, 0) + pitchOffset));
-        int32_t pd = clampTuringTone(pdControl + turingCvToneOffset(cv1));
-        int32_t wave = clampTuringTone(waveControl + turingCvToneOffset(cv2));
+        int32_t pd = clampTuringTone(
+            midiScaledPdControl() + turingCvToneOffset(cv1));
+        int32_t wave = clampTuringTone(
+            midiScaledWaveControl() + turingCvToneOffset(cv2));
 
         outputSynthVoice(freq, pd, wave, osc2Ring, osc2Noise);
     }
@@ -666,33 +661,18 @@ private:
         {
             if (midiData[0] == MidiCcPdAmount)
             {
-                pdControl = midiCcToControl(midiData[1]);
-                midiResetSynthXPickup = true;
+                midiPdAmount = midiData[1];
+                midiPdActive = true;
             }
             else if (midiData[0] == MidiCcWaveAmount)
             {
-                waveControl = midiCcToControl(midiData[1]);
-                midiResetSynthYPickup = true;
+                midiWaveAmount = midiData[1];
+                midiWaveActive = true;
             }
             else if (midiData[0] == MidiCcTuringCvOctaveRange)
             {
                 turingCvOctaveRange =
                     1u + (uint8_t)(((uint32_t)midiData[1] * 7u) / 127u);
-            }
-            else if (midiData[0] == MidiCcDetune)
-            {
-                setDetuneFromControl(midiCcToControl(midiData[1]));
-                midiResetAltMainPickup = true;
-            }
-            else if (midiData[0] == MidiCcRingAmount)
-            {
-                osc2Ring = midiCcToControl(midiData[1]);
-                midiResetAltXPickup = true;
-            }
-            else if (midiData[0] == MidiCcNoiseAmount)
-            {
-                osc2Noise = midiCcToControl(midiData[1]);
-                midiResetAltYPickup = true;
             }
             return;
         }
@@ -704,9 +684,20 @@ private:
         }
     }
 
-    int32_t midiCcToControl(uint8_t value)
+    int32_t midiScaledPdControl()
     {
-        return ((int32_t)value * 4095) / 127;
+        if (!midiPdActive)
+            return pdControl;
+
+        return (pdControl * (int32_t)midiPdAmount) / 127;
+    }
+
+    int32_t midiScaledWaveControl()
+    {
+        if (!midiWaveActive)
+            return waveControl;
+
+        return (waveControl * (int32_t)midiWaveAmount) / 127;
     }
 
     void applyPendingMidiNote()
@@ -765,13 +756,7 @@ private:
         }
 
         if (command == WebMidiCommandDeleteEnvelope)
-        {
             handleWebMidiDeleteEnvelope();
-            return;
-        }
-
-        if (command == WebMidiCommandRequestSettings)
-            handleWebMidiRequestSettings();
     }
 
     bool webMidiHeaderMatches()
@@ -823,32 +808,6 @@ private:
 
         if (persist)
             savePerformanceStateIfChanged();
-    }
-
-    void handleWebMidiRequestSettings()
-    {
-        if (sysexLength != 6u)
-            return;
-
-        uint8_t frame[16] = {
-            0xF0u,
-            WebMidiManufacturer,
-            WebMidiId[0],
-            WebMidiId[1],
-            WebMidiId[2],
-            WebMidiId[3],
-            WebMidiCommandSettingsResponse
-        };
-        uint32_t offset = 7;
-        appendWebMidiUint14(frame, offset, clamp12(osc2Ring));
-        appendWebMidiUint14(frame, offset, clamp12(osc2Noise));
-        frame[offset++] = midiInChannel & 0x0Fu;
-        frame[offset++] = clampTuringCvOctaveRange(turingCvOctaveRange);
-        frame[offset++] = turingMidiOutputEnabled ? 1u : 0u;
-        frame[offset++] = turingMidiOutputChannel & 0x0Fu;
-        frame[offset++] = 0xF7u;
-
-        tud_midi_stream_write(0, frame, offset);
     }
 
     void handleWebMidiEnvelope(bool persist)
@@ -918,13 +877,6 @@ private:
             ((int32_t)(sysexBuffer[offset + 1] & 0x7Fu) << 7);
         offset += 2;
         return clamp12(value);
-    }
-
-    void appendWebMidiUint14(uint8_t* buffer, uint32_t& offset, int32_t value)
-    {
-        uint32_t packed = (uint32_t)clamp12(value);
-        buffer[offset++] = packed & 0x7Fu;
-        buffer[offset++] = (packed >> 7) & 0x7Fu;
     }
 
     uint32_t decodeWebMidiUint21(uint32_t& offset)
@@ -1458,7 +1410,13 @@ private:
         if (altMainPickedUp ||
             pickupAltControl(main, altMainEntry, clamp12(osc2Detune + 2048), altMainPickedUp))
         {
-            setDetuneFromControl(main);
+            osc2Detune = main - 2048;
+            if (osc2Detune > -32 && osc2Detune < 32)
+                osc2Detune = 0;
+
+            osc2Level = osc2Detune < 0 ? -osc2Detune : osc2Detune;
+            osc2Level <<= 1;
+            if (osc2Level > 4095) osc2Level = 4095;
         }
 
         if (altXPickedUp ||
@@ -1483,55 +1441,6 @@ private:
         if (synthYPickedUp ||
             pickupModeControl(y, synthYEntry, waveControl, synthYPickedUp))
             waveControl = y;
-    }
-
-    void applyMidiControlPickupResets(int32_t main, int32_t x, int32_t y)
-    {
-        if (midiResetSynthXPickup)
-        {
-            synthXPickedUp = false;
-            synthXEntry = x;
-            midiResetSynthXPickup = false;
-        }
-
-        if (midiResetSynthYPickup)
-        {
-            synthYPickedUp = false;
-            synthYEntry = y;
-            midiResetSynthYPickup = false;
-        }
-
-        if (midiResetAltMainPickup)
-        {
-            altMainPickedUp = false;
-            altMainEntry = main;
-            midiResetAltMainPickup = false;
-        }
-
-        if (midiResetAltXPickup)
-        {
-            altXPickedUp = false;
-            altXEntry = x;
-            midiResetAltXPickup = false;
-        }
-
-        if (midiResetAltYPickup)
-        {
-            altYPickedUp = false;
-            altYEntry = y;
-            midiResetAltYPickup = false;
-        }
-    }
-
-    void setDetuneFromControl(int32_t control)
-    {
-        osc2Detune = clamp12(control) - 2048;
-        if (osc2Detune > -32 && osc2Detune < 32)
-            osc2Detune = 0;
-
-        osc2Level = osc2Detune < 0 ? -osc2Detune : osc2Detune;
-        osc2Level <<= 1;
-        if (osc2Level > 4095) osc2Level = 4095;
     }
 
     void updateTuringModeControls(int32_t main, int32_t x, int32_t y)
@@ -2081,14 +1990,13 @@ private:
     uint8_t midiNote = 60;
     uint8_t midiVelocity = 100;
     int32_t midiPitchBend = 0;
+    volatile uint8_t midiPdAmount = 127;
+    volatile uint8_t midiWaveAmount = 127;
+    volatile bool midiPdActive = false;
+    volatile bool midiWaveActive = false;
     bool midiNoteActive = false;
     bool midiNoteReleased = false;
     volatile uint8_t midiInChannel = 0;
-    volatile bool midiResetSynthXPickup = false;
-    volatile bool midiResetSynthYPickup = false;
-    volatile bool midiResetAltMainPickup = false;
-    volatile bool midiResetAltXPickup = false;
-    volatile bool midiResetAltYPickup = false;
     EnvelopeProgram customEnvelopes[CustomEnvelopeSlotCount] = {};
     bool customEnvelopeLoaded[CustomEnvelopeSlotCount] = {};
     uint8_t sysexBuffer[WebMidiMaxSysexLength] = {};
@@ -2186,8 +2094,8 @@ void usbMidiWorker()
 //}
 int main()
 {
-#if defined(C1ZZL3_OVERCLOCK_KHZ) && C1ZZL3_OVERCLOCK_KHZ
-    set_sys_clock_khz(C1ZZL3_OVERCLOCK_KHZ, true);
+#if defined(C1ZZL3_EXPERIMENTAL_OVERCLOCK_KHZ) && C1ZZL3_EXPERIMENTAL_OVERCLOCK_KHZ
+    set_sys_clock_khz(C1ZZL3_EXPERIMENTAL_OVERCLOCK_KHZ, true);
 #endif
     multicore_launch_core1(usbMidiWorker);
     card.Run();

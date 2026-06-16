@@ -38,6 +38,8 @@ F0 7D 43 31 5A 33 cc payload... F7
 | `03` | Apply ring/noise/MIDI channel/Turing settings in RAM |
 | `04` | Save ring/noise/MIDI channel/Turing settings to flash |
 | `05` | Delete saved custom envelope slot from flash |
+| `06` | Request current performance settings from the card |
+| `07` | Performance settings response from the card |
 
 ## Envelope Payload
 
@@ -117,6 +119,10 @@ unchanged.
 The web editor `Set` button sends command `04`, so the settings are applied
 immediately and reloaded after reset.
 
+The web editor `Read` button sends command `06`. The card replies with command
+`07` and the same 8-byte payload format, allowing the editor to load the current
+card settings without writing flash.
+
 ```text
 rr rr nn nn ic tr tm tc
 ```
@@ -135,22 +141,27 @@ There is no MIDI acknowledgement frame.
 The following MIDI CC controls are handled live on the selected MIDI input
 channel:
 
-- CC1: live phase-distortion amount, using the standard modulation wheel. The
-  physical X/PD knob sets the maximum value; CC1 scales from 0 to that maximum.
-- CC20: Turing CV range, value `0` maps to 1 octave and `127` maps to 8 octaves.
-- CC23: live waveform amount for DAW/controller knob assignment. The physical
-  Y/wave knob sets the maximum value; CC23 scales from 0 to that maximum.
+- CC1: phase-distortion amount, mapped across `0..4095`.
+- CC20: oscillator 2 detune, mapped across the same bipolar range as the
+  physical detune control.
+- CC21: ring modulation amount, mapped across `0..4095`.
+- CC22: noise amount, mapped across `0..4095`.
+- CC23: waveform amount, mapped across `0..4095`.
+- CC24: Turing CV range, value `0` maps to 1 octave and `127` maps to 8 octaves.
 
 Turing MIDI output enable and output channel are set by the Web MIDI settings
-payload, not by MIDI CC.
+payload, not by MIDI CC. CC changes are live and update the same control values
+as the physical knobs; use the web editor `Set` button or the physical save
+gesture to persist them.
 
 ## Current Limitations
 
-- No SysEx readback.
+- SysEx readback is limited to performance settings; custom envelope readback is
+  not implemented.
 - Custom slot names are kept by the browser editor, not by the card firmware.
 - Silent custom envelopes are not accepted.
 - USB role is selected only at boot/reset.
 - Web MIDI SysEx editing is only available in USB MIDI device mode.
-- Turing MIDI output is experimental and can be disabled from the web editor.
-- In the overclock experimental build, the Turing clock can continue running in
-  synth mode while the Turing audio voice remains absent.
+- Turing MIDI output can be disabled from the web editor.
+- The Turing clock can continue running in synth mode while the Turing audio
+  voice remains absent.

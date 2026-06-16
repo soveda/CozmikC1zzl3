@@ -67,7 +67,7 @@ Experimental behaviour:
   LED/ring behaviour.
 - Web MIDI performance settings can scale Turing CV output range from 1 to 8
   octaves, defaulting to 2 octaves.
-- MIDI CC20 on the selected input channel controls the same Turing CV octave
+- MIDI CC24 on the selected input channel controls the same Turing CV octave
   range live.
 - The synth output now has a fixed first-order output filter: 40 Hz high-pass
   followed by 7 kHz low-pass, both 6 dB/octave.
@@ -77,8 +77,11 @@ Experimental behaviour:
   the next note if the clock is faster than that window.
 - Web MIDI settings can turn Turing MIDI output on/off and select its MIDI
   output channel.
-- CC1 scales phase distortion up to the physical X/PD knob value. CC23 scales
-  waveform up to the physical Y/wave knob value.
+- CC1 controls phase distortion, CC20 controls detune, CC21 controls ring
+  modulation, CC22 controls noise amount, and CC23 controls waveform live. The
+  current values can be saved by the web editor or the physical save gesture.
+- The web editor can request current performance settings from the card and load
+  them into its controls.
 
 Expected tradeoff:
 
