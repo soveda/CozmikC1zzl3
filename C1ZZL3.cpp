@@ -1,5 +1,6 @@
 #include "ComputerCard.h"
 #include "C1ZZL3_LUT.h"
+#include "hardware/clocks.h"
 #include "hardware/sync.h"
 #include "pico/multicore.h"
 #include "pico/time.h"
@@ -1972,6 +1973,9 @@ void usbMidiWorker()
 //}
 int main()
 {
+#if defined(C1ZZL3_EXPERIMENTAL_OVERCLOCK_KHZ) && C1ZZL3_EXPERIMENTAL_OVERCLOCK_KHZ
+    set_sys_clock_khz(C1ZZL3_EXPERIMENTAL_OVERCLOCK_KHZ, true);
+#endif
     multicore_launch_core1(usbMidiWorker);
     card.Run();
 }
