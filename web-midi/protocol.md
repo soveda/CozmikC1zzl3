@@ -35,8 +35,8 @@ F0 7D 43 31 5A 33 cc payload... F7
 | --- | --- |
 | `01` | Load custom envelope into RAM |
 | `02` | Save custom envelope to flash |
-| `03` | Apply ring/noise/MIDI channel/Turing range settings |
-| `04` | Reserved settings-save command; currently applies settings like `03` |
+| `03` | Apply ring/noise/MIDI channel/Turing settings in RAM |
+| `04` | Save ring/noise/MIDI channel/Turing settings to flash |
 | `05` | Delete saved custom envelope slot from flash |
 
 ## Envelope Payload
@@ -109,11 +109,16 @@ slot is currently selected on the card, the active envelope preset is changed to
 
 ## Performance Settings Payload
 
-Settings commands `03` and `04` use a 6-byte payload. Firmware also accepts the
-older 5-byte payload and leaves the Turing range unchanged.
+Settings commands `03` and `04` use an 8-byte payload. Firmware also accepts
+the older 5-byte payload and leaves Turing range/MIDI-out settings unchanged;
+it also accepts the previous 6-byte payload and leaves the MIDI-out settings
+unchanged.
+
+The web editor `Set` button sends command `04`, so the settings are applied
+immediately and reloaded after reset.
 
 ```text
-rr rr nn nn ic tr
+rr rr nn nn ic tr tm tc
 ```
 
 | Bytes | Meaning |
@@ -122,11 +127,22 @@ rr rr nn nn ic tr
 | `nn nn` | noise amount, 14-bit packed, `0..4095` |
 | `ic` | MIDI input channel encoded as `0..15` for channels `1..16` |
 | `tr` | Turing CV output range in octaves, `1..8`; default is `2` |
+| `tm` | Turing MIDI output enable, `0` off or `1` on |
+| `tc` | Turing MIDI output channel encoded as `0..15` for channels `1..16` |
 
 There is no MIDI acknowledgement frame.
 
-The same range can be controlled live with MIDI CC20 on the selected MIDI input
-channel. CC value `0` maps to 1 octave and `127` maps to 8 octaves.
+The following MIDI CC controls are handled live on the selected MIDI input
+channel:
+
+- CC1: live phase-distortion amount, using the standard modulation wheel. The
+  physical X/PD knob sets the maximum value; CC1 scales from 0 to that maximum.
+- CC20: Turing CV range, value `0` maps to 1 octave and `127` maps to 8 octaves.
+- CC23: live waveform amount for DAW/controller knob assignment. The physical
+  Y/wave knob sets the maximum value; CC23 scales from 0 to that maximum.
+
+Turing MIDI output enable and output channel are set by the Web MIDI settings
+payload, not by MIDI CC.
 
 ## Current Limitations
 
@@ -135,6 +151,6 @@ channel. CC value `0` maps to 1 octave and `127` maps to 8 octaves.
 - Silent custom envelopes are not accepted.
 - USB role is selected only at boot/reset.
 - Web MIDI SysEx editing is only available in USB MIDI device mode.
-- Turing MIDI output is intentionally absent for stability.
+- Turing MIDI output is experimental and can be disabled from the web editor.
 - In the overclock experimental build, the Turing clock can continue running in
-  synth mode while the Turing audio voice and Turing MIDI output remain absent.
+  synth mode while the Turing audio voice remains absent.

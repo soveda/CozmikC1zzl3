@@ -14,7 +14,8 @@ static constexpr uint8_t WebMidiCommandSaveEnvelope = 0x02u;
 static constexpr uint8_t WebMidiCommandSettings = 0x03u;
 static constexpr uint8_t WebMidiCommandSaveSettings = 0x04u;
 static constexpr uint8_t WebMidiCommandDeleteEnvelope = 0x05u;
-static constexpr uint32_t WebMidiSettingsPayloadLength = 6u;
+static constexpr uint32_t WebMidiSettingsPayloadLength = 8u;
+static constexpr uint32_t WebMidiRangeSettingsPayloadLength = 6u;
 static constexpr uint32_t WebMidiLegacySettingsPayloadLength = 5u;
 static constexpr uint32_t WebMidiEnvelopePayloadLength = 97u;
 static constexpr uint32_t WebMidiDeleteEnvelopePayloadLength = 1u;
@@ -82,7 +83,24 @@ public:
 
     void SendPendingUsbMidiOutput()
     {
-        uint8_t channel = midiInChannel & 0x0Fu;
+        if (!turingMidiOutputEnabled)
+        {
+            pendingTuringMidiNoteOn = false;
+            pendingTuringMidiNoteOff = false;
+            if (turingMidiNoteActive)
+            {
+                uint8_t off[3] = {
+                    (uint8_t)(0x80u | (turingMidiLastChannel & 0x0Fu)),
+                    turingMidiLastNote,
+                    0
+                };
+                tud_midi_stream_write(0, off, sizeof(off));
+            }
+            turingMidiNoteActive = false;
+            return;
+        }
+
+        uint8_t channel = turingMidiOutputChannel & 0x0Fu;
         if (pendingTuringMidiNoteOff && !turingMidiNoteActive)
             pendingTuringMidiNoteOff = false;
 
@@ -91,7 +109,7 @@ public:
         {
             pendingTuringMidiNoteOff = false;
             uint8_t off[3] = {
-                (uint8_t)(0x80u | channel),
+                (uint8_t)(0x80u | (turingMidiLastChannel & 0x0Fu)),
                 turingMidiLastNote,
                 0
             };
@@ -113,6 +131,7 @@ public:
         tud_midi_stream_write(0, on, sizeof(on));
 
         turingMidiLastNote = note;
+        turingMidiLastChannel = channel;
         turingMidiNoteActive = true;
     }
 
@@ -192,8 +211,8 @@ public:
             // -------------------------
             int32_t freq = smoothPitch(pitchFrequency(currentPitchUnits(pitchControl, in1)));
 
-            int32_t pd = clamp12(pdControl + (cv1 << 1));
-            int32_t wave = clamp12(waveControl + (cv2 << 1));
+            int32_t pd = clamp12(midiScaledPdControl() + (cv1 << 1));
+            int32_t wave = clamp12(midiScaledWaveControl() + (cv2 << 1));
 
             int32_t ring = clamp12(osc2Ring);
             int32_t noiseAmt = clamp12(osc2Noise);
@@ -274,6 +293,8 @@ private:
     static constexpr uint8_t MinTuringCvOctaveRange = 1;
     static constexpr uint8_t MaxTuringCvOctaveRange = 8;
     static constexpr uint8_t MidiCcTuringCvOctaveRange = 20;
+    static constexpr uint8_t MidiCcPdAmount = 1;
+    static constexpr uint8_t MidiCcWaveAmount = 23;
     static constexpr int32_t TuringAudioPitchDepth = 2048;
     static constexpr uint32_t TuringClockLedSamples = 1200u;
     static constexpr int32_t TuringToneMin = 256;
@@ -397,8 +418,8 @@ private:
     void outputSynthVoice()
     {
         int32_t freq = smoothPitch(pitchFrequency(pitchUnits(pitchControl, 0)));
-        int32_t pd = clamp12(pdControl);
-        int32_t wave = clamp12(waveControl);
+        int32_t pd = clamp12(midiScaledPdControl());
+        int32_t wave = clamp12(midiScaledWaveControl());
 
         outputSynthVoice(freq, pd, wave, osc2Ring, osc2Noise);
     }
@@ -409,8 +430,10 @@ private:
             (turingCv * TuringAudioPitchDepth * MainPitchOctaves) >> 12;
         int32_t freq = smoothPitch(
             pitchFrequency(pitchUnits(pitchControl, 0) + pitchOffset));
-        int32_t pd = clampTuringTone(pdControl + turingCvToneOffset(cv1));
-        int32_t wave = clampTuringTone(waveControl + turingCvToneOffset(cv2));
+        int32_t pd = clampTuringTone(
+            midiScaledPdControl() + turingCvToneOffset(cv1));
+        int32_t wave = clampTuringTone(
+            midiScaledWaveControl() + turingCvToneOffset(cv2));
 
         outputSynthVoice(freq, pd, wave, osc2Ring, osc2Noise);
     }
@@ -636,9 +659,21 @@ private:
 
         if (type == 0xB0u)
         {
-            if (midiData[0] == MidiCcTuringCvOctaveRange)
+            if (midiData[0] == MidiCcPdAmount)
+            {
+                midiPdAmount = midiData[1];
+                midiPdActive = true;
+            }
+            else if (midiData[0] == MidiCcWaveAmount)
+            {
+                midiWaveAmount = midiData[1];
+                midiWaveActive = true;
+            }
+            else if (midiData[0] == MidiCcTuringCvOctaveRange)
+            {
                 turingCvOctaveRange =
                     1u + (uint8_t)(((uint32_t)midiData[1] * 7u) / 127u);
+            }
             return;
         }
 
@@ -647,6 +682,22 @@ private:
             int32_t bend = ((int32_t)midiData[1] << 7) | midiData[0];
             midiPitchBend = bend - 8192;
         }
+    }
+
+    int32_t midiScaledPdControl()
+    {
+        if (!midiPdActive)
+            return pdControl;
+
+        return (pdControl * (int32_t)midiPdAmount) / 127;
+    }
+
+    int32_t midiScaledWaveControl()
+    {
+        if (!midiWaveActive)
+            return waveControl;
+
+        return (waveControl * (int32_t)midiWaveAmount) / 127;
     }
 
     void applyPendingMidiNote()
@@ -728,6 +779,7 @@ private:
     void handleWebMidiSettings(bool persist)
     {
         if (sysexLength != WebMidiSettingsPayloadLength + 6u &&
+            sysexLength != WebMidiRangeSettingsPayloadLength + 6u &&
             sysexLength != WebMidiLegacySettingsPayloadLength + 6u)
             return;
 
@@ -741,8 +793,18 @@ private:
         osc2Noise = noise;
         midiInChannel = channel;
 
-        if (sysexLength == WebMidiSettingsPayloadLength + 6u)
+        if (sysexLength >= WebMidiRangeSettingsPayloadLength + 6u)
+        {
             turingCvOctaveRange = clampTuringCvOctaveRange(sysexBuffer[offset]);
+            offset++;
+        }
+
+        if (sysexLength == WebMidiSettingsPayloadLength + 6u)
+        {
+            turingMidiOutputEnabled = (sysexBuffer[offset] & 0x01u) != 0;
+            offset++;
+            turingMidiOutputChannel = sysexBuffer[offset] & 0x0Fu;
+        }
 
         if (persist)
             savePerformanceStateIfChanged();
@@ -1468,21 +1530,23 @@ private:
 
     SavedPerformanceState currentPerformanceState()
     {
-        SavedPerformanceState state;
+        SavedPerformanceState state = {};
         state.magic = SaveMagic;
         state.version = SaveVersion;
         state.size = sizeof(SavedPerformanceState);
         state.osc2Detune = osc2Detune;
         state.osc2Level = osc2Level;
-        state.osc2Ring = 0;
-        state.osc2Noise = 0;
+        state.osc2Ring = clamp12(osc2Ring);
+        state.osc2Noise = clamp12(osc2Noise);
         state.envelopePreset =
             envelopePreset < EnvelopePresetCount ?
             envelopePreset :
             (uint8_t)EnvelopePreset::Off;
         state.reserved[0] = turingCvOctaveRange;
         state.reserved[1] = midiInChannel;
-        state.reserved[2] = 0;
+        state.reserved[2] =
+            (turingMidiOutputEnabled ? 0u : 0x80u) |
+            (turingMidiOutputChannel & 0x0Fu);
         state.checksum = 0;
         state.checksum = checksumState(state);
 
@@ -1602,7 +1666,8 @@ private:
             a.osc2Noise == b.osc2Noise &&
             a.envelopePreset == b.envelopePreset &&
             a.reserved[0] == b.reserved[0] &&
-            a.reserved[1] == b.reserved[1];
+            a.reserved[1] == b.reserved[1] &&
+            a.reserved[2] == b.reserved[2];
     }
 
     void loadPerformanceState()
@@ -1613,10 +1678,12 @@ private:
 
         osc2Detune = state.osc2Detune;
         osc2Level = clamp12(state.osc2Level);
-        osc2Ring = 0;
-        osc2Noise = 0;
+        osc2Ring = clamp12(state.osc2Ring);
+        osc2Noise = clamp12(state.osc2Noise);
         turingCvOctaveRange = clampTuringCvOctaveRange(state.reserved[0]);
         midiInChannel = state.reserved[1] & 0x0Fu;
+        turingMidiOutputEnabled = (state.reserved[2] & 0x80u) == 0;
+        turingMidiOutputChannel = state.reserved[2] & 0x0Fu;
         envelopePreset = state.envelopePreset < EnvelopePresetCount ?
             state.envelopePreset :
             (uint8_t)EnvelopePreset::Off;
@@ -1916,10 +1983,17 @@ private:
     volatile bool pendingTuringMidiNoteOn = false;
     volatile bool pendingTuringMidiNoteOff = false;
     uint8_t turingMidiLastNote = 60;
+    uint8_t turingMidiLastChannel = 0;
     bool turingMidiNoteActive = false;
+    volatile bool turingMidiOutputEnabled = true;
+    volatile uint8_t turingMidiOutputChannel = 0;
     uint8_t midiNote = 60;
     uint8_t midiVelocity = 100;
     int32_t midiPitchBend = 0;
+    volatile uint8_t midiPdAmount = 127;
+    volatile uint8_t midiWaveAmount = 127;
+    volatile bool midiPdActive = false;
+    volatile bool midiWaveActive = false;
     bool midiNoteActive = false;
     bool midiNoteReleased = false;
     volatile uint8_t midiInChannel = 0;

@@ -37,14 +37,19 @@ select the C1ZZL3 MIDI output, then use:
 - `Load` to send the selected envelope to a custom RAM slot
 - `Save` to write the selected custom slot to card flash
 - `Delete` to clear the selected custom slot from card flash
-- `Set` to apply ring, noise, MIDI input channel, and Turing CV range settings
+- `Set` to save ring, noise, MIDI input channel, Turing CV range, and Turing
+  MIDI output settings to the card
 - `SysEx` to copy the current envelope frame for inspection
 
 Factory presets are protected. Custom envelope names are stored by the browser;
 the card stores the envelope shapes.
 
 Turing CV range defaults to 2 octaves. It can also be changed live with MIDI
-CC20 on the selected MIDI input channel.
+CC20 on the selected MIDI input channel. Turing MIDI output on/off and output
+channel are set from this editor.
+
+CC1 controls phase distortion with the X/PD knob as the maximum value. CC23
+controls waveform with the Y/wave knob as the maximum value.
 
 ## Limits
 

@@ -10,6 +10,7 @@ const SYSEX_ID = [0x43, 0x31, 0x5a, 0x33];
 const SYSEX_COMMAND_PREVIEW = 0x01;
 const SYSEX_COMMAND_SAVE = 0x02;
 const SYSEX_COMMAND_SETTINGS = 0x03;
+const SYSEX_COMMAND_SAVE_SETTINGS = 0x04;
 const SYSEX_COMMAND_DELETE = 0x05;
 
 const factoryPresets = [
@@ -80,7 +81,9 @@ const el = {
   ringControl: document.querySelector("#ringControl"),
   noiseControl: document.querySelector("#noiseControl"),
   midiInChannel: document.querySelector("#midiInChannel"),
-  turingRange: document.querySelector("#turingRange")
+  turingRange: document.querySelector("#turingRange"),
+  turingMidiOut: document.querySelector("#turingMidiOut"),
+  turingMidiChannel: document.querySelector("#turingMidiChannel")
 };
 
 function preset(name, amp, pd) {
@@ -140,14 +143,23 @@ function loadPerformanceSettings() {
         ring: clampInt(saved.ring, 0, MAX_LEVEL),
         noise: clampInt(saved.noise, 0, MAX_LEVEL),
         midiInChannel: clampInt(saved.midiInChannel, 1, 16),
-        turingRange: clampInt(saved.turingRange ?? 2, 1, 8)
+        turingRange: clampInt(saved.turingRange ?? 2, 1, 8),
+        turingMidiOut: saved.turingMidiOut !== false,
+        turingMidiChannel: clampInt(saved.turingMidiChannel ?? 1, 1, 16)
       };
     }
   } catch {
     /* Keep defaults if saved data is malformed. */
   }
 
-  return { ring: 0, noise: 0, midiInChannel: 1, turingRange: 2 };
+  return {
+    ring: 0,
+    noise: 0,
+    midiInChannel: 1,
+    turingRange: 2,
+    turingMidiOut: true,
+    turingMidiChannel: 1
+  };
 }
 
 function savePerformanceSettings() {
@@ -174,6 +186,8 @@ function renderPerformanceSettings() {
   el.noiseControl.value = performanceSettings.noise;
   el.midiInChannel.value = performanceSettings.midiInChannel;
   el.turingRange.value = performanceSettings.turingRange;
+  el.turingMidiOut.checked = performanceSettings.turingMidiOut;
+  el.turingMidiChannel.value = performanceSettings.turingMidiChannel;
 }
 
 function renderPresetList() {
@@ -604,6 +618,8 @@ function buildSettingsSysex(command) {
   payload.push(...packUint14(performanceSettings.noise));
   payload.push(clampInt(performanceSettings.midiInChannel, 1, 16) - 1);
   payload.push(clampInt(performanceSettings.turingRange, 1, 8));
+  payload.push(performanceSettings.turingMidiOut ? 1 : 0);
+  payload.push(clampInt(performanceSettings.turingMidiChannel, 1, 16) - 1);
   return [0xf0, SYSEX_MANUFACTURER, ...SYSEX_ID, command, ...payload, 0xf7];
 }
 
@@ -758,6 +774,10 @@ function updatePerformanceSetting(key, value) {
     performanceSettings[key] = clampInt(value, 1, 16);
   } else if (key === "turingRange") {
     performanceSettings[key] = clampInt(value, 1, 8);
+  } else if (key === "turingMidiOut") {
+    performanceSettings[key] = Boolean(value);
+  } else if (key === "turingMidiChannel") {
+    performanceSettings[key] = clampInt(value, 1, 16);
   } else if (key === "ring" || key === "noise") {
     performanceSettings[key] = clampInt(value, 0, MAX_LEVEL);
   }
@@ -778,7 +798,8 @@ async function sendPerformanceSettings(command = SYSEX_COMMAND_SETTINGS) {
 
   const frame = buildSettingsSysex(command);
   output.send(frame);
-  setStatus(`Set ring ${performanceSettings.ring}, noise ${performanceSettings.noise}, MIDI in ch ${performanceSettings.midiInChannel}, Turing ${performanceSettings.turingRange} oct on ${output.name || "MIDI output"}.`);
+  const action = command === SYSEX_COMMAND_SAVE_SETTINGS ? "Saved" : "Set";
+  setStatus(`${action} ring ${performanceSettings.ring}, noise ${performanceSettings.noise}, MIDI in ch ${performanceSettings.midiInChannel}, Turing ${performanceSettings.turingRange} oct, Turing MIDI ${performanceSettings.turingMidiOut ? "on" : "off"} ch ${performanceSettings.turingMidiChannel} on ${output.name || "MIDI output"}.`);
 }
 
 el.addPreset.addEventListener("click", () => {
@@ -832,11 +853,13 @@ el.copySysex.addEventListener("click", async () => {
 el.sendSysex.addEventListener("click", () => sendSysex(SYSEX_COMMAND_PREVIEW));
 el.flashSysex.addEventListener("click", () => sendSysex(SYSEX_COMMAND_SAVE));
 el.deleteSlot.addEventListener("click", deleteCustomSlot);
-el.sendSettings.addEventListener("click", () => sendPerformanceSettings(SYSEX_COMMAND_SETTINGS));
+el.sendSettings.addEventListener("click", () => sendPerformanceSettings(SYSEX_COMMAND_SAVE_SETTINGS));
 el.ringControl.addEventListener("input", () => updatePerformanceSetting("ring", el.ringControl.value));
 el.noiseControl.addEventListener("input", () => updatePerformanceSetting("noise", el.noiseControl.value));
 el.midiInChannel.addEventListener("input", () => updatePerformanceSetting("midiInChannel", el.midiInChannel.value));
 el.turingRange.addEventListener("input", () => updatePerformanceSetting("turingRange", el.turingRange.value));
+el.turingMidiOut.addEventListener("change", () => updatePerformanceSetting("turingMidiOut", el.turingMidiOut.checked));
+el.turingMidiChannel.addEventListener("input", () => updatePerformanceSetting("turingMidiChannel", el.turingMidiChannel.value));
 el.canvas.addEventListener("pointerdown", (event) => {
   const target = findDragTarget(canvasPoint(event));
   if (!target) return;

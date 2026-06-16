@@ -75,6 +75,10 @@ Experimental behaviour:
   Each Turing step sends a CV-derived note on the selected MIDI channel. The
   note is turned off when the Turing pulse window ends, or immediately before
   the next note if the clock is faster than that window.
+- Web MIDI settings can turn Turing MIDI output on/off and select its MIDI
+  output channel.
+- CC1 scales phase distortion up to the physical X/PD knob value. CC23 scales
+  waveform up to the physical Y/wave knob value.
 
 Expected tradeoff:
 
@@ -195,7 +199,8 @@ Test:
 
 Turing MIDI output is present in this branch as a deliberately small trial. The
 audio core queues only note-on/off requests; core 1 sends the USB MIDI bytes in
-computer/device mode.
+computer/device mode. The on/off setting and output channel are included in the
+performance state saved by the down-switch save gesture.
 
 ## Oscillator 2 Level Note
 
