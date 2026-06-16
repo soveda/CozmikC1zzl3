@@ -1,18 +1,17 @@
 # C1ZZL3 Card Guide
 
 C1ZZL3 is a phase-distortion synth card for the Music Thing Modular Workshop
-Computer. It combines a playable CZ-style oscillator, a second detuned oscillator
-for ring/noise textures, a Turing machine mode, USB MIDI, and a Web MIDI editor
-for custom envelopes.
+Computer. It combines a playable digital synth voice, a Turing machine, USB
+MIDI, and a browser editor for custom envelopes.
 
 ## What It Does
 
 - Plays as a phase-distortion synth voice.
 - Responds to USB MIDI notes from a DAW or class-compliant controller.
 - Lets you design and save custom envelopes from a browser.
-- Runs a Turing machine mode with stepped CV, smoothed CV, and two pulse outputs.
-- Keeps factory envelope presets safe; Web MIDI custom envelopes use separate
-  custom slots.
+- Runs a Turing machine mode with stepped CV, smoothed CV, two pulse outputs,
+  and optional MIDI note output.
+- Keeps factory envelope presets safe; custom envelopes use separate slots.
 
 ## Main Synth Mode
 
@@ -24,11 +23,14 @@ Put the switch in the middle.
 - `Audio/CV In 1` adds pitch at 1V/oct.
 - `CV In 1` adds phase distortion.
 - `CV In 2` adds wave control.
-- `Pulse In 2` triggers the selected envelope.
+- `Pulse In 2` triggers the selected envelope and oscillator sync.
+
+The Turing CV and pulse outputs continue running in synth mode, so they can be
+used while playing the synth.
 
 ## Performance Edit
 
-Hold the switch down.
+Hold the switch down from the middle position.
 
 - Main sets oscillator 2 detune.
 - X sets ring modulation.
@@ -36,6 +38,9 @@ Hold the switch down.
 
 Ring and noise start neutral after reset. If the card powers up with the switch
 already down, ring/noise editing waits until the switch has first left down.
+
+Hold the switch down from the middle position to save the current performance
+settings.
 
 ## Turing Mode
 
@@ -48,20 +53,32 @@ Put the switch up.
 - `CV Out 1` outputs stepped Turing CV.
 - `CV Out 2` outputs smoothed Turing CV.
 - `Pulse Out 1` and `Pulse Out 2` output Turing pulses.
-
-When you leave Turing mode, the CV and pulse outputs hold their last values.
-The Turing clock does not keep running in synth mode; this is intentional for
-stability on the RP2040 card format.
+- Audio outputs carry the self-playing Turing oscillator voice.
 
 Tap tempo has been removed. Y is the internal Turing clock-speed control.
 
+## USB MIDI
+
+The card chooses its USB role at boot.
+
+- Connected to a computer, it appears as a USB MIDI device for DAW and browser
+  use.
+- Connected to a class-compliant USB MIDI controller, it can run in USB MIDI
+  host mode.
+
+MIDI CC controls on the selected input channel:
+
+- `CC1`: phase distortion
+- `CC20`: oscillator 2 detune
+- `CC21`: ring modulation
+- `CC22`: noise amount
+- `CC23`: waveform
+- `CC24`: Turing CV octave range, from 1 to 8 octaves
+
+Physical knobs use pickup after MIDI changes, so values do not jump until the
+knob is swept through the current setting.
+
 ## Web MIDI Editor
-
-The editor is in:
-
-```text
-web-midi/editor/
-```
 
 Hosted editor:
 
@@ -69,20 +86,17 @@ Hosted editor:
 https://soveda.github.io/CozmikC1zzl3/web-midi/editor/
 ```
 
-Run it locally instead:
-
-```sh
-python3 -m http.server 5173 --directory web-midi/editor
-```
-
-Open:
-
-```text
-http://localhost:5173
-```
-
 Use Chrome or another browser with Web MIDI and SysEx support. Press `MIDI`,
-choose the C1ZZL3 output, then use `Load`, `Save`, `Delete`, or `Set`.
+choose the C1ZZL3 output, then use:
+
+- `Load` to send a custom envelope until reset.
+- `Save` to write a custom envelope to the card.
+- `Delete` to clear a custom envelope slot.
+- `Read` to load the current card settings into the editor.
+- `Set` to save performance settings to the card.
+
+The editor can save up to eight custom envelopes. Factory presets are not
+overwritten.
 
 ## Envelope Presets
 
@@ -99,7 +113,7 @@ Factory presets:
 8. Evolving digital
 
 Saved custom envelopes appear after the factory presets during startup envelope
-selection. Factory presets are not overwritten.
+selection. Custom slots light LED 6 and use LEDs 1-3 for the slot number.
 
 ## LED Feedback
 
@@ -118,15 +132,24 @@ In Turing mode:
 - LED 4 follows Pulse In 1.
 - LED 5 shows sequence length.
 - LED 6 flashes on each Turing clock step.
+- Turning X briefly displays sequence length as binary on the LEDs.
 
 In startup envelope selection:
 
 - Factory presets use the binary LED display.
 - Custom slots light LED 6 and use LEDs 1-3 for the custom slot number.
 
-## Stability Note
+## Build UF2
 
-This firmware is a hardware-tested production build, but it is also close to
-the practical processing limit of this RP2040 card format. Turing MIDI output
-and background Turing clocking in synth mode are intentionally left out because
-testing showed they could cause lockups at maximum settings.
+From the repository root:
+
+```sh
+cmake -S . -B build
+cmake --build build
+```
+
+The built firmware will be at:
+
+```text
+build/C1ZZL3.uf2
+```
