@@ -72,8 +72,9 @@ Experimental behaviour:
 - The synth output now has a fixed first-order output filter: 40 Hz high-pass
   followed by 7 kHz low-pass, both 6 dB/octave.
 - Turing MIDI output is enabled as an experimental device-mode note stream.
-  Each Turing step sends note-off for the previous Turing note and note-on for
-  the new CV-derived note on the selected MIDI channel.
+  Each Turing step sends a CV-derived note on the selected MIDI channel. The
+  note is turned off when the Turing pulse window ends, or immediately before
+  the next note if the clock is faster than that window.
 
 Expected tradeoff:
 
@@ -193,8 +194,8 @@ Test:
 ### Stage 2: Turing MIDI Output Trial
 
 Turing MIDI output is present in this branch as a deliberately small trial. The
-audio core queues only the latest note number; core 1 sends note-off/note-on
-over USB MIDI device mode.
+audio core queues only note-on/off requests; core 1 sends the USB MIDI bytes in
+computer/device mode.
 
 ## Oscillator 2 Level Note
 

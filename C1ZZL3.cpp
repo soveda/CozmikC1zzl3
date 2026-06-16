@@ -82,22 +82,28 @@ public:
 
     void SendPendingUsbMidiOutput()
     {
-        if (!pendingTuringMidiNoteOn)
-            return;
-
-        uint8_t note = pendingTuringMidiNote;
-        pendingTuringMidiNoteOn = false;
-
         uint8_t channel = midiInChannel & 0x0Fu;
-        if (turingMidiNoteActive)
+        if (pendingTuringMidiNoteOff && !turingMidiNoteActive)
+            pendingTuringMidiNoteOff = false;
+
+        if ((pendingTuringMidiNoteOff || pendingTuringMidiNoteOn) &&
+            turingMidiNoteActive)
         {
+            pendingTuringMidiNoteOff = false;
             uint8_t off[3] = {
                 (uint8_t)(0x80u | channel),
                 turingMidiLastNote,
                 0
             };
             tud_midi_stream_write(0, off, sizeof(off));
+            turingMidiNoteActive = false;
         }
+
+        if (!pendingTuringMidiNoteOn)
+            return;
+
+        uint8_t note = pendingTuringMidiNote;
+        pendingTuringMidiNoteOn = false;
 
         uint8_t on[3] = {
             (uint8_t)(0x90u | channel),
@@ -1078,6 +1084,7 @@ private:
         {
             turingPulse = false;
             turingAltPulse = false;
+            pendingTuringMidiNoteOff = true;
         }
     }
 
@@ -1907,6 +1914,7 @@ private:
     volatile bool pendingMidiNoteOn = false;
     volatile uint8_t pendingTuringMidiNote = 60;
     volatile bool pendingTuringMidiNoteOn = false;
+    volatile bool pendingTuringMidiNoteOff = false;
     uint8_t turingMidiLastNote = 60;
     bool turingMidiNoteActive = false;
     uint8_t midiNote = 60;
