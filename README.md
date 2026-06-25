@@ -24,10 +24,10 @@ uf2/C1ZZL3.uf2
 Checksum:
 
 ```text
-3810c1afc3f6ce6a2c596d85aaac18349367c2efc01bad3adffb4a09ff819165
+6cb55940ab502cb38926d20f3cdd76e5f93909ebb391569d82ee385bb20fbf55
 ```
 
-This is the hardware-tested 192 MHz RP2040 build promoted on 2026-06-16.
+This is the hardware-tested 192 MHz RP2040 build promoted on 2026-06-25.
 
 Previous UF2s are archived in:
 
