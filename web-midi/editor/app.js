@@ -56,6 +56,8 @@ let auditionToken = 0;
 let dragTarget = null;
 let performanceSettings = loadPerformanceSettings();
 let activeLaneView = "amp";
+let developerMode = false;
+let themeMode = loadThemeMode();
 
 const el = {
   presetList: document.querySelector("#presetList"),
@@ -65,12 +67,16 @@ const el = {
   waveSelect: document.querySelector("#waveSelect"),
   customSlot: document.querySelector("#customSlot"),
   canvas: document.querySelector("#curveCanvas"),
+  themeToggle: document.querySelector("#themeToggle"),
   ampStages: document.querySelector("#ampStages"),
   pdStages: document.querySelector("#pdStages"),
   ampView: document.querySelector("#ampView"),
   pdView: document.querySelector("#pdView"),
-  ampPanel: document.querySelector("#ampPanel"),
-  pdPanel: document.querySelector("#pdPanel"),
+  developerToggle: document.querySelector("#developerToggle"),
+  stagePanel: document.querySelector("#stagePanel"),
+  stagePanelTitle: document.querySelector("#stagePanelTitle"),
+  stagePanelSubtitle: document.querySelector("#stagePanelSubtitle"),
+  developerPanel: document.querySelector("#developerPanel"),
   exportText: document.querySelector("#exportText"),
   status: document.querySelector("#status"),
   audition: document.querySelector("#audition"),
@@ -174,6 +180,20 @@ function savePerformanceSettings() {
   localStorage.setItem("c1zzl3-performance-settings", JSON.stringify(performanceSettings));
 }
 
+function loadThemeMode() {
+  try {
+    const saved = localStorage.getItem("c1zzl3-theme-mode");
+    if (saved === "light" || saved === "dark") return saved;
+  } catch {
+    /* Keep default theme if saved data is unavailable. */
+  }
+  return "dark";
+}
+
+function saveThemeMode() {
+  localStorage.setItem("c1zzl3-theme-mode", themeMode);
+}
+
 function render() {
   selected = Math.max(0, Math.min(selected, presets.length - 1));
   const current = presets[selected];
@@ -185,9 +205,19 @@ function render() {
   renderStages("amp", el.ampStages);
   renderStages("pd", el.pdStages);
   renderPerformanceSettings();
+  renderThemeMode();
   renderLaneView();
+  renderDeveloperMode();
   drawCurves();
   updateExport();
+}
+
+function renderThemeMode() {
+  document.body.classList.toggle("theme-light", themeMode === "light");
+  el.themeToggle.classList.toggle("is-active", themeMode === "light");
+  el.themeToggle.textContent = themeMode === "light" ? "Light" : "Dark";
+  el.themeToggle.setAttribute("aria-checked", String(themeMode === "light"));
+  drawCurves();
 }
 
 function renderLaneView() {
@@ -196,8 +226,19 @@ function renderLaneView() {
   el.ampView.setAttribute("aria-selected", String(ampActive));
   el.pdView.classList.toggle("is-active", !ampActive);
   el.pdView.setAttribute("aria-selected", String(!ampActive));
-  el.ampPanel.classList.toggle("is-muted", !ampActive);
-  el.pdPanel.classList.toggle("is-muted", ampActive);
+  el.stagePanelTitle.textContent = ampActive ? "Amplitude" : "Phase Distortion";
+  el.stagePanelSubtitle.textContent = "Level / samples";
+  el.ampStages.classList.toggle("is-hidden", !ampActive);
+  el.pdStages.classList.toggle("is-hidden", ampActive);
+  el.ampStages.setAttribute("aria-hidden", String(!ampActive));
+  el.pdStages.setAttribute("aria-hidden", String(ampActive));
+}
+
+function renderDeveloperMode() {
+  el.developerToggle.classList.toggle("is-active", developerMode);
+  el.developerToggle.setAttribute("aria-checked", String(developerMode));
+  el.developerToggle.textContent = developerMode ? "Developer tools: On" : "Developer tools: Off";
+  el.developerPanel.classList.toggle("is-hidden", !developerMode);
 }
 
 function renderPerformanceSettings() {
@@ -315,13 +356,15 @@ function drawCurves() {
   el.canvas.height = Math.max(260, Math.floor(rect.height * dpr));
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
+  const theme = getThemeColors();
+
   const w = rect.width;
   const h = rect.height;
   ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = "#0c0e10";
+  ctx.fillStyle = theme.canvasBg;
   ctx.fillRect(0, 0, w, h);
 
-  ctx.strokeStyle = "#242932";
+  ctx.strokeStyle = theme.grid;
   ctx.lineWidth = 1;
   for (let i = 1; i < 4; i++) {
     const y = (h * i) / 4;
@@ -332,21 +375,21 @@ function drawCurves() {
   }
 
   const viewSamples = editorViewSamples();
-  drawLane(ctx, presets[selected].amp, "#ffcc66", w, h, viewSamples);
-  drawLane(ctx, presets[selected].pd, "#6ee7c8", w, h, viewSamples);
-  drawHandles(ctx, presets[selected].amp, "#ffcc66", w, h, viewSamples, activeLaneView === "amp");
-  drawHandles(ctx, presets[selected].pd, "#6ee7c8", w, h, viewSamples, activeLaneView === "pd");
+  drawLane(ctx, presets[selected].amp, theme.amp, w, h, viewSamples);
+  drawLane(ctx, presets[selected].pd, theme.pd, w, h, viewSamples);
+  drawHandles(ctx, presets[selected].amp, theme.amp, w, h, viewSamples, activeLaneView === "amp", theme);
+  drawHandles(ctx, presets[selected].pd, theme.pd, w, h, viewSamples, activeLaneView === "pd", theme);
 
-  ctx.fillStyle = "#a5adba";
+  ctx.fillStyle = theme.muted;
   ctx.font = "12px system-ui";
   ctx.fillText(`Amp`, 14, 22);
-  ctx.fillStyle = "#6ee7c8";
+  ctx.fillStyle = theme.pd;
   ctx.fillText(`PD`, 62, 22);
-  ctx.fillStyle = "#a5adba";
+  ctx.fillStyle = theme.muted;
   ctx.fillText(`${(totalSamples(presets[selected].amp) / SAMPLE_RATE).toFixed(2)}s / ${(viewSamples / SAMPLE_RATE).toFixed(0)}s`, w - 94, h - 16);
 }
 
-function drawHandles(ctx, stages, color, w, h, viewSamples, active) {
+function drawHandles(ctx, stages, color, w, h, viewSamples, active, theme) {
   let x = 0;
   const points = [];
   stages.forEach((stage) => {
@@ -356,12 +399,13 @@ function drawHandles(ctx, stages, color, w, h, viewSamples, active) {
   });
 
   points.forEach((point, index) => {
-    ctx.fillStyle = color;
+    const pointColor = color === theme.amp ? theme.ampPoint : theme.pdPoint;
+    ctx.fillStyle = pointColor;
     ctx.beginPath();
     ctx.arc(point.x, point.y, active ? 7 : 5, 0, Math.PI * 2);
     ctx.fill();
     ctx.lineWidth = active ? 2 : 1;
-    ctx.strokeStyle = "#0c0e10";
+    ctx.strokeStyle = theme.canvasBg;
     ctx.stroke();
 
     ctx.save();
@@ -369,12 +413,26 @@ function drawHandles(ctx, stages, color, w, h, viewSamples, active) {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     const labelY = Math.max(12, point.y - 14);
-    ctx.fillStyle = "#0c0e10";
+    ctx.fillStyle = theme.canvasBg;
     ctx.fillText(String(index + 1), point.x + 1, labelY + 1);
-    ctx.fillStyle = "#f4f0e8";
+    ctx.fillStyle = theme.text;
     ctx.fillText(String(index + 1), point.x, labelY);
     ctx.restore();
   });
+}
+
+function getThemeColors() {
+  const styles = getComputedStyle(document.body);
+  return {
+    canvasBg: styles.getPropertyValue("--canvas-bg").trim() || "#0c0e10",
+    grid: styles.getPropertyValue("--line").trim() || "#242932",
+    amp: styles.getPropertyValue("--graph-amp").trim() || styles.getPropertyValue("--amp").trim() || "#ffcc66",
+    pd: styles.getPropertyValue("--graph-pd").trim() || styles.getPropertyValue("--pd").trim() || "#6ee7c8",
+    ampPoint: styles.getPropertyValue("--graph-amp-point").trim() || styles.getPropertyValue("--amp").trim() || "#ffcc66",
+    pdPoint: styles.getPropertyValue("--graph-pd-point").trim() || styles.getPropertyValue("--pd").trim() || "#6ee7c8",
+    muted: styles.getPropertyValue("--muted").trim() || "#a5adba",
+    text: styles.getPropertyValue("--text").trim() || "#f4f0e8"
+  };
 }
 
 function drawLane(ctx, stages, color, w, h, viewSamples) {
@@ -417,6 +475,10 @@ function samplesBeforeStage(stages, index) {
 }
 
 function updateExport() {
+  if (!developerMode) {
+    el.exportText.value = "";
+    return;
+  }
   const current = presets[selected];
   const className = cppName(current.name);
   el.exportText.value = `case EnvelopePreset::${className}:\n    return {{\n${cppLane(current.amp)}\n    }, {\n${cppLane(current.pd)}\n    }};`;
@@ -926,17 +988,22 @@ el.presetName.addEventListener("input", () => {
 el.audition.addEventListener("click", () => audition());
 el.stop.addEventListener("click", stopAudio);
 el.midiToggle.addEventListener("click", connectMidi);
+el.themeToggle.addEventListener("click", () => {
+  themeMode = themeMode === "light" ? "dark" : "light";
+  saveThemeMode();
+  renderThemeMode();
+});
 el.midiOutput.addEventListener("change", () => {
   const output = selectedMidiOutput();
   setStatus(output ? `Selected ${output.name || "MIDI output"}.` : "No MIDI output selected.");
 });
 el.downloadJson.addEventListener("click", downloadJson);
 el.resetPreset.addEventListener("click", () => {
-  const factory = factoryPresets[selected] || factoryPresets[0];
+  const factory = factoryPresets.find((preset) => preset.name === "Bounce") || factoryPresets[0];
   presets[selected] = structuredClone(factory);
   savePresets();
   render();
-  setStatus("Preset restored to factory values.");
+  setStatus("Preset restored to Bounce.");
 });
 el.ampView.addEventListener("click", () => {
   activeLaneView = "amp";
@@ -947,6 +1014,11 @@ el.pdView.addEventListener("click", () => {
   activeLaneView = "pd";
   renderLaneView();
   drawCurves();
+});
+el.developerToggle.addEventListener("click", () => {
+  developerMode = !developerMode;
+  renderDeveloperMode();
+  updateExport();
 });
 el.copyCpp.addEventListener("click", async () => {
   await navigator.clipboard.writeText(el.exportText.value);
