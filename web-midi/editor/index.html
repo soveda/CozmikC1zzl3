@@ -63,22 +63,47 @@
           </label>
         </div>
 
+        <div class="editor-hint">
+          Drag points on the graph to edit stages, or type exact values below. Factory presets turn into a copy the first time you change them.
+        </div>
+
+        <div class="lane-switcher" role="tablist" aria-label="Envelope lane view">
+          <button id="ampView" type="button" class="is-active" role="tab" aria-selected="true">Amplitude</button>
+          <button id="pdView" type="button" role="tab" aria-selected="false">Phase Distortion</button>
+        </div>
+
+        <div class="editor-legend" aria-label="Editor guide">
+          <span><strong>Selected lane:</strong> only the active window can be moved.</span>
+          <span><strong>Point numbers:</strong> stages with the same number are stacked at the same spot.</span>
+          <span><strong>Dragging:</strong> move a point to change its level and timing together.</span>
+        </div>
+
         <div class="curve-panel">
           <canvas id="curveCanvas" width="1200" height="420" aria-label="Amplitude and phase distortion envelope preview"></canvas>
         </div>
 
         <div class="tables">
-          <section>
+          <section id="ampPanel">
             <div class="lane-title">
               <h2>Amplitude</h2>
-              <span>level / samples</span>
+              <span>Level / samples</span>
+            </div>
+            <div class="stage-head">
+              <span>Stage</span>
+              <span>Level</span>
+              <span>Samples</span>
             </div>
             <div id="ampStages" class="stage-grid"></div>
           </section>
-          <section>
+          <section id="pdPanel">
             <div class="lane-title">
               <h2>Phase Distortion</h2>
-              <span>level / samples</span>
+              <span>Level / samples</span>
+            </div>
+            <div class="stage-head">
+              <span>Stage</span>
+              <span>Level</span>
+              <span>Samples</span>
             </div>
             <div id="pdStages" class="stage-grid"></div>
           </section>
@@ -120,14 +145,14 @@
         </section>
         <div class="output-actions">
           <button id="copyCpp" type="button">Copy C++</button>
-          <button id="copySysex" type="button">SysEx</button>
-          <button id="sendSysex" type="button" title="Load this envelope until reset">Load</button>
-          <button id="flashSysex" type="button" title="Save this envelope after reset">Save</button>
-          <button id="deleteSlot" type="button" title="Delete the selected custom slot from card flash">Delete</button>
-          <button id="requestSettings" type="button" title="Load current card settings into the editor">Read</button>
-          <button id="sendSettings" type="button">Set</button>
-          <button id="downloadJson" type="button">JSON</button>
-          <button id="resetPreset" type="button">Reset</button>
+          <button id="copySysex" type="button">Copy SysEx</button>
+          <button id="sendSysex" type="button" title="Load this envelope until reset">Load RAM</button>
+          <button id="flashSysex" type="button" title="Save this envelope after reset">Save Slot</button>
+          <button id="deleteSlot" type="button" title="Delete the selected custom slot from card flash">Delete Slot</button>
+          <button id="requestSettings" type="button" title="Load current card settings into the editor">Read Card</button>
+          <button id="sendSettings" type="button">Set Card</button>
+          <button id="downloadJson" type="button">Export JSON</button>
+          <button id="resetPreset" type="button">Reset Preset</button>
         </div>
         <textarea id="exportText" spellcheck="false" aria-label="Generated firmware preset"></textarea>
         <p id="status" class="status">Ready.</p>

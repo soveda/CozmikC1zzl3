@@ -55,6 +55,7 @@ let auditionLoop = false;
 let auditionToken = 0;
 let dragTarget = null;
 let performanceSettings = loadPerformanceSettings();
+let activeLaneView = "amp";
 
 const el = {
   presetList: document.querySelector("#presetList"),
@@ -66,6 +67,10 @@ const el = {
   canvas: document.querySelector("#curveCanvas"),
   ampStages: document.querySelector("#ampStages"),
   pdStages: document.querySelector("#pdStages"),
+  ampView: document.querySelector("#ampView"),
+  pdView: document.querySelector("#pdView"),
+  ampPanel: document.querySelector("#ampPanel"),
+  pdPanel: document.querySelector("#pdPanel"),
   exportText: document.querySelector("#exportText"),
   status: document.querySelector("#status"),
   audition: document.querySelector("#audition"),
@@ -180,8 +185,19 @@ function render() {
   renderStages("amp", el.ampStages);
   renderStages("pd", el.pdStages);
   renderPerformanceSettings();
+  renderLaneView();
   drawCurves();
   updateExport();
+}
+
+function renderLaneView() {
+  const ampActive = activeLaneView === "amp";
+  el.ampView.classList.toggle("is-active", ampActive);
+  el.ampView.setAttribute("aria-selected", String(ampActive));
+  el.pdView.classList.toggle("is-active", !ampActive);
+  el.pdView.setAttribute("aria-selected", String(!ampActive));
+  el.ampPanel.classList.toggle("is-muted", !ampActive);
+  el.pdPanel.classList.toggle("is-muted", ampActive);
 }
 
 function renderPerformanceSettings() {
@@ -249,6 +265,8 @@ function renderStages(lane, container) {
   presets[selected][lane].forEach((stage, index) => {
     const row = document.createElement("div");
     row.className = "stage-row";
+    row.dataset.lane = lane;
+    row.dataset.index = String(index);
     row.innerHTML = `
       <strong>${index + 1}</strong>
       <input type="number" min="0" max="${MAX_LEVEL}" value="${stage.level}" aria-label="${lane} stage ${index + 1} level">
@@ -295,7 +313,7 @@ function drawCurves() {
   const rect = el.canvas.getBoundingClientRect();
   el.canvas.width = Math.max(640, Math.floor(rect.width * dpr));
   el.canvas.height = Math.max(260, Math.floor(rect.height * dpr));
-  ctx.scale(dpr, dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   const w = rect.width;
   const h = rect.height;
@@ -316,8 +334,8 @@ function drawCurves() {
   const viewSamples = editorViewSamples();
   drawLane(ctx, presets[selected].amp, "#ffcc66", w, h, viewSamples);
   drawLane(ctx, presets[selected].pd, "#6ee7c8", w, h, viewSamples);
-  drawHandles(ctx, presets[selected].amp, "#ffcc66", w, h, viewSamples);
-  drawHandles(ctx, presets[selected].pd, "#6ee7c8", w, h, viewSamples);
+  drawHandles(ctx, presets[selected].amp, "#ffcc66", w, h, viewSamples, activeLaneView === "amp");
+  drawHandles(ctx, presets[selected].pd, "#6ee7c8", w, h, viewSamples, activeLaneView === "pd");
 
   ctx.fillStyle = "#a5adba";
   ctx.font = "12px system-ui";
@@ -328,15 +346,34 @@ function drawCurves() {
   ctx.fillText(`${(totalSamples(presets[selected].amp) / SAMPLE_RATE).toFixed(2)}s / ${(viewSamples / SAMPLE_RATE).toFixed(0)}s`, w - 94, h - 16);
 }
 
-function drawHandles(ctx, stages, color, w, h, viewSamples) {
+function drawHandles(ctx, stages, color, w, h, viewSamples, active) {
   let x = 0;
-  ctx.fillStyle = color;
+  const points = [];
   stages.forEach((stage) => {
     x = Math.min(w, x + (stage.time / viewSamples) * w);
     const y = levelY(stage.level, h);
+    points.push({ x, y });
+  });
+
+  points.forEach((point, index) => {
+    ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.arc(x, y, 5, 0, Math.PI * 2);
+    ctx.arc(point.x, point.y, active ? 7 : 5, 0, Math.PI * 2);
     ctx.fill();
+    ctx.lineWidth = active ? 2 : 1;
+    ctx.strokeStyle = "#0c0e10";
+    ctx.stroke();
+
+    ctx.save();
+    ctx.font = "bold 11px system-ui";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const labelY = Math.max(12, point.y - 14);
+    ctx.fillStyle = "#0c0e10";
+    ctx.fillText(String(index + 1), point.x + 1, labelY + 1);
+    ctx.fillStyle = "#f4f0e8";
+    ctx.fillText(String(index + 1), point.x, labelY);
+    ctx.restore();
   });
 }
 
@@ -770,19 +807,18 @@ function findDragTarget(point) {
   let best = null;
   const viewSamples = editorViewSamples();
 
-  for (const lane of ["amp", "pd"]) {
-    const stages = current[lane];
-    let x = 0;
+  const lane = activeLaneView;
+  const stages = current[lane];
+  let x = 0;
 
-    stages.forEach((stage, index) => {
-      x = Math.min(point.width, x + (stage.time / viewSamples) * point.width);
-      const y = levelY(stage.level, point.height);
-      const distance = Math.hypot(point.x - x, point.y - y);
-      if (!best || distance < best.distance) {
-        best = { lane, index, distance };
-      }
-    });
-  }
+  stages.forEach((stage, index) => {
+    x = Math.min(point.width, x + (stage.time / viewSamples) * point.width);
+    const y = levelY(stage.level, point.height);
+    const distance = Math.hypot(point.x - x, point.y - y);
+    if (!best || distance < best.distance) {
+      best = { lane, index, distance };
+    }
+  });
 
   return best && best.distance <= 28 ? best : null;
 }
@@ -805,10 +841,18 @@ function updateDraggedStage(event) {
   stage.level = clampInt(level, 0, MAX_LEVEL);
   stage.time = clampInt(targetEnd - before, 1, maxStageTime);
   savePresets();
-  renderStages("amp", el.ampStages);
-  renderStages("pd", el.pdStages);
+  syncStageInputs(dragTarget.lane, dragTarget.index);
   drawCurves();
   updateExport();
+}
+
+function syncStageInputs(lane, index) {
+  const row = el[`${lane}Stages`].querySelector(`[data-lane="${lane}"][data-index="${index}"]`);
+  if (!row) return;
+  const [levelInput, timeInput] = row.querySelectorAll("input");
+  const stage = presets[selected][lane][index];
+  levelInput.value = stage.level;
+  timeInput.value = stage.time;
 }
 
 function updatePerformanceSetting(key, value) {
@@ -892,7 +936,17 @@ el.resetPreset.addEventListener("click", () => {
   presets[selected] = structuredClone(factory);
   savePresets();
   render();
-  setStatus("Preset reset.");
+  setStatus("Preset restored to factory values.");
+});
+el.ampView.addEventListener("click", () => {
+  activeLaneView = "amp";
+  renderLaneView();
+  drawCurves();
+});
+el.pdView.addEventListener("click", () => {
+  activeLaneView = "pd";
+  renderLaneView();
+  drawCurves();
 });
 el.copyCpp.addEventListener("click", async () => {
   await navigator.clipboard.writeText(el.exportText.value);

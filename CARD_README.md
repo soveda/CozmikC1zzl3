@@ -87,13 +87,24 @@ https://soveda.github.io/CozmikC1zzl3/web-midi/editor/
 ```
 
 Use Chrome or another browser with Web MIDI and SysEx support. Press `MIDI`,
-choose the C1ZZL3 output, then use:
+choose the C1ZZL3 output, then:
 
-- `Load` to send a custom envelope until reset.
-- `Save` to write a custom envelope to the card.
-- `Delete` to clear a custom envelope slot.
-- `Read` to load the current card settings into the editor.
-- `Set` to save performance settings to the card.
+1. Pick a preset on the left, or add a custom one.
+2. Choose `Amplitude` or `Phase Distortion` to focus on one lane at a time.
+3. Drag points on the graph to change both level and timing.
+4. Watch the point numbers. Matching numbers mean the stages are stacked at the same spot.
+5. Use the tables below the graph for exact values when you want precise edits.
+6. Use the action buttons on the right when you want to send, save, read, or export.
+
+Button quick reference:
+
+- `Load RAM` to send a custom envelope until reset.
+- `Save Slot` to write a custom envelope to the card.
+- `Delete Slot` to clear a custom envelope slot.
+- `Read Card` to load the current card settings into the editor.
+- `Set Card` to save performance settings to the card.
+- `Export JSON` to download all editor presets.
+- `Reset Preset` to restore the selected preset to its factory value.
 
 The editor can save up to eight custom envelopes. Factory presets are not
 overwritten.

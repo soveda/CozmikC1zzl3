@@ -119,6 +119,27 @@ http://localhost:5173
 
 Use Chrome or another browser with Web MIDI and SysEx support.
 
+## How To Use The Editor
+
+1. Pick a preset on the left, or add a custom one.
+2. Choose `Amplitude` or `Phase Distortion` to focus on one lane at a time.
+3. Drag points on the graph to change both level and timing.
+4. Watch the point numbers. Matching numbers mean the stages are stacked at the same spot.
+5. Use the tables below the graph for exact values when you want precise edits.
+6. Use the action buttons on the right when you want to send, save, read, or export.
+
+Button quick reference:
+
+- `Load RAM`: send the envelope to the card until reset.
+- `Save Slot`: store the selected custom envelope in flash.
+- `Delete Slot`: clear the selected custom slot from card flash.
+- `Read Card`: pull the current performance settings into the editor.
+- `Set Card`: write the current performance settings to the card.
+- `Export JSON`: download all editor presets.
+- `Reset Preset`: restore the selected preset to its factory value.
+
+The editor can save up to eight custom envelopes. Factory presets are not overwritten.
+
 ## Build
 
 ```sh
