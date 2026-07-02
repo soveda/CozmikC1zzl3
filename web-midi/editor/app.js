@@ -584,6 +584,57 @@ function renderDeveloperLog() {
     : "No diagnostics yet.";
 }
 
+function collectMidiPorts(portMap) {
+  if (!portMap) return [];
+
+  const ports = [];
+  const seen = new Set();
+  const addPort = (port) => {
+    if (!port) return;
+    const key = port.id || `${port.name || "unnamed"}:${port.type || "port"}:${ports.length}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    ports.push(port);
+  };
+
+  if (typeof portMap.forEach === "function") {
+    try {
+      portMap.forEach((port) => addPort(port));
+    } catch {
+      /* Some mobile browsers expose partial map behavior. */
+    }
+  }
+
+  if (typeof portMap.values === "function") {
+    try {
+      for (const port of portMap.values()) addPort(port);
+    } catch {
+      /* Fall through to other access paths. */
+    }
+  }
+
+  if (typeof portMap[Symbol.iterator] === "function") {
+    try {
+      for (const entry of portMap) {
+        if (Array.isArray(entry)) addPort(entry[1]);
+        else addPort(entry);
+      }
+    } catch {
+      /* Fall through to key-based access. */
+    }
+  }
+
+  if (ports.length === 0 && typeof portMap.keys === "function" && typeof portMap.get === "function") {
+    try {
+      for (const key of portMap.keys()) addPort(portMap.get(key));
+    } catch {
+      /* Keep empty if the browser exposes no usable enumeration path. */
+    }
+  }
+
+  return ports;
+}
+
 function formatPort(port, index, kind) {
   if (!port) return `${kind} ${index + 1}: unavailable`;
   const name = port.name || `${kind} ${index + 1}`;
@@ -600,8 +651,8 @@ function renderDeveloperPorts() {
     return;
   }
 
-  const inputs = Array.from(midiAccess.inputs.values());
-  const outputs = Array.from(midiAccess.outputs.values());
+  const inputs = collectMidiPorts(midiAccess.inputs);
+  const outputs = collectMidiPorts(midiAccess.outputs);
   const inputText = inputs.length
     ? inputs.map((port, index) => formatPort(port, index, "Input")).join("\n\n")
     : "None detected";
@@ -690,14 +741,15 @@ async function connectMidi() {
 function refreshMidiPorts() {
   if (!midiAccess) return;
 
-  midiAccess.inputs.forEach((input) => {
+  const inputs = collectMidiPorts(midiAccess.inputs);
+  inputs.forEach((input) => {
     input.onmidimessage = handleMidi;
   });
 
   const previousOutput = el.midiOutput.value;
   el.midiOutput.innerHTML = "";
 
-  const outputs = Array.from(midiAccess.outputs.values());
+  const outputs = collectMidiPorts(midiAccess.outputs);
   outputs.forEach((output, index) => {
     const option = document.createElement("option");
     option.value = output.id;
@@ -716,19 +768,21 @@ function refreshMidiPorts() {
 
   renderDeveloperPorts();
   logDeveloper("MIDI ports refreshed.", {
-    inputs: midiAccess.inputs.size || 0,
+    inputs: inputs.length,
     outputs: outputs.length,
-    inputNames: Array.from(midiAccess.inputs.values()).map((input) => input.name || input.id || "Unnamed input"),
+    inputNames: inputs.map((input) => input.name || input.id || "Unnamed input"),
     outputNames: outputs.map((output) => output.name || output.id || "Unnamed output")
   });
-  setStatus(`MIDI ready: ${midiAccess.inputs.size || 0} input${midiAccess.inputs.size === 1 ? "" : "s"}, ${outputs.length} output${outputs.length === 1 ? "" : "s"}.`);
+  setStatus(`MIDI ready: ${inputs.length} input${inputs.length === 1 ? "" : "s"}, ${outputs.length} output${outputs.length === 1 ? "" : "s"}.`);
 }
 
 function selectedMidiOutput() {
   if (!midiAccess) return null;
-  const selectedOutput = midiAccess.outputs.get(el.midiOutput.value);
+  const selectedOutput = typeof midiAccess.outputs.get === "function"
+    ? midiAccess.outputs.get(el.midiOutput.value)
+    : null;
   if (selectedOutput) return selectedOutput;
-  return Array.from(midiAccess.outputs.values())[0] || null;
+  return collectMidiPorts(midiAccess.outputs)[0] || null;
 }
 
 async function sendSysex(command = SYSEX_COMMAND_PREVIEW) {
