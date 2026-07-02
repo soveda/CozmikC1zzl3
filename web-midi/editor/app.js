@@ -79,6 +79,7 @@ const el = {
   stagePanelSubtitle: document.querySelector("#stagePanelSubtitle"),
   developerPanel: document.querySelector("#developerPanel"),
   exportText: document.querySelector("#exportText"),
+  developerPorts: document.querySelector("#developerPorts"),
   developerLog: document.querySelector("#developerLog"),
   clearDeveloperLog: document.querySelector("#clearDeveloperLog"),
   status: document.querySelector("#status"),
@@ -242,6 +243,7 @@ function renderDeveloperMode() {
   el.developerToggle.setAttribute("aria-checked", String(developerMode));
   el.developerToggle.textContent = developerMode ? "Developer tools: On" : "Developer tools: Off";
   el.developerPanel.classList.toggle("is-hidden", !developerMode);
+  renderDeveloperPorts();
   renderDeveloperLog();
 }
 
@@ -582,6 +584,34 @@ function renderDeveloperLog() {
     : "No diagnostics yet.";
 }
 
+function formatPort(port, index, kind) {
+  if (!port) return `${kind} ${index + 1}: unavailable`;
+  const name = port.name || `${kind} ${index + 1}`;
+  const manufacturer = port.manufacturer || "Unknown maker";
+  const state = port.state || "unknown";
+  const connection = port.connection || "unknown";
+  return `${name}\n  maker: ${manufacturer}\n  state: ${state}\n  connection: ${connection}\n  id: ${port.id || "none"}`;
+}
+
+function renderDeveloperPorts() {
+  if (!el.developerPorts) return;
+  if (!midiAccess) {
+    el.developerPorts.textContent = "No MIDI access yet.";
+    return;
+  }
+
+  const inputs = Array.from(midiAccess.inputs.values());
+  const outputs = Array.from(midiAccess.outputs.values());
+  const inputText = inputs.length
+    ? inputs.map((port, index) => formatPort(port, index, "Input")).join("\n\n")
+    : "None detected";
+  const outputText = outputs.length
+    ? outputs.map((port, index) => formatPort(port, index, "Output")).join("\n\n")
+    : "None detected";
+
+  el.developerPorts.textContent = `Inputs (${inputs.length})\n${inputText}\n\nOutputs (${outputs.length})\n${outputText}`;
+}
+
 function clearDeveloperLog() {
   developerLogLines = [];
   renderDeveloperLog();
@@ -684,6 +714,13 @@ function refreshMidiPorts() {
     el.midiOutput.value = previousOutput;
   }
 
+  renderDeveloperPorts();
+  logDeveloper("MIDI ports refreshed.", {
+    inputs: midiAccess.inputs.size || 0,
+    outputs: outputs.length,
+    inputNames: Array.from(midiAccess.inputs.values()).map((input) => input.name || input.id || "Unnamed input"),
+    outputNames: outputs.map((output) => output.name || output.id || "Unnamed output")
+  });
   setStatus(`MIDI ready: ${midiAccess.inputs.size || 0} input${midiAccess.inputs.size === 1 ? "" : "s"}, ${outputs.length} output${outputs.length === 1 ? "" : "s"}.`);
 }
 
