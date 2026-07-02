@@ -80,6 +80,7 @@ const el = {
   developerPanel: document.querySelector("#developerPanel"),
   exportText: document.querySelector("#exportText"),
   developerPorts: document.querySelector("#developerPorts"),
+  developerMidiRaw: document.querySelector("#developerMidiRaw"),
   developerLog: document.querySelector("#developerLog"),
   clearDeveloperLog: document.querySelector("#clearDeveloperLog"),
   status: document.querySelector("#status"),
@@ -244,6 +245,7 @@ function renderDeveloperMode() {
   el.developerToggle.textContent = developerMode ? "Developer tools: On" : "Developer tools: Off";
   el.developerPanel.classList.toggle("is-hidden", !developerMode);
   renderDeveloperPorts();
+  renderDeveloperMidiRaw();
   renderDeveloperLog();
 }
 
@@ -635,6 +637,57 @@ function collectMidiPorts(portMap) {
   return ports;
 }
 
+function inspectPortMap(portMap) {
+  if (!portMap) return "Unavailable";
+
+  const details = {
+    constructor: constructorName(portMap),
+    size: typeof portMap.size === "number" ? portMap.size : "n/a",
+    hasForEach: typeof portMap.forEach === "function",
+    hasValues: typeof portMap.values === "function",
+    hasKeys: typeof portMap.keys === "function",
+    hasGet: typeof portMap.get === "function",
+    iterable: typeof portMap[Symbol.iterator] === "function",
+    ownKeys: Object.keys(portMap)
+  };
+
+  const sampleKeys = [];
+  if (typeof portMap.keys === "function") {
+    try {
+      for (const key of portMap.keys()) {
+        sampleKeys.push(key);
+        if (sampleKeys.length >= 6) break;
+      }
+    } catch {
+      sampleKeys.push("keys() failed");
+    }
+  }
+  details.sampleKeys = sampleKeys;
+  details.enumeratedCount = collectMidiPorts(portMap).length;
+
+  return Object.entries(details)
+    .map(([key, value]) => `${key}: ${previewValue(value)}`)
+    .join("\n");
+}
+
+function renderDeveloperMidiRaw() {
+  if (!el.developerMidiRaw) return;
+  if (!midiAccess) {
+    el.developerMidiRaw.textContent = "No MIDI access yet.";
+    return;
+  }
+
+  el.developerMidiRaw.textContent = [
+    `MIDIAccess: ${constructorName(midiAccess)}`,
+    "",
+    "Inputs map",
+    inspectPortMap(midiAccess.inputs),
+    "",
+    "Outputs map",
+    inspectPortMap(midiAccess.outputs)
+  ].join("\n");
+}
+
 function formatPort(port, index, kind) {
   if (!port) return `${kind} ${index + 1}: unavailable`;
   const name = port.name || `${kind} ${index + 1}`;
@@ -661,6 +714,7 @@ function renderDeveloperPorts() {
     : "None detected";
 
   el.developerPorts.textContent = `Inputs (${inputs.length})\n${inputText}\n\nOutputs (${outputs.length})\n${outputText}`;
+  renderDeveloperMidiRaw();
 }
 
 function clearDeveloperLog() {
