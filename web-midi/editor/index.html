@@ -149,6 +149,13 @@
             <button id="downloadJson" type="button">Export JSON</button>
           </div>
           <textarea id="exportText" spellcheck="false" aria-label="Generated firmware preset"></textarea>
+          <div class="developer-log-panel">
+            <div class="developer-log-head">
+              <h3>Diagnostics</h3>
+              <button id="clearDeveloperLog" type="button">Clear log</button>
+            </div>
+            <pre id="developerLog" class="developer-log" aria-label="Developer diagnostics"></pre>
+          </div>
         </div>
         <p id="status" class="status">Ready.</p>
       </aside>

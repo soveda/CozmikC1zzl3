@@ -58,6 +58,7 @@ let performanceSettings = loadPerformanceSettings();
 let activeLaneView = "amp";
 let developerMode = false;
 let themeMode = loadThemeMode();
+let developerLogLines = [];
 
 const el = {
   presetList: document.querySelector("#presetList"),
@@ -78,6 +79,8 @@ const el = {
   stagePanelSubtitle: document.querySelector("#stagePanelSubtitle"),
   developerPanel: document.querySelector("#developerPanel"),
   exportText: document.querySelector("#exportText"),
+  developerLog: document.querySelector("#developerLog"),
+  clearDeveloperLog: document.querySelector("#clearDeveloperLog"),
   status: document.querySelector("#status"),
   audition: document.querySelector("#audition"),
   stop: document.querySelector("#stop"),
@@ -239,6 +242,7 @@ function renderDeveloperMode() {
   el.developerToggle.setAttribute("aria-checked", String(developerMode));
   el.developerToggle.textContent = developerMode ? "Developer tools: On" : "Developer tools: Off";
   el.developerPanel.classList.toggle("is-hidden", !developerMode);
+  renderDeveloperLog();
 }
 
 function renderPerformanceSettings() {
@@ -571,6 +575,64 @@ function midiToHz(note) {
   return 440 * Math.pow(2, (Number(note) - 69) / 12);
 }
 
+function renderDeveloperLog() {
+  if (!el.developerLog) return;
+  el.developerLog.textContent = developerLogLines.length
+    ? developerLogLines.join("\n\n")
+    : "No diagnostics yet.";
+}
+
+function clearDeveloperLog() {
+  developerLogLines = [];
+  renderDeveloperLog();
+}
+
+function previewValue(value) {
+  if (value == null) return String(value);
+  if (Array.isArray(value)) {
+    return `Array(${value.length}) [${value.slice(0, 8).join(", ")}${value.length > 8 ? ", ..." : ""}]`;
+  }
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return Object.prototype.toString.call(value);
+    }
+  }
+  return String(value);
+}
+
+function constructorName(value) {
+  return value?.constructor?.name || typeof value;
+}
+
+function logDeveloper(message, detail = {}) {
+  const time = new Date().toLocaleTimeString([], { hour12: false });
+  const lines = [`[${time}] ${message}`];
+  Object.entries(detail).forEach(([key, value]) => {
+    lines.push(`${key}: ${previewValue(value)}`);
+  });
+  developerLogLines = [...developerLogLines.slice(-29), lines.join("\n")];
+  renderDeveloperLog();
+}
+
+function failDeveloper(message, detail = {}) {
+  logDeveloper(message, detail);
+  throw new Error(message);
+}
+
+function ensureArray(value, label) {
+  if (!Array.isArray(value)) {
+    failDeveloper(`${label} must be an array before spreading.`, {
+      label,
+      type: typeof value,
+      constructor: constructorName(value),
+      value
+    });
+  }
+  return value;
+}
+
 async function connectMidi() {
   if (!navigator.requestMIDIAccess) {
     setStatus("Web MIDI is not available in this browser.");
@@ -582,7 +644,15 @@ async function connectMidi() {
     refreshMidiPorts();
     midiAccess.onstatechange = refreshMidiPorts;
     el.midiToggle.classList.add("is-active");
+    logDeveloper("Web MIDI connected.", {
+      inputs: midiAccess.inputs?.size ?? 0,
+      outputs: midiAccess.outputs?.size ?? 0
+    });
   } catch (error) {
+    logDeveloper("Web MIDI connection failed.", {
+      message: error?.message || "Unknown error",
+      stack: error?.stack || "No stack trace"
+    });
     setStatus(`MIDI access denied or unavailable: ${error.message}`);
   }
 }
@@ -645,7 +715,21 @@ async function sendSysex(command = SYSEX_COMMAND_PREVIEW) {
     return;
   }
 
-  const frame = buildSysex(command);
+  let frame;
+  try {
+    frame = buildSysex(command);
+  } catch (error) {
+    logDeveloper("SysEx build failed.", {
+      command,
+      preset: presets[selected]?.name,
+      selected,
+      slot: el.customSlot.value,
+      message: error?.message || "Unknown error",
+      stack: error?.stack || "No stack trace"
+    });
+    setStatus("Web MIDI send failed. Open Developer tools for details.");
+    return;
+  }
   const isFlash = command === SYSEX_COMMAND_SAVE;
   const sendCooldownMs = isFlash ? 1800 : 250;
   const summary = frameSummary();
@@ -653,7 +737,23 @@ async function sendSysex(command = SYSEX_COMMAND_PREVIEW) {
   el.sendSysex.disabled = true;
   el.flashSysex.disabled = true;
   el.deleteSlot.disabled = true;
-  output.send(frame);
+  try {
+    output.send(frame);
+  } catch (error) {
+    logDeveloper("SysEx send failed.", {
+      command,
+      output: output.name || output.id || "Unknown output",
+      frameLength: frame.length,
+      message: error?.message || "Unknown error",
+      stack: error?.stack || "No stack trace"
+    });
+    sendingSysex = false;
+    el.sendSysex.disabled = false;
+    el.flashSysex.disabled = false;
+    el.deleteSlot.disabled = false;
+    setStatus("Web MIDI send failed. Open Developer tools for details.");
+    return;
+  }
   const slotLabel = `Custom ${Number(el.customSlot.value) + 1}`;
   const status = isFlash
     ? `Saved ${slotLabel}; after reset it appears after the factory presets. Amp max ${summary.ampMax}, ${summary.seconds}s.`
@@ -685,12 +785,28 @@ async function deleteCustomSlot() {
   }
 
   const slot = clampInt(el.customSlot.value, 0, CUSTOM_SLOT_COUNT - 1);
-  const frame = buildDeleteSlotSysex(slot);
-  sendingSysex = true;
-  el.sendSysex.disabled = true;
-  el.flashSysex.disabled = true;
-  el.deleteSlot.disabled = true;
-  output.send(frame);
+  let frame;
+  try {
+    frame = buildDeleteSlotSysex(slot);
+    sendingSysex = true;
+    el.sendSysex.disabled = true;
+    el.flashSysex.disabled = true;
+    el.deleteSlot.disabled = true;
+    output.send(frame);
+  } catch (error) {
+    logDeveloper("Delete slot SysEx failed.", {
+      slot,
+      output: output.name || output.id || "Unknown output",
+      message: error?.message || "Unknown error",
+      stack: error?.stack || "No stack trace"
+    });
+    sendingSysex = false;
+    el.sendSysex.disabled = false;
+    el.flashSysex.disabled = false;
+    el.deleteSlot.disabled = false;
+    setStatus("Delete failed. Open Developer tools for details.");
+    return;
+  }
   removeLocalCustomPresetForSlot(slot);
   setStatus(`Deleted Custom ${slot + 1} from card flash. ${frame.length} byte SysEx to ${output.name || "MIDI output"}.`);
 
@@ -708,21 +824,22 @@ function buildSysex(command) {
   }
 
   const slot = clampInt(el.customSlot.value, 0, CUSTOM_SLOT_COUNT - 1);
-  const payload = [slot & 0x7f, ...encodeName(presets[selected].name)];
+  const nameBytes = ensureArray(encodeName(presets[selected].name), "encodeName()");
+  const payload = [slot & 0x7f, ...nameBytes];
   appendStages(payload, presets[selected].amp);
   appendStages(payload, presets[selected].pd);
-  return [0xf0, SYSEX_MANUFACTURER, ...SYSEX_ID, command, ...payload, 0xf7];
+  return [0xf0, SYSEX_MANUFACTURER, ...ensureArray(SYSEX_ID, "SYSEX_ID"), command, ...ensureArray(payload, "payload"), 0xf7];
 }
 
 function buildSettingsSysex(command) {
   const payload = [];
-  payload.push(...packUint14(performanceSettings.ring));
-  payload.push(...packUint14(performanceSettings.noise));
+  payload.push(...ensureArray(packUint14(performanceSettings.ring), "packUint14(ring)"));
+  payload.push(...ensureArray(packUint14(performanceSettings.noise), "packUint14(noise)"));
   payload.push(clampInt(performanceSettings.midiInChannel, 1, 16) - 1);
   payload.push(clampInt(performanceSettings.turingRange, 1, 8));
   payload.push(performanceSettings.turingMidiOut ? 1 : 0);
   payload.push(clampInt(performanceSettings.turingMidiChannel, 1, 16) - 1);
-  return [0xf0, SYSEX_MANUFACTURER, ...SYSEX_ID, command, ...payload, 0xf7];
+  return [0xf0, SYSEX_MANUFACTURER, ...ensureArray(SYSEX_ID, "SYSEX_ID"), command, ...ensureArray(payload, "settings payload"), 0xf7];
 }
 
 function buildDeleteSlotSysex(slot) {
@@ -749,8 +866,8 @@ function frameSummary() {
 
 function appendStages(payload, stages) {
   stages.forEach((stage) => {
-    payload.push(...packUint14(stage.level));
-    payload.push(...packUint21(stage.time));
+    payload.push(...ensureArray(packUint14(stage.level), `packUint14(stage level ${stage.level})`));
+    payload.push(...ensureArray(packUint21(stage.time), `packUint21(stage time ${stage.time})`));
   });
 }
 
@@ -776,7 +893,7 @@ function encodeName(name) {
 }
 
 function sysexHex() {
-  return Array.from(buildSysex(SYSEX_COMMAND_PREVIEW))
+  return Array.from(ensureArray(buildSysex(SYSEX_COMMAND_PREVIEW), "buildSysex()"))
     .map((byte) => byte.toString(16).toUpperCase().padStart(2, "0"))
     .join(" ");
 }
@@ -944,8 +1061,19 @@ async function sendPerformanceSettings(command = SYSEX_COMMAND_SETTINGS) {
     return;
   }
 
-  const frame = buildSettingsSysex(command);
-  output.send(frame);
+  try {
+    const frame = buildSettingsSysex(command);
+    output.send(frame);
+  } catch (error) {
+    logDeveloper("Settings SysEx failed.", {
+      command,
+      output: output.name || output.id || "Unknown output",
+      message: error?.message || "Unknown error",
+      stack: error?.stack || "No stack trace"
+    });
+    setStatus("Card settings send failed. Open Developer tools for details.");
+    return;
+  }
   const action = command === SYSEX_COMMAND_SAVE_SETTINGS ? "Saved" : "Set";
   setStatus(`${action} ring ${performanceSettings.ring}, noise ${performanceSettings.noise}, MIDI in ch ${performanceSettings.midiInChannel}, Turing ${performanceSettings.turingRange} oct, Turing MIDI ${performanceSettings.turingMidiOut ? "on" : "off"} ch ${performanceSettings.turingMidiChannel} on ${output.name || "MIDI output"}.`);
 }
@@ -961,7 +1089,17 @@ async function requestPerformanceSettings() {
     return;
   }
 
-  output.send(buildRequestSettingsSysex());
+  try {
+    output.send(buildRequestSettingsSysex());
+  } catch (error) {
+    logDeveloper("Settings request failed.", {
+      output: output.name || output.id || "Unknown output",
+      message: error?.message || "Unknown error",
+      stack: error?.stack || "No stack trace"
+    });
+    setStatus("Settings request failed. Open Developer tools for details.");
+    return;
+  }
   setStatus(`Requested settings from ${output.name || "MIDI output"}.`);
 }
 
@@ -1020,6 +1158,10 @@ el.developerToggle.addEventListener("click", () => {
   renderDeveloperMode();
   updateExport();
 });
+el.clearDeveloperLog.addEventListener("click", () => {
+  clearDeveloperLog();
+  setStatus("Developer diagnostics cleared.");
+});
 el.copyCpp.addEventListener("click", async () => {
   await navigator.clipboard.writeText(el.exportText.value);
   setStatus("C++ preset copied.");
@@ -1030,7 +1172,17 @@ el.copySysex.addEventListener("click", async () => {
     return;
   }
 
-  await navigator.clipboard.writeText(sysexHex());
+  try {
+    await navigator.clipboard.writeText(sysexHex());
+  } catch (error) {
+    logDeveloper("Copy SysEx failed.", {
+      preset: presets[selected]?.name,
+      message: error?.message || "Unknown error",
+      stack: error?.stack || "No stack trace"
+    });
+    setStatus("Copy SysEx failed. Open Developer tools for details.");
+    return;
+  }
   setStatus(`SysEx preview frame copied for Custom ${Number(el.customSlot.value) + 1}.`);
 });
 el.sendSysex.addEventListener("click", () => sendSysex(SYSEX_COMMAND_PREVIEW));
@@ -1060,4 +1212,5 @@ el.canvas.addEventListener("pointercancel", () => {
 });
 
 window.addEventListener("resize", drawCurves);
+renderDeveloperLog();
 render();
