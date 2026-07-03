@@ -51,6 +51,16 @@ So the import result must be presented as:
 It should also be presented in a dedicated import workflow, not mixed into the
 main envelope editor page.
 
+## Editor Handoff
+
+The import page opens the main Envelope Lab editor in a new tab after draft
+handoff.
+
+- Local editor route: `../../web-midi/editor/index.html`
+- Hosted editor route: `https://soveda.github.io/CozmikC1zzl3/web-midi/editor/index.html`
+
+The import page chooses the hosted link when it is served from GitHub Pages.
+
 ## Files
 
 - [IMPORT_SPEC.md](/Users/adrianvos/coding/GitHub/CozmikC1zzl3/experiments/cz-import/IMPORT_SPEC.md):

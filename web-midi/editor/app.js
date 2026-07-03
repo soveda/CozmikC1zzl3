@@ -59,6 +59,7 @@ let activeLaneView = "amp";
 let developerMode = false;
 let themeMode = loadThemeMode();
 let developerLogLines = [];
+const CZ_IMPORT_HANDOFF_KEY = "c1zzl3-cz-import-draft";
 
 const el = {
   presetList: document.querySelector("#presetList"),
@@ -197,6 +198,45 @@ function loadThemeMode() {
 
 function saveThemeMode() {
   localStorage.setItem("c1zzl3-theme-mode", themeMode);
+}
+
+function consumeImportedDraft() {
+  try {
+    const raw = localStorage.getItem(CZ_IMPORT_HANDOFF_KEY);
+    if (!raw) return false;
+
+    const payload = JSON.parse(raw);
+    const draft = payload?.draft;
+    if (!draft || !Array.isArray(draft.amp) || !Array.isArray(draft.pd)) {
+      localStorage.removeItem(CZ_IMPORT_HANDOFF_KEY);
+      return false;
+    }
+
+    const imported = preset(draft.name || "Imported CZ patch", draft.amp, draft.pd);
+    if (customPresetCount() >= CUSTOM_SLOT_COUNT) {
+      presets[FACTORY_PRESET_COUNT + CUSTOM_SLOT_COUNT - 1] = imported;
+      selected = FACTORY_PRESET_COUNT + CUSTOM_SLOT_COUNT - 1;
+    } else {
+      presets.push(imported);
+      selected = presets.length - 1;
+    }
+
+    if (draft.performance && typeof draft.performance === "object") {
+      performanceSettings = {
+        ...performanceSettings,
+        ring: clampInt(draft.performance.ring ?? performanceSettings.ring, 0, MAX_LEVEL),
+        noise: clampInt(draft.performance.noise ?? performanceSettings.noise, 0, MAX_LEVEL)
+      };
+    }
+
+    savePresets();
+    savePerformanceSettings();
+    localStorage.removeItem(CZ_IMPORT_HANDOFF_KEY);
+    return true;
+  } catch {
+    localStorage.removeItem(CZ_IMPORT_HANDOFF_KEY);
+    return false;
+  }
 }
 
 function render() {
@@ -1358,4 +1398,5 @@ el.canvas.addEventListener("pointercancel", () => {
 
 window.addEventListener("resize", drawCurves);
 renderDeveloperLog();
+consumeImportedDraft();
 render();
