@@ -239,6 +239,36 @@ function consumeImportedDraft() {
       }
     }
 
+    const params = new URLSearchParams(window.location.search);
+    const queryPayload = params.get("cz-import");
+    if (queryPayload) {
+      const payload = JSON.parse(decodeURIComponent(queryPayload));
+      const draft = payload?.draft;
+      if (draft && Array.isArray(draft.amp) && Array.isArray(draft.pd)) {
+        const imported = preset(draft.name || "Imported CZ patch", draft.amp, draft.pd);
+        if (customPresetCount() >= CUSTOM_SLOT_COUNT) {
+          presets[FACTORY_PRESET_COUNT + CUSTOM_SLOT_COUNT - 1] = imported;
+          selected = FACTORY_PRESET_COUNT + CUSTOM_SLOT_COUNT - 1;
+        } else {
+          presets.push(imported);
+          selected = presets.length - 1;
+        }
+
+        if (draft.performance && typeof draft.performance === "object") {
+          performanceSettings = {
+            ...performanceSettings,
+            ring: clampInt(draft.performance.ring ?? performanceSettings.ring, 0, MAX_LEVEL),
+            noise: clampInt(draft.performance.noise ?? performanceSettings.noise, 0, MAX_LEVEL)
+          };
+        }
+
+        savePresets();
+        savePerformanceSettings();
+        window.history.replaceState(null, "", window.location.pathname);
+        return true;
+      }
+    }
+
     const hashMatch = window.location.hash.match(/(?:^|&)cz-import=([^&]+)/);
     if (hashMatch) {
       const payload = JSON.parse(decodeURIComponent(hashMatch[1]));
@@ -263,7 +293,7 @@ function consumeImportedDraft() {
 
         savePresets();
         savePerformanceSettings();
-        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+        window.history.replaceState(null, "", window.location.pathname);
         return true;
       }
     }

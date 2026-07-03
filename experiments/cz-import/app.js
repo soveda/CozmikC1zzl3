@@ -189,7 +189,10 @@ function createHandoffPayload() {
 function openEditorTab() {
   const editorUrl = createEditorUrl();
   const payload = createHandoffPayload();
-  const tab = window.open(editorUrl, "_blank", "noopener,noreferrer");
+  const handoffUrl = payload
+    ? `${editorUrl}?cz-import=${encodeURIComponent(JSON.stringify(payload))}`
+    : editorUrl;
+  const tab = window.open(handoffUrl, "_blank", "noopener,noreferrer");
   if (tab && payload) {
     setTimeout(() => {
       try {
@@ -199,7 +202,7 @@ function openEditorTab() {
       }
     }, 250);
   }
-  return editorUrl;
+  return handoffUrl;
 }
 
 function decodePatch(buffer, fileName) {
