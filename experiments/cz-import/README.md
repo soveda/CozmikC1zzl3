@@ -1,0 +1,59 @@
+# CZ Import Experiment
+
+This folder sketches a user-facing experiment for importing Casio CZ `.syx`
+patches into the C1ZZL3 web editor as approximate translated presets.
+
+This is not a direct SysEx passthrough feature. It is a translation layer.
+
+## Goal
+
+Allow a user to:
+
+1. choose a Casio CZ patch file
+2. decode the patch in the browser
+3. map the parts that make sense onto C1ZZL3 controls
+4. preview and adjust the result
+5. save the translated result to a custom slot on the card
+
+This should live on a separate page from Envelope Lab so users do not confuse:
+
+- envelope editing
+- CZ patch import
+- translated patch review
+
+## Why Translation Is Needed
+
+Casio CZ patches target a different synth architecture.
+
+C1ZZL3 has:
+
+- one waveform morph control
+- one phase-distortion control
+- custom amplitude envelope
+- custom phase-distortion envelope
+- detune, ring, and noise controls
+
+Casio CZ patches include things like:
+
+- CZ waveform selection and combinations
+- DCW behaviour that does not map 1:1 to C1ZZL3
+- DCA and DCW envelopes
+- pitch envelope
+- modulation settings
+- tone structure choices that may not match C1ZZL3 directly
+
+So the import result must be presented as:
+
+- a best-effort approximation
+- editable before sending
+- not a guaranteed faithful clone
+
+It should also be presented in a dedicated import workflow, not mixed into the
+main envelope editor page.
+
+## Files
+
+- [IMPORT_SPEC.md](/Users/adrianvos/coding/GitHub/CozmikC1zzl3/experiments/cz-import/IMPORT_SPEC.md):
+  import workflow and user-facing design
+- [MAPPING_TABLE.md](/Users/adrianvos/coding/GitHub/CozmikC1zzl3/experiments/cz-import/MAPPING_TABLE.md):
+  parameter mapping ideas and unsupported areas
