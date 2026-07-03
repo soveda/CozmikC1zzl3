@@ -60,6 +60,14 @@ let developerMode = false;
 let themeMode = loadThemeMode();
 let developerLogLines = [];
 const CZ_IMPORT_HANDOFF_KEY = "c1zzl3-cz-import-draft";
+const HOSTED_EDITOR_URL = "https://soveda.github.io/CozmikC1zzl3/web-midi/editor/index.html";
+let messageImportedDraft = null;
+
+window.addEventListener("message", (event) => {
+  if (event.data?.type === "cz-import-handoff" && event.data?.payload) {
+    messageImportedDraft = event.data.payload;
+  }
+});
 
 const el = {
   presetList: document.querySelector("#presetList"),
@@ -70,6 +78,7 @@ const el = {
   customSlot: document.querySelector("#customSlot"),
   canvas: document.querySelector("#curveCanvas"),
   themeToggle: document.querySelector("#themeToggle"),
+  onlineEditorLink: document.querySelector("#onlineEditorLink"),
   ampStages: document.querySelector("#ampStages"),
   pdStages: document.querySelector("#pdStages"),
   ampView: document.querySelector("#ampView"),
@@ -202,6 +211,63 @@ function saveThemeMode() {
 
 function consumeImportedDraft() {
   try {
+    if (messageImportedDraft) {
+      const payload = messageImportedDraft;
+      messageImportedDraft = null;
+      const draft = payload?.draft;
+      if (draft && Array.isArray(draft.amp) && Array.isArray(draft.pd)) {
+        const imported = preset(draft.name || "Imported CZ patch", draft.amp, draft.pd);
+        if (customPresetCount() >= CUSTOM_SLOT_COUNT) {
+          presets[FACTORY_PRESET_COUNT + CUSTOM_SLOT_COUNT - 1] = imported;
+          selected = FACTORY_PRESET_COUNT + CUSTOM_SLOT_COUNT - 1;
+        } else {
+          presets.push(imported);
+          selected = presets.length - 1;
+        }
+
+        if (draft.performance && typeof draft.performance === "object") {
+          performanceSettings = {
+            ...performanceSettings,
+            ring: clampInt(draft.performance.ring ?? performanceSettings.ring, 0, MAX_LEVEL),
+            noise: clampInt(draft.performance.noise ?? performanceSettings.noise, 0, MAX_LEVEL)
+          };
+        }
+
+        savePresets();
+        savePerformanceSettings();
+        return true;
+      }
+    }
+
+    const hashMatch = window.location.hash.match(/(?:^|&)cz-import=([^&]+)/);
+    if (hashMatch) {
+      const payload = JSON.parse(decodeURIComponent(hashMatch[1]));
+      const draft = payload?.draft;
+      if (draft && Array.isArray(draft.amp) && Array.isArray(draft.pd)) {
+        const imported = preset(draft.name || "Imported CZ patch", draft.amp, draft.pd);
+        if (customPresetCount() >= CUSTOM_SLOT_COUNT) {
+          presets[FACTORY_PRESET_COUNT + CUSTOM_SLOT_COUNT - 1] = imported;
+          selected = FACTORY_PRESET_COUNT + CUSTOM_SLOT_COUNT - 1;
+        } else {
+          presets.push(imported);
+          selected = presets.length - 1;
+        }
+
+        if (draft.performance && typeof draft.performance === "object") {
+          performanceSettings = {
+            ...performanceSettings,
+            ring: clampInt(draft.performance.ring ?? performanceSettings.ring, 0, MAX_LEVEL),
+            noise: clampInt(draft.performance.noise ?? performanceSettings.noise, 0, MAX_LEVEL)
+          };
+        }
+
+        savePresets();
+        savePerformanceSettings();
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+        return true;
+      }
+    }
+
     const raw = localStorage.getItem(CZ_IMPORT_HANDOFF_KEY);
     if (!raw) return false;
 
@@ -262,6 +328,11 @@ function renderThemeMode() {
   el.themeToggle.classList.toggle("is-active", themeMode === "light");
   el.themeToggle.textContent = themeMode === "light" ? "Light" : "Dark";
   el.themeToggle.setAttribute("aria-checked", String(themeMode === "light"));
+  if (el.onlineEditorLink) {
+    const host = window.location.hostname;
+    const isLocalDev = host === "localhost" || host === "127.0.0.1" || host === "::1";
+    el.onlineEditorLink.classList.toggle("is-active", !isLocalDev && window.location.href.startsWith(HOSTED_EDITOR_URL));
+  }
   drawCurves();
 }
 

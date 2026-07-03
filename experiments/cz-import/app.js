@@ -22,7 +22,9 @@ const LOCAL_EDITOR_URL = "../../web-midi/editor/index.html";
 const HOSTED_EDITOR_URL = "https://soveda.github.io/CozmikC1zzl3/web-midi/editor/index.html";
 
 function getEditorUrl() {
-  return window.location.hostname.endsWith("github.io") ? HOSTED_EDITOR_URL : LOCAL_EDITOR_URL;
+  const host = window.location.hostname;
+  const isLocalDev = host === "localhost" || host === "127.0.0.1" || host === "::1";
+  return isLocalDev ? LOCAL_EDITOR_URL : HOSTED_EDITOR_URL;
 }
 
 function setStatus(text, tone = "ok") {
@@ -161,17 +163,42 @@ function renderDraft(draft) {
 
 function handoffDraft(draft) {
   if (!draft) return false;
-  localStorage.setItem(HANDOFF_KEY, JSON.stringify({
+  const payload = {
     source: "cz-import-lab",
     createdAt: new Date().toISOString(),
     draft
-  }));
+  };
+  localStorage.setItem(HANDOFF_KEY, JSON.stringify(payload));
   return true;
 }
 
-function openEditorTab() {
+function createEditorUrl() {
   const editorUrl = getEditorUrl();
-  window.open(editorUrl, "_blank", "noopener,noreferrer");
+  return editorUrl;
+}
+
+function createHandoffPayload() {
+  if (!currentDraft) return null;
+  return {
+    source: "cz-import-lab",
+    createdAt: new Date().toISOString(),
+    draft: currentDraft
+  };
+}
+
+function openEditorTab() {
+  const editorUrl = createEditorUrl();
+  const payload = createHandoffPayload();
+  const tab = window.open(editorUrl, "_blank", "noopener,noreferrer");
+  if (tab && payload) {
+    setTimeout(() => {
+      try {
+        tab.postMessage({ type: "cz-import-handoff", payload }, "*");
+      } catch {
+        /* If messaging fails, the editor can still fall back to local storage. */
+      }
+    }, 250);
+  }
   return editorUrl;
 }
 
