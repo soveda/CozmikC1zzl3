@@ -97,6 +97,9 @@ const el = {
   audition: document.querySelector("#audition"),
   stop: document.querySelector("#stop"),
   midiToggle: document.querySelector("#midiToggle"),
+  pdControl: document.querySelector("#pdControl"),
+  detuneControl: document.querySelector("#detuneControl"),
+  performanceWaveSelect: document.querySelector("#performanceWaveSelect"),
   midiOutput: document.querySelector("#midiOutput"),
   copyCpp: document.querySelector("#copyCpp"),
   copySysex: document.querySelector("#copySysex"),
@@ -169,6 +172,9 @@ function loadPerformanceSettings() {
     const saved = JSON.parse(localStorage.getItem("c1zzl3-performance-settings"));
     if (saved && typeof saved === "object") {
       return {
+        pd: clampInt(saved.pd ?? 0, 0, MAX_LEVEL),
+        detune: clampInt(saved.detune ?? 0, 0, MAX_LEVEL),
+        waveform: ["sine", "sawtooth", "square", "triangle"].includes(saved.waveform) ? saved.waveform : "sine",
         ring: clampInt(saved.ring, 0, MAX_LEVEL),
         noise: clampInt(saved.noise, 0, MAX_LEVEL),
         midiInChannel: clampInt(saved.midiInChannel, 1, 16),
@@ -182,6 +188,9 @@ function loadPerformanceSettings() {
   }
 
   return {
+    pd: 0,
+    detune: 0,
+    waveform: "sine",
     ring: 0,
     noise: 0,
     midiInChannel: 1,
@@ -391,6 +400,9 @@ function renderDeveloperMode() {
 }
 
 function renderPerformanceSettings() {
+  el.pdControl.value = performanceSettings.pd;
+  el.detuneControl.value = performanceSettings.detune;
+  el.performanceWaveSelect.value = performanceSettings.waveform;
   el.ringControl.value = performanceSettings.ring;
   el.noiseControl.value = performanceSettings.noise;
   el.midiInChannel.value = performanceSettings.midiInChannel;
@@ -1224,7 +1236,7 @@ function handleSysexResponse(data) {
   };
   savePerformanceSettings();
   renderPerformanceSettings();
-  setStatus(`Loaded settings from card: ring ${performanceSettings.ring}, noise ${performanceSettings.noise}, MIDI in ch ${performanceSettings.midiInChannel}, Turing ${performanceSettings.turingRange} oct, Turing MIDI ${performanceSettings.turingMidiOut ? "on" : "off"} ch ${performanceSettings.turingMidiChannel}.`);
+  setStatus(`Loaded settings from card: PD ${performanceSettings.pd}, detune ${performanceSettings.detune}, waveform ${performanceSettings.waveform}, ring ${performanceSettings.ring}, noise ${performanceSettings.noise}, MIDI in ch ${performanceSettings.midiInChannel}, Turing ${performanceSettings.turingRange} oct, Turing MIDI ${performanceSettings.turingMidiOut ? "on" : "off"} ch ${performanceSettings.turingMidiChannel}.`);
 }
 
 function downloadJson() {
@@ -1329,8 +1341,10 @@ function updatePerformanceSetting(key, value) {
     performanceSettings[key] = Boolean(value);
   } else if (key === "turingMidiChannel") {
     performanceSettings[key] = clampInt(value, 1, 16);
-  } else if (key === "ring" || key === "noise") {
+  } else if (key === "ring" || key === "noise" || key === "pd" || key === "detune") {
     performanceSettings[key] = clampInt(value, 0, MAX_LEVEL);
+  } else if (key === "waveform") {
+    performanceSettings.waveform = ["sine", "sawtooth", "square", "triangle"].includes(value) ? value : "sine";
   }
 
   savePerformanceSettings();
@@ -1361,7 +1375,7 @@ async function sendPerformanceSettings(command = SYSEX_COMMAND_SETTINGS) {
     return;
   }
   const action = command === SYSEX_COMMAND_SAVE_SETTINGS ? "Saved" : "Set";
-  setStatus(`${action} ring ${performanceSettings.ring}, noise ${performanceSettings.noise}, MIDI in ch ${performanceSettings.midiInChannel}, Turing ${performanceSettings.turingRange} oct, Turing MIDI ${performanceSettings.turingMidiOut ? "on" : "off"} ch ${performanceSettings.turingMidiChannel} on ${output.name || "MIDI output"}.`);
+  setStatus(`${action} PD ${performanceSettings.pd}, detune ${performanceSettings.detune}, waveform ${performanceSettings.waveform}, ring ${performanceSettings.ring}, noise ${performanceSettings.noise}, MIDI in ch ${performanceSettings.midiInChannel}, Turing ${performanceSettings.turingRange} oct, Turing MIDI ${performanceSettings.turingMidiOut ? "on" : "off"} ch ${performanceSettings.turingMidiChannel} on ${output.name || "MIDI output"}.`);
 }
 
 async function requestPerformanceSettings() {
@@ -1476,6 +1490,9 @@ el.flashSysex.addEventListener("click", () => sendSysex(SYSEX_COMMAND_SAVE));
 el.deleteSlot.addEventListener("click", deleteCustomSlot);
 el.requestSettings.addEventListener("click", requestPerformanceSettings);
 el.sendSettings.addEventListener("click", () => sendPerformanceSettings(SYSEX_COMMAND_SAVE_SETTINGS));
+el.pdControl.addEventListener("input", () => updatePerformanceSetting("pd", el.pdControl.value));
+el.detuneControl.addEventListener("input", () => updatePerformanceSetting("detune", el.detuneControl.value));
+el.performanceWaveSelect.addEventListener("change", () => updatePerformanceSetting("waveform", el.performanceWaveSelect.value));
 el.ringControl.addEventListener("input", () => updatePerformanceSetting("ring", el.ringControl.value));
 el.noiseControl.addEventListener("input", () => updatePerformanceSetting("noise", el.noiseControl.value));
 el.midiInChannel.addEventListener("input", () => updatePerformanceSetting("midiInChannel", el.midiInChannel.value));

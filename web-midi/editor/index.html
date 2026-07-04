@@ -106,6 +106,23 @@
         </label>
         <section class="performance-panel" aria-label="Performance settings">
           <label>
+            PD amount
+            <input id="pdControl" type="range" min="0" max="4095" value="0">
+          </label>
+          <label>
+            Detune
+            <input id="detuneControl" type="range" min="0" max="4095" value="0">
+          </label>
+          <label>
+            Waveform
+            <select id="performanceWaveSelect">
+              <option value="sine">Sine</option>
+              <option value="sawtooth">Saw</option>
+              <option value="square">Square</option>
+              <option value="triangle">Triangle</option>
+            </select>
+          </label>
+          <label>
             Ring mod
             <input id="ringControl" type="range" min="0" max="4095" value="0">
           </label>
