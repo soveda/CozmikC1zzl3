@@ -846,7 +846,7 @@ private:
         if (sysexLength != 6u)
             return;
 
-        uint8_t frame[16] = {
+        uint8_t frame[22] = {
             0xF0u,
             WebMidiManufacturer,
             WebMidiId[0],
@@ -858,6 +858,8 @@ private:
         uint32_t offset = 7;
         appendWebMidiUint14(frame, offset, clamp12(osc2Ring));
         appendWebMidiUint14(frame, offset, clamp12(osc2Noise));
+        appendWebMidiUint14(frame, offset, clamp12(pdControl));
+        appendWebMidiUint14(frame, offset, clamp12(waveControl));
         frame[offset++] = midiInChannel & 0x0Fu;
         frame[offset++] = clampTuringCvOctaveRange(turingCvOctaveRange);
         frame[offset++] = turingMidiOutputEnabled ? 1u : 0u;
