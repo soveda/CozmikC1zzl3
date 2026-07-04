@@ -20,6 +20,16 @@ let currentDraft = null;
 const HANDOFF_KEY = "c1zzl3-cz-import-draft";
 const LOCAL_EDITOR_URL = "../../web-midi/editor/index.html";
 const HOSTED_EDITOR_URL = "https://soveda.github.io/CozmikC1zzl3/web-midi/editor/index.html";
+const WAVE_FAMILIES = [
+  { label: "Saw", value: 0, hint: "lower CC23 range" },
+  { label: "Square", value: 1, hint: "lower-mid CC23 range" },
+  { label: "Narrow pulse", value: 2, hint: "pulse-focused region" },
+  { label: "Double sine", value: 3, hint: "mid CC23 range" },
+  { label: "Saw pulse", value: 4, hint: "lower-mid to mid CC23 range" },
+  { label: "Resonant saw window", value: 5, hint: "upper CC23 range" },
+  { label: "Resonant triangle window", value: 6, hint: "upper CC23 range" },
+  { label: "Resonant trapezoid window", value: 7, hint: "upper CC23 range" },
+];
 
 function getEditorUrl() {
   const host = window.location.hostname;
@@ -104,15 +114,18 @@ function classifyWave(bytes) {
   const mid = bytes.slice(32, 64).reduce((sum, b) => sum + b, 0) / 32;
 
   if (peak > 220 && avg > 110) {
-    return { label: "Bright resonant", value: "upper CC23 range" };
+    return WAVE_FAMILIES[5];
   }
   if (mid > 95) {
-    return { label: "Smooth harmonic", value: "mid CC23 range" };
+    return WAVE_FAMILIES[3];
   }
   if (peak > 190) {
-    return { label: "Pulse / square-leaning", value: "lower-mid CC23 range" };
+    return WAVE_FAMILIES[2];
   }
-  return { label: "Saw-like", value: "lower CC23 range" };
+  if (avg > 80) {
+    return WAVE_FAMILIES[4];
+  }
+  return WAVE_FAMILIES[0];
 }
 
 function buildDraftPreset(decodedBytes, patchName) {
@@ -155,8 +168,8 @@ function renderDraft(draft) {
   }
 
   el.draftNameBox.textContent = `${draft.name} (${draft.confidence} confidence)`;
-  el.waveBox.textContent = `${draft.wave.label} -> ${draft.wave.value}`;
-  el.perfBox.textContent = `Detune ${draft.performance.detune}, ring ${draft.performance.ring}, noise ${draft.performance.noise}`;
+  el.waveBox.textContent = `${draft.wave.label} -> ${draft.wave.hint}`;
+  el.perfBox.textContent = `Wave family ${draft.wave.label}, detune ${draft.performance.detune}, ring ${draft.performance.ring}, noise ${draft.performance.noise}`;
   el.ampDraftBox.textContent = formatStages(draft.amp);
   el.pdDraftBox.textContent = formatStages(draft.pd);
 }

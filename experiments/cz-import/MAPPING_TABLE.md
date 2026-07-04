@@ -10,7 +10,7 @@ compatibility.
 | Patch file | Draft custom preset | Browser-side only |
 | DCA envelope | Amplitude envelope | Best direct candidate |
 | DCW envelope | Phase-distortion envelope | Approximation |
-| Basic waveform family | CC23 / waveform start position | Approximation |
+| Basic waveform family | 8-wave family selector / CC23 region | Approximation |
 | Brightness / timbre trend | PD starting level | Approximation |
 
 ## Harder Or Approximate Areas
@@ -27,11 +27,11 @@ compatibility.
 
 | CZ Character | Suggested C1ZZL3 Region |
 | --- | --- |
-| Saw-like | lower CC23 range |
-| Square-like | lower-mid CC23 range |
-| Pulse-like | pulse-focused region |
-| Double-sine or smoother harmonic shapes | mid CC23 range |
-| Resonant or brighter CZ shapes | upper CC23 range |
+| Saw-like | Saw |
+| Square-like | Square |
+| Pulse-like | Narrow pulse or Saw pulse |
+| Double-sine or smoother harmonic shapes | Double sine |
+| Resonant or brighter CZ shapes | Resonant saw / triangle / trapezoid windows |
 
 ## Envelope Mapping Strategy
 

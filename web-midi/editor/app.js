@@ -62,6 +62,16 @@ let developerLogLines = [];
 const CZ_IMPORT_HANDOFF_KEY = "c1zzl3-cz-import-draft";
 const HOSTED_EDITOR_URL = "https://soveda.github.io/CozmikC1zzl3/web-midi/editor/index.html";
 let messageImportedDraft = null;
+const WAVE_FAMILIES = [
+  "Saw",
+  "Square",
+  "Narrow pulse",
+  "Double sine",
+  "Saw pulse",
+  "Resonant saw window",
+  "Resonant triangle window",
+  "Resonant trapezoid window"
+];
 
 window.addEventListener("message", (event) => {
   if (event.data?.type === "cz-import-handoff" && event.data?.payload) {
@@ -174,7 +184,7 @@ function loadPerformanceSettings() {
       return {
         pd: clampInt(saved.pd ?? 0, 0, MAX_LEVEL),
         detune: clampInt(saved.detune ?? 0, 0, MAX_LEVEL),
-        waveform: ["sine", "sawtooth", "square", "triangle"].includes(saved.waveform) ? saved.waveform : "sine",
+        waveform: clampInt(saved.waveform ?? 0, 0, 7),
         ring: clampInt(saved.ring, 0, MAX_LEVEL),
         noise: clampInt(saved.noise, 0, MAX_LEVEL),
         midiInChannel: clampInt(saved.midiInChannel, 1, 16),
@@ -190,7 +200,7 @@ function loadPerformanceSettings() {
   return {
     pd: 0,
     detune: 0,
-    waveform: "sine",
+    waveform: 0,
     ring: 0,
     noise: 0,
     midiInChannel: 1,
@@ -677,7 +687,7 @@ function playAudition(note, token) {
   const gain = audioCtx.createGain();
   const filter = audioCtx.createBiquadFilter();
 
-  osc.type = el.waveSelect.value;
+  osc.type = auditionOscType(el.waveSelect.value);
   osc.frequency.value = midiToHz(note);
   filter.type = "lowpass";
   filter.frequency.value = 220;
@@ -695,6 +705,14 @@ function playAudition(note, token) {
   };
   activeNodes = [osc, gain, filter];
   setStatus(`Looping browser audition for ${current.name} at MIDI note ${note}.`);
+}
+
+function auditionOscType(waveIndex) {
+  const index = clampInt(waveIndex, 0, 7);
+  if (index === 0 || index === 4 || index === 5) return "sawtooth";
+  if (index === 1 || index === 2) return "square";
+  if (index === 3 || index === 6 || index === 7) return "triangle";
+  return "sine";
 }
 
 function scheduleEnvelope(param, stages, startTime, base, depth) {
@@ -1236,7 +1254,7 @@ function handleSysexResponse(data) {
   };
   savePerformanceSettings();
   renderPerformanceSettings();
-  setStatus(`Loaded settings from card: PD ${performanceSettings.pd}, detune ${performanceSettings.detune}, waveform ${performanceSettings.waveform}, ring ${performanceSettings.ring}, noise ${performanceSettings.noise}, MIDI in ch ${performanceSettings.midiInChannel}, Turing ${performanceSettings.turingRange} oct, Turing MIDI ${performanceSettings.turingMidiOut ? "on" : "off"} ch ${performanceSettings.turingMidiChannel}.`);
+  setStatus(`Loaded settings from card: PD ${performanceSettings.pd}, detune ${performanceSettings.detune}, wave ${WAVE_FAMILIES[performanceSettings.waveform] || performanceSettings.waveform}, ring ${performanceSettings.ring}, noise ${performanceSettings.noise}, MIDI in ch ${performanceSettings.midiInChannel}, Turing ${performanceSettings.turingRange} oct, Turing MIDI ${performanceSettings.turingMidiOut ? "on" : "off"} ch ${performanceSettings.turingMidiChannel}.`);
 }
 
 function downloadJson() {
@@ -1344,7 +1362,7 @@ function updatePerformanceSetting(key, value) {
   } else if (key === "ring" || key === "noise" || key === "pd" || key === "detune") {
     performanceSettings[key] = clampInt(value, 0, MAX_LEVEL);
   } else if (key === "waveform") {
-    performanceSettings.waveform = ["sine", "sawtooth", "square", "triangle"].includes(value) ? value : "sine";
+    performanceSettings.waveform = clampInt(value, 0, 7);
   }
 
   savePerformanceSettings();
@@ -1375,7 +1393,7 @@ async function sendPerformanceSettings(command = SYSEX_COMMAND_SETTINGS) {
     return;
   }
   const action = command === SYSEX_COMMAND_SAVE_SETTINGS ? "Saved" : "Set";
-  setStatus(`${action} PD ${performanceSettings.pd}, detune ${performanceSettings.detune}, waveform ${performanceSettings.waveform}, ring ${performanceSettings.ring}, noise ${performanceSettings.noise}, MIDI in ch ${performanceSettings.midiInChannel}, Turing ${performanceSettings.turingRange} oct, Turing MIDI ${performanceSettings.turingMidiOut ? "on" : "off"} ch ${performanceSettings.turingMidiChannel} on ${output.name || "MIDI output"}.`);
+  setStatus(`${action} PD ${performanceSettings.pd}, detune ${performanceSettings.detune}, wave ${WAVE_FAMILIES[performanceSettings.waveform] || performanceSettings.waveform}, ring ${performanceSettings.ring}, noise ${performanceSettings.noise}, MIDI in ch ${performanceSettings.midiInChannel}, Turing ${performanceSettings.turingRange} oct, Turing MIDI ${performanceSettings.turingMidiOut ? "on" : "off"} ch ${performanceSettings.turingMidiChannel} on ${output.name || "MIDI output"}.`);
 }
 
 async function requestPerformanceSettings() {
