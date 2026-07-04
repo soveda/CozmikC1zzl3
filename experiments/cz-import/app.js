@@ -160,6 +160,7 @@ function formatStages(stages) {
 function renderDraft(draft) {
   if (!draft) {
     el.draftNameBox.textContent = "No draft created yet.";
+    el.summaryBox.textContent = "No decoded patch yet.";
     el.waveBox.textContent = "No draft yet.";
     el.perfBox.textContent = "No draft yet.";
     el.ampDraftBox.textContent = "No draft yet.";
@@ -167,6 +168,7 @@ function renderDraft(draft) {
     return;
   }
 
+  el.summaryBox.textContent = `${draft.name} decoded with ${draft.confidence} confidence.`;
   el.draftNameBox.textContent = `${draft.name} (${draft.confidence} confidence)`;
   el.waveBox.textContent = `${draft.wave.label} -> ${draft.wave.hint}`;
   el.perfBox.textContent = `Wave family ${draft.wave.label}, detune ${draft.performance.detune}, ring ${draft.performance.ring}, noise ${draft.performance.noise}`;
