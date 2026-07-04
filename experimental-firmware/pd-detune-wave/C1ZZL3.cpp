@@ -1090,12 +1090,23 @@ private:
     {
         uint32_t scaled = ((uint32_t)wave * 7u);
         uint32_t index = scaled >> 12;
-        uint32_t frac = smoothStep12(scaled & 4095);
+        uint32_t frac = compressWaveTransition(smoothStep12(scaled & 4095));
 
         int32_t a = czWave(phase, index);
         int32_t b = czWave(phase, index < 7 ? index + 1 : 7);
 
         return a + (((b - a) * (int32_t)frac) >> 12);
+    }
+
+    uint32_t compressWaveTransition(uint32_t frac)
+    {
+        if (frac <= 1024u)
+            return 0u;
+        if (frac >= 3072u)
+            return 4095u;
+
+        uint32_t span = frac - 1024u;
+        return ((span * 4095u) / 2048u);
     }
 
     inline int32_t czWave(uint32_t phase, uint32_t wave)
