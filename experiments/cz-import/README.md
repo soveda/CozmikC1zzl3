@@ -1,7 +1,7 @@
 # CZ Import Experiment
 
-This folder sketches a user-facing experiment for importing Casio CZ `.syx`
-patches into the C1ZZL3 web editor as approximate translated presets.
+This folder sketches a user-facing experiment for decoding Casio CZ `.syx`
+patches into approximate C1ZZL3 draft presets.
 
 This is not a direct SysEx passthrough feature. It is a translation layer.
 
@@ -12,8 +12,8 @@ Allow a user to:
 1. choose a Casio CZ patch file
 2. decode the patch in the browser
 3. map the parts that make sense onto C1ZZL3 controls
-4. preview and adjust the result
-5. save the translated result to a custom slot on the card
+4. hand the draft into Envelope Lab
+5. review and send it from there
 
 This should live on a separate page from Envelope Lab so users do not confuse:
 
@@ -45,7 +45,7 @@ Casio CZ patches include things like:
 So the import result must be presented as:
 
 - a best-effort approximation
-- editable before sending
+- reviewable in Envelope Lab before sending
 - not a guaranteed faithful clone
 
 It should also be presented in a dedicated import workflow, not mixed into the

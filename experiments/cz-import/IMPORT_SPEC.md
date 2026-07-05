@@ -2,8 +2,8 @@
 
 ## Summary
 
-The importer should accept a Casio CZ single-patch SysEx file and translate it
-into a new editable C1ZZL3 custom preset inside the web editor.
+The importer should accept a Casio CZ-style single-patch SysEx file and
+translate it into a new reviewable C1ZZL3 draft preset inside the web editor.
 
 The import should happen in the browser, not in firmware.
 
@@ -12,7 +12,7 @@ The import should happen in the browser, not in firmware.
 1. User opens a dedicated CZ import page.
 2. User chooses `Import CZ Patch`.
 3. User selects a `.syx` file.
-4. The browser validates that the file looks like a supported Casio CZ patch.
+4. The browser validates that the file looks like a supported Casio CZ draft candidate.
 5. The browser decodes the patch into readable parameters.
 6. The browser maps those parameters into a draft C1ZZL3 preset.
 7. The browser shows:
@@ -21,9 +21,8 @@ The import should happen in the browser, not in firmware.
    - mapped amplitude envelope
    - mapped phase-distortion envelope
    - warnings for unsupported or approximate values
-8. User edits the result if needed.
-9. User saves the translated preset to a custom browser slot or sends it to the
-   card.
+8. User opens the result in Envelope Lab if needed.
+9. User saves or sends it from there.
 
 ## Scope For First Experiment
 
@@ -73,7 +72,6 @@ Recommended flow after file selection:
 - imported patch info
 - mapping confidence
 - warning list
-- `Create Draft Preset`
 - `Open In Envelope Lab`
 
 ## Validation Rules
@@ -85,12 +83,13 @@ Validation checks:
 
 - file contains at least one SysEx frame
 - frame starts with Casio manufacturer ID `F0 44`
-- payload shape matches expected single-patch format
-- nibble-packed payload length matches expected patch size
+- payload is nibble-packed
+- nibble-packed payload length is even
+- decoded payload size lands inside the supported draft range
 
 If validation fails, the user should get a plain-language message such as:
 
-- `This file does not look like a supported Casio CZ single-patch SysEx file.`
+- `This file does not look like a supported Casio CZ single-patch SysEx file for draft translation.`
 
 ## Import Output
 
@@ -110,7 +109,7 @@ The importer should generate:
   - detune neutral
 
 After creating the draft preset, the user can be sent into Envelope Lab to make
-final edits and save to the card.
+final edits and save or send to the card.
 
 ## Confidence Model
 

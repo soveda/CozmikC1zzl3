@@ -13,9 +13,9 @@
         <p class="eyebrow">CZ Import Lab</p>
         <h1>Translate CZ patches into C1ZZL3 drafts</h1>
         <p class="top-note">
-          This page imports a Casio CZ SysEx patch, decodes what it can, and
-          turns it into a reviewable C1ZZL3 preset. It stays separate from
-          Envelope Lab so the workflows do not blur together.
+          This page does a best-effort decode of a Casio CZ SysEx patch and
+          turns the result into a reviewable C1ZZL3 draft. It stays separate
+          from Envelope Lab so the workflows do not blur together.
         </p>
       </div>
       <div class="top-actions">
@@ -35,7 +35,7 @@
           <label class="dropzone" for="czFile">
             <div>
               <strong>Drop a Casio CZ patch here</strong>
-              <div>Or choose a `.syx` file to validate and decode</div>
+              <div>Or choose a `.syx` file to validate and turn into a draft</div>
             </div>
           </label>
           <input id="czFile" type="file" accept=".syx,.mid,.sysex,application/octet-stream">
@@ -109,6 +109,7 @@
             <li>Pitch envelope may be simplified or ignored.</li>
             <li>Dual-oscillator structure may not map exactly.</li>
             <li>Modulation details may be dropped in the first pass.</li>
+            <li>Only files that pass the CZ frame checks are treated as draft candidates.</li>
           </ul>
         </div>
       </article>

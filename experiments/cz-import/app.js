@@ -32,6 +32,8 @@ const WAVE_FAMILIES = [
   { label: "Resonant triangle window", value: 6, hint: "upper CC23 range" },
   { label: "Resonant trapezoid window", value: 7, hint: "upper CC23 range" },
 ];
+const MIN_DECODED_PATCH_BYTES = 48;
+const MAX_DECODED_PATCH_BYTES = 512;
 
 function getEditorUrl() {
   const host = window.location.hostname;
@@ -249,19 +251,32 @@ function decodePatch(buffer, fileName) {
   const payload = frame.slice(7, -1);
   const nibblePayload = Array.from(payload).every((b) => b >= 0 && b <= 15);
   const decodedBytes = nibblePayload ? unpackNibbles(payload) : [];
+  const evenNibbleCount = payload.length % 2 === 0;
+  const decodedLengthOk =
+    decodedBytes.length >= MIN_DECODED_PATCH_BYTES &&
+    decodedBytes.length <= MAX_DECODED_PATCH_BYTES;
   const looksCasio = manufacturer === 0x44;
+  const supportedCandidate = looksCasio && nibblePayload && evenNibbleCount && decodedLengthOk;
   const patchName = fileName.replace(/\.(syx|mid|sysex)$/i, "");
-  const confidence = looksCasio ? "medium" : "low";
-  const draft = looksCasio ? buildDraftPreset(decodedBytes, patchName) : null;
+  const confidence = supportedCandidate ? "medium" : "low";
+  const draft = supportedCandidate ? buildDraftPreset(decodedBytes, patchName) : null;
+
+  const validationReasons = [];
+  if (!looksCasio) validationReasons.push("manufacturer was not Casio `0x44`");
+  if (!nibblePayload) validationReasons.push("payload was not nibble-packed");
+  if (nibblePayload && !evenNibbleCount) validationReasons.push("nibble payload length was uneven");
+  if (nibblePayload && !decodedLengthOk) {
+    validationReasons.push(`decoded size was ${decodedBytes.length} bytes, outside the expected draft range`);
+  }
 
   return {
-    ok: looksCasio,
-    tone: looksCasio ? "ok" : "warn",
-    validation: looksCasio
-      ? `Casio SysEx frame found (${frame.length} bytes, device id ${deviceId}).`
-      : `SysEx frame found, but manufacturer byte was 0x${manufacturer.toString(16).padStart(2, "0")}.`,
-    patchType: looksCasio
-      ? "Casio CZ single-patch candidate"
+    ok: supportedCandidate,
+    tone: supportedCandidate ? "ok" : "warn",
+    validation: supportedCandidate
+      ? `Casio-style nibble-packed patch candidate found (${frame.length} bytes, device id ${deviceId}).`
+      : `This file does not look like a supported Casio CZ single-patch draft candidate: ${validationReasons.join("; ")}.`,
+    patchType: supportedCandidate
+      ? "Casio CZ-style single-patch draft candidate"
       : "Unsupported or different synth family",
     summary: [
       `File: ${fileName}`,
@@ -271,6 +286,7 @@ function decodePatch(buffer, fileName) {
       `Model bytes: ${modelBytes.map((b) => `0x${b.toString(16).padStart(2, "0")}`).join(" ")}`,
       `Payload bytes: ${payload.length}`,
       `Nibble-packed payload: ${nibblePayload ? "yes" : "no"}`,
+      `Even nibble count: ${evenNibbleCount ? "yes" : "no"}`,
       `Decoded bytes: ${decodedBytes.length}`,
       `Draft name: ${patchName}`,
       `Confidence: ${confidence}`
