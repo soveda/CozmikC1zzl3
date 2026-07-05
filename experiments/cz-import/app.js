@@ -5,15 +5,17 @@ const el = {
   validationBox: document.querySelector("#validationBox"),
   patchTypeBox: document.querySelector("#patchTypeBox"),
   summaryBox: document.querySelector("#summaryBox"),
+  decodedPatchBox: document.querySelector("#decodedPatchBox"),
+  mappedDraftBox: document.querySelector("#mappedDraftBox"),
+  confidenceBox: document.querySelector("#confidenceBox"),
+  supportedOutputBox: document.querySelector("#supportedOutputBox"),
   decodedBox: document.querySelector("#decodedBox"),
   draftNameBox: document.querySelector("#draftNameBox"),
   waveBox: document.querySelector("#waveBox"),
   perfBox: document.querySelector("#perfBox"),
   ampDraftBox: document.querySelector("#ampDraftBox"),
   pdDraftBox: document.querySelector("#pdDraftBox"),
-  createDraft: document.querySelector("#createDraft"),
   openDraft: document.querySelector("#openDraft"),
-  saveDraft: document.querySelector("#saveDraft"),
 };
 
 let currentDraft = null;
@@ -159,8 +161,11 @@ function formatStages(stages) {
 
 function renderDraft(draft) {
   if (!draft) {
+    el.decodedPatchBox.textContent = "No decoded patch yet.";
+    el.mappedDraftBox.textContent = "Amplitude, PD, and 8-wave family mapping will appear here.";
+    el.confidenceBox.textContent = "High / Medium / Low";
+    el.supportedOutputBox.textContent = "Draft preset for Envelope Lab";
     el.draftNameBox.textContent = "No draft created yet.";
-    el.summaryBox.textContent = "No decoded patch yet.";
     el.waveBox.textContent = "No draft yet.";
     el.perfBox.textContent = "No draft yet.";
     el.ampDraftBox.textContent = "No draft yet.";
@@ -168,7 +173,10 @@ function renderDraft(draft) {
     return;
   }
 
-  el.summaryBox.textContent = `${draft.name} decoded with ${draft.confidence} confidence.`;
+  el.decodedPatchBox.textContent = `${draft.name} decoded and unpacked into a draft preset.`;
+  el.mappedDraftBox.textContent = `8-wave family ${draft.wave.label}, translated amplitude envelope, and translated phase distortion envelope are ready for review.`;
+  el.confidenceBox.textContent = draft.confidence;
+  el.supportedOutputBox.textContent = "Envelope Lab draft handoff";
   el.draftNameBox.textContent = `${draft.name} (${draft.confidence} confidence)`;
   el.waveBox.textContent = `${draft.wave.label} -> ${draft.wave.hint}`;
   el.perfBox.textContent = `Wave family ${draft.wave.label}, detune ${draft.performance.detune}, ring ${draft.performance.ring}, noise ${draft.performance.noise}`;
@@ -301,13 +309,6 @@ el.dropzone.addEventListener("drop", (event) => {
   const file = event.dataTransfer.files?.[0];
   if (file) handleFile(file);
 });
-el.createDraft.addEventListener("click", () => {
-  if (currentDraft) {
-    setStatus("Draft preset is already populated from the imported CZ file.", "ok");
-  } else {
-    setStatus("Import a file first so there is a draft to create.", "warn");
-  }
-});
 el.openDraft.addEventListener("click", () => {
   if (handoffDraft(currentDraft)) {
     setStatus("Draft handed off to Envelope Lab.", "ok");
@@ -316,6 +317,4 @@ el.openDraft.addEventListener("click", () => {
     setStatus("Import a file first so there is a draft to open.", "warn");
   }
 });
-el.saveDraft.addEventListener("click", () => {
-  setStatus("Saving to card will come after the draft handoff flow is connected.", "warn");
-});
+renderDraft(null);

@@ -65,20 +65,20 @@
         <div class="card-body stack">
           <div class="field">
             <label>Decoded patch</label>
-            <div class="value-box">No decoded patch yet.</div>
+            <div id="decodedPatchBox" class="value-box">No decoded patch yet.</div>
           </div>
           <div class="field">
             <label>Mapped draft</label>
-            <div class="value-box">Amplitude, PD, and 8-wave family mapping will be previewed here.</div>
+            <div id="mappedDraftBox" class="value-box">Amplitude, PD, and 8-wave family mapping will be previewed here.</div>
           </div>
           <div class="grid-2">
             <div class="field">
               <label>Confidence</label>
-              <div class="value-box">High / Medium / Low</div>
+              <div id="confidenceBox" class="value-box">High / Medium / Low</div>
             </div>
             <div class="field">
               <label>Supported output</label>
-              <div class="value-box">Custom C1ZZL3 preset</div>
+              <div id="supportedOutputBox" class="value-box">Draft preset for Envelope Lab</div>
             </div>
           </div>
           <div class="field">
@@ -120,10 +120,10 @@
         </div>
         <div class="card-body stack">
           <div class="grid-2">
-          <div class="field">
-            <label>Wave family start</label>
-            <div id="waveBox" class="value-box">No draft yet.</div>
-          </div>
+            <div class="field">
+              <label>Wave family start</label>
+              <div id="waveBox" class="value-box">No draft yet.</div>
+            </div>
             <div class="field">
               <label>Performance defaults</label>
               <div id="perfBox" class="value-box">No draft yet.</div>
@@ -144,19 +144,16 @@
 
       <article class="card full-span">
         <div class="card-head">
-          <h2>Actions</h2>
-          <span class="meta">Create the draft preset, then review it</span>
+          <h2>Next Step</h2>
+          <span class="meta">Send the decoded draft into Envelope Lab for final editing</span>
         </div>
         <div class="card-body stack">
           <div class="top-actions start">
-            <button id="createDraft" class="primary" type="button">Create Draft Preset</button>
-            <button id="openDraft" type="button">Open In Envelope Lab</button>
-            <button id="saveDraft" type="button">Save To Card</button>
-            <button type="button">Cancel</button>
+            <button id="openDraft" class="primary" type="button">Open In Envelope Lab</button>
           </div>
           <div class="banner">
             <strong>Note:</strong>
-            <span>This page is for import and translation only. Final editing stays in Envelope Lab.</span>
+            <span>This page only decodes the CZ patch and prepares a draft. Use Envelope Lab to review it and send it to the card.</span>
           </div>
         </div>
       </article>
