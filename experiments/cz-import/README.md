@@ -1,14 +1,15 @@
 # C1ZZL3 Import Lab Experiment
 
-This folder sketches a user-facing experiment for decoding Casio CZ `.syx`
-patches into approximate C1ZZL3 draft presets.
+This folder contains the user-facing C1ZZL3 Import Lab work for decoding Casio
+CZ `.syx` patches into approximate C1ZZL3 draft presets.
 
 User-facing page:
 
 - Hosted: `https://soveda.github.io/CozmikC1zzl3/experiments/cz-import/`
 - Local: `http://localhost:5174` when served from `experiments/cz-import`
 
-This is not a direct SysEx passthrough feature. It is a translation layer.
+This is not a direct SysEx passthrough feature. It is a browser translation
+layer with a handoff into Envelope Lab.
 
 ## Goal
 
@@ -20,7 +21,7 @@ Allow a user to:
 4. hand the draft into Envelope Lab
 5. review and send it from there
 
-This should live on a separate page from Envelope Lab so users do not confuse:
+This stays on a separate page from Envelope Lab so users do not confuse:
 
 - envelope editing
 - CZ patch import
@@ -53,8 +54,16 @@ So the import result must be presented as:
 - reviewable in Envelope Lab before sending
 - not a guaranteed faithful clone
 
-It should also be presented in a dedicated import workflow, not mixed into the
-main envelope editor page.
+It is intentionally presented as a dedicated import workflow, not mixed into
+the main envelope editor page.
+
+## Current User-Facing Features
+
+- `C1ZZL3 Import Lab` title and guided hero section.
+- Light and dark mode toggle matching Envelope Lab.
+- Drag-and-drop or file-picker import.
+- Validation, summary, decoded readout, warnings, and draft mapping panels.
+- `Open In Envelope Lab` handoff for final editing and card send.
 
 ## Editor Handoff
 

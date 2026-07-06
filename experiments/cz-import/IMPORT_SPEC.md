@@ -1,28 +1,27 @@
-# CZ To C1ZZL3 Import Spec
+# C1ZZL3 Import Lab Spec
 
 ## Summary
 
 The importer should accept a Casio CZ-style single-patch SysEx file and
-translate it into a new reviewable C1ZZL3 draft preset inside the web editor.
+translate it into a new reviewable C1ZZL3 draft preset for Envelope Lab.
 
 The import should happen in the browser, not in firmware.
 
 ## User Story
 
-1. User opens a dedicated CZ import page.
-2. User chooses `Import CZ Patch`.
-3. User selects a `.syx` file.
-4. The browser validates that the file looks like a supported Casio CZ draft candidate.
-5. The browser decodes the patch into readable parameters.
-6. The browser maps those parameters into a draft C1ZZL3 preset.
-7. The browser shows:
+1. User opens `C1ZZL3 Import Lab`.
+2. User drops in a file or chooses a `.syx` patch.
+3. The browser validates that the file looks like a supported Casio CZ draft candidate.
+4. The browser decodes the patch into readable parameters.
+5. The browser maps those parameters into a draft C1ZZL3 preset.
+6. The browser shows:
    - imported patch name if available
    - mapped waveform region
    - mapped amplitude envelope
    - mapped phase-distortion envelope
    - warnings for unsupported or approximate values
-8. User opens the result in Envelope Lab if needed.
-9. User saves or sends it from there.
+7. User opens the result in Envelope Lab.
+8. User saves or sends it from there.
 
 ## Scope For First Experiment
 
@@ -46,9 +45,9 @@ The import should happen in the browser, not in firmware.
 
 Do not place this feature directly inside the Envelope Lab page.
 
-Use a separate page, for example:
+Use a separate page:
 
-- `CZ Import Lab`
+- `C1ZZL3 Import Lab`
 
 Reasons:
 
@@ -57,21 +56,24 @@ Reasons:
 - makes it easier to explain translation warnings
 - avoids users assuming CZ patches load natively into the card
 
-The Envelope Lab page can link to the import page with a simple experimental
-link or button, but the import workflow should remain separate.
+The Envelope Lab page can link to the import page, but the import workflow
+should remain separate.
 
 ## Proposed UI For The Import Page
 
-Add a clear top-level action:
+Top-level UI should include:
 
-- `Import CZ Patch`
+- a large `C1ZZL3 Import Lab` title
+- theme toggle matching Envelope Lab
+- `Open Envelope Lab` link
 
 Recommended flow after file selection:
 
-- modal or side panel summary
+- summary panel
 - imported patch info
 - mapping confidence
 - warning list
+- decoded data readout
 - `Open In Envelope Lab`
 
 ## Validation Rules

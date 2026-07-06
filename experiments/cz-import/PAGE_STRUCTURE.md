@@ -1,4 +1,4 @@
-# CZ Import Lab Page Structure
+# C1ZZL3 Import Lab Page Structure
 
 This page should be separate from Envelope Lab.
 
@@ -12,17 +12,17 @@ editing.
 
 ```text
 ------------------------------------------------------
-CZ Import Lab                                          |
+C1ZZL3 Import Lab                                     |
 ------------------------------------------------------
-| Header / intro / page purpose                       |
+| Hero header / page purpose / theme toggle          |
 ------------------------------------------------------
-| File import panel | Patch summary panel             |
+| File import panel | Patch summary panel            |
 ------------------------------------------------------
-| Decoded data panel | Mapping preview panel          |
+| Decoded data panel | Mapping preview panel         |
 ------------------------------------------------------
-| Warnings panel    | Draft preset actions            |
+| Warnings panel    | Draft handoff actions          |
 ------------------------------------------------------
-| Footer note: separate from Envelope Lab             |
+| Footer note: Import Lab -> Envelope Lab            |
 ------------------------------------------------------
 ```
 
@@ -37,8 +37,9 @@ Purpose:
 
 Content:
 
-- page title: `CZ Import Lab`
-- short description: `Import a Casio CZ patch and translate it into a C1ZZL3 draft preset`
+- page title: `C1ZZL3 Import Lab`
+- short description: `Bring in a Casio CZ patch, translate it into a C1ZZL3 draft, and refine it in Envelope Lab`
+- light/dark toggle matching Envelope Lab
 - link back to Envelope Lab
 
 ### 2. File Import Panel
@@ -114,7 +115,7 @@ Content:
 
 Use plain language and avoid technical overload.
 
-### 7. Draft Preset Actions
+### 7. Draft Handoff Actions
 
 Purpose:
 
@@ -122,12 +123,10 @@ Purpose:
 
 Content:
 
-- `Create Draft Preset`
 - `Open In Envelope Lab`
-- `Save To Card`
-- `Cancel`
 
-Only enable `Save To Card` after the user has reviewed the draft preset.
+This page should prepare the draft and hand it off rather than sending
+directly to the card.
 
 ### 8. Footer Note
 
@@ -142,13 +141,12 @@ Content:
 
 ## Interaction Flow
 
-1. User opens CZ Import Lab.
+1. User opens C1ZZL3 Import Lab.
 2. User imports a `.syx` file.
 3. Page validates and decodes the patch.
 4. Page shows summary, mapping, and warnings.
-5. User creates a draft preset.
-6. User optionally opens the draft in Envelope Lab.
-7. User finishes editing there and sends or saves the preset.
+5. User opens the draft in Envelope Lab.
+6. User finishes editing there and sends or saves the preset.
 
 ## UI Rules
 
@@ -156,7 +154,7 @@ Content:
 - Avoid showing the full envelope editor here.
 - Avoid using the same mental model as the main editor.
 - Make warnings visible before any save action.
-- Keep developer details hidden behind a toggle.
+- Keep detailed data present but secondary to the guided workflow.
 
 ## Good Default States
 
@@ -171,4 +169,3 @@ Each state should explain what to do next.
 - file picker should work on mobile browsers where possible
 - page should stack into a single column on small screens
 - mapping and warnings should remain readable without horizontal scrolling
-
