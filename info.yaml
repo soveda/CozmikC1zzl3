@@ -1,9 +1,9 @@
 draft: true
 Name: Cosmik C1ZZL3
-Description: Stable phase-distortion synthesiser and Turing machine firmware with Web MIDI custom envelopes, USB MIDI device/host operation, MIDI CC control, and optional Turing MIDI output.
+Description: Stable phase-distortion synthesiser and Turing machine firmware with Web MIDI envelope readback, PD, detune, eight waveform families, USB MIDI device/host operation, and optional Turing MIDI output.
 Language: C++ (Pico SDK)
 Creator: Adrian Vos
-Version: 1.0
+Version: 1.1
 Status: Released
 License: MIT
 Editor: https://soveda.github.io/CozmikC1zzl3/web-midi/editor/

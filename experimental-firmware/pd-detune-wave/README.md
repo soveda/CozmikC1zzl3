@@ -4,9 +4,10 @@ This folder is a separate firmware experiment.
 
 ## Status
 
-This is the current stable experimental firmware. It has been hardware-tested
-with Envelope Lab and CZ Import while the main stable C1ZZL3 firmware remains
-unchanged.
+This is stable experimental release 1.1. Its settings, envelope
+readback, save/delete verification, hardware pickup, waveform selection, and
+restart behaviour have been hardware-tested with Envelope Lab and CZ Import.
+The main production C1ZZL3 firmware remains unchanged.
 
 Current UF2:
 
@@ -14,14 +15,11 @@ Current UF2:
 C1ZZL3_PD_DETUNE_WAVE.uf2
 ```
 
-Envelope-readback test UF2:
+Previous stable-experimental rollback:
 
 ```text
-C1ZZL3_PD_DETUNE_WAVE_envelope_readback_test.uf2
+archive/C1ZZL3_PD_DETUNE_WAVE_1.0_20260706.uf2
 ```
-
-Keep the current UF2 as the rollback build until envelope readback has been
-tested on hardware.
 
 It keeps the stable C1ZZL3 firmware untouched and adds an extended Web MIDI
 performance settings protocol for testing:

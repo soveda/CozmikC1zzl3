@@ -24,20 +24,19 @@ uf2/C1ZZL3.uf2
 Checksum:
 
 ```text
-6cb55940ab502cb38926d20f3cdd76e5f93909ebb391569d82ee385bb20fbf55
+12c356ad75d6d25fccab5060dbb057f1e3ed86169c2429a798c66f835825ed61
 ```
 
-This is the hardware-tested 192 MHz RP2040 build promoted on 2026-06-25.
+This is hardware-tested production release 1.1, promoted on 2026-07-06.
 
-Current stable experimental UF2 with Web MIDI PD, detune, and eight waveform
-families:
+The previous production release 1.0 is archived at:
 
 ```text
-experimental-firmware/pd-detune-wave/C1ZZL3_PD_DETUNE_WAVE.uf2
+uf2/archive/production-1.0-20260706/C1ZZL3_1.0_production.uf2
 ```
 
-This experimental build works with Envelope Lab and CZ Import. It does not
-replace the production UF2 above.
+Release 1.1 works with Envelope Lab and CZ Import and includes Web MIDI PD,
+detune, eight waveform families, and card-to-editor envelope readback.
 
 Previous UF2s are archived in:
 
@@ -176,11 +175,11 @@ The built UF2 will be:
 build/C1ZZL3.uf2
 ```
 
-The stable production build currently reports:
+The production source build currently reports:
 
 ```text
-FLASH: 133168 B
-RAM: 141500 B
+FLASH: 138160 B
+RAM: 146500 B
 ```
 
 ## Stability Notes
