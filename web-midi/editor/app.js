@@ -60,6 +60,8 @@ let developerMode = false;
 let themeMode = loadThemeMode();
 let developerLogLines = [];
 let settingsProtocol = "unknown";
+let settingsRequestPending = false;
+let settingsRequestTimer = null;
 const CZ_IMPORT_HANDOFF_KEY = "c1zzl3-cz-import-draft";
 const HOSTED_EDITOR_URL = "https://soveda.github.io/CozmikC1zzl3/web-midi/editor/index.html";
 let messageImportedDraft = null;
@@ -478,6 +480,15 @@ function removeLocalCustomPresetForSlot(slot) {
   selected = Math.min(selected, presets.length - 1);
   savePresets();
   render();
+}
+
+function removeSelectedCustomPreset() {
+  if (selected < FACTORY_PRESET_COUNT || !presets[selected]) return false;
+  presets.splice(selected, 1);
+  selected = Math.min(Math.max(1, selected - 1), presets.length - 1);
+  savePresets();
+  render();
+  return true;
 }
 
 function bindSelectedPresetToSlot(slot) {
@@ -1158,8 +1169,10 @@ async function deleteCustomSlot() {
     setStatus("Delete failed. Open Developer tools for details.");
     return;
   }
+  const removedSelected = removeSelectedCustomPreset();
   removeLocalCustomPresetForSlot(slot);
-  setStatus(`Deleted Custom ${slot + 1} from card flash. ${frame.length} byte SysEx to ${output.name || "MIDI output"}.`);
+  const browserStatus = removedSelected ? " The selected C preset was also removed from the editor." : "";
+  setStatus(`Deleted Custom ${slot + 1} from card flash.${browserStatus} ${frame.length} byte SysEx to ${output.name || "MIDI output"}.`);
 
   window.setTimeout(() => {
     sendingSysex = false;
@@ -1207,7 +1220,7 @@ function buildExperimentalSettingsSysex(command) {
   payload.push(...ensureArray(packUint14(performanceSettings.noise), "packUint14(noise)"));
   payload.push(...ensureArray(packUint14(performanceSettings.pd), "packUint14(pd)"));
   payload.push(...ensureArray(packUint14(performanceSettings.detune), "packUint14(detune)"));
-  payload.push(...ensureArray(packUint14(performanceSettings.waveform), "packUint14(waveform)"));
+  payload.push(...ensureArray(packUint14(waveFamilyToControl(performanceSettings.waveform)), "packUint14(waveform)"));
   payload.push(clampInt(performanceSettings.midiInChannel, 1, 16) - 1);
   payload.push(clampInt(performanceSettings.turingRange, 1, 8));
   payload.push(performanceSettings.turingMidiOut ? 1 : 0);
@@ -1247,6 +1260,14 @@ function appendStages(payload, stages) {
 function packUint14(value) {
   const v = clampInt(value, 0, 0x3fff);
   return [v & 0x7f, (v >> 7) & 0x7f];
+}
+
+function waveFamilyToControl(family) {
+  return Math.round((clampInt(family, 0, 7) * MAX_LEVEL) / 7);
+}
+
+function waveControlToFamily(control) {
+  return clampInt(Math.round((clampInt(control, 0, MAX_LEVEL) * 7) / MAX_LEVEL), 0, 7);
 }
 
 function unpackUint14(data, offset) {
@@ -1300,6 +1321,20 @@ function handleSysexResponse(data) {
     return;
   }
 
+  if (!settingsRequestPending) {
+    logDeveloper("Ignored unsolicited settings response.", {
+      length: data.length,
+      reason: "Use Read Card to replace editor settings with card settings."
+    });
+    return;
+  }
+
+  settingsRequestPending = false;
+  if (settingsRequestTimer !== null) {
+    window.clearTimeout(settingsRequestTimer);
+    settingsRequestTimer = null;
+  }
+
   if (data.length === 16) {
     settingsProtocol = "stable";
     performanceSettings = {
@@ -1319,7 +1354,7 @@ function handleSysexResponse(data) {
       noise: clampInt(unpackUint14(data, 9), 0, MAX_LEVEL),
       pd: clampInt(unpackUint14(data, 11), 0, MAX_LEVEL),
       detune: clampInt(unpackUint14(data, 13), 0, MAX_LEVEL),
-      waveform: clampInt(unpackUint14(data, 15), 0, 7),
+      waveform: waveControlToFamily(unpackUint14(data, 15)),
       midiInChannel: clampInt((data[17] & 0x0f) + 1, 1, 16),
       turingRange: clampInt(data[18], 1, 8),
       turingMidiOut: (data[19] & 0x01) !== 0,
@@ -1498,8 +1533,20 @@ async function requestPerformanceSettings(isProbe = false) {
   }
 
   try {
+    settingsRequestPending = true;
+    if (settingsRequestTimer !== null) window.clearTimeout(settingsRequestTimer);
+    settingsRequestTimer = window.setTimeout(() => {
+      settingsRequestPending = false;
+      settingsRequestTimer = null;
+      setStatus("The card did not reply to Read Card.");
+    }, 1500);
     output.send(buildRequestSettingsSysex());
   } catch (error) {
+    settingsRequestPending = false;
+    if (settingsRequestTimer !== null) {
+      window.clearTimeout(settingsRequestTimer);
+      settingsRequestTimer = null;
+    }
     logDeveloper("Settings request failed.", {
       output: output.name || output.id || "Unknown output",
       message: error?.message || "Unknown error",
