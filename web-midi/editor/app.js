@@ -248,6 +248,18 @@ function clearImportedDraftSources() {
   window.history.replaceState(null, "", window.location.pathname);
 }
 
+function applyImportedPerformance(draft) {
+  if (!draft || typeof draft !== "object") return;
+
+  performanceSettings = {
+    ...performanceSettings,
+    detune: clampInt(draft.performance?.detune ?? performanceSettings.detune, 0, MAX_LEVEL),
+    ring: clampInt(draft.performance?.ring ?? performanceSettings.ring, 0, MAX_LEVEL),
+    noise: clampInt(draft.performance?.noise ?? performanceSettings.noise, 0, MAX_LEVEL),
+    waveform: clampInt(draft.wave?.value ?? performanceSettings.waveform, 0, 7)
+  };
+}
+
 function consumeImportedDraft() {
   try {
     if (messageImportedDraft) {
@@ -263,13 +275,7 @@ function consumeImportedDraft() {
           selected = presets.length - 1;
         }
 
-        if (draft.performance && typeof draft.performance === "object") {
-          performanceSettings = {
-            ...performanceSettings,
-            ring: clampInt(draft.performance.ring ?? performanceSettings.ring, 0, MAX_LEVEL),
-            noise: clampInt(draft.performance.noise ?? performanceSettings.noise, 0, MAX_LEVEL)
-          };
-        }
+        applyImportedPerformance(draft);
 
         savePresets();
         savePerformanceSettings();
@@ -293,13 +299,7 @@ function consumeImportedDraft() {
           selected = presets.length - 1;
         }
 
-        if (draft.performance && typeof draft.performance === "object") {
-          performanceSettings = {
-            ...performanceSettings,
-            ring: clampInt(draft.performance.ring ?? performanceSettings.ring, 0, MAX_LEVEL),
-            noise: clampInt(draft.performance.noise ?? performanceSettings.noise, 0, MAX_LEVEL)
-          };
-        }
+        applyImportedPerformance(draft);
 
         savePresets();
         savePerformanceSettings();
@@ -322,13 +322,7 @@ function consumeImportedDraft() {
           selected = presets.length - 1;
         }
 
-        if (draft.performance && typeof draft.performance === "object") {
-          performanceSettings = {
-            ...performanceSettings,
-            ring: clampInt(draft.performance.ring ?? performanceSettings.ring, 0, MAX_LEVEL),
-            noise: clampInt(draft.performance.noise ?? performanceSettings.noise, 0, MAX_LEVEL)
-          };
-        }
+        applyImportedPerformance(draft);
 
         savePresets();
         savePerformanceSettings();
@@ -356,13 +350,7 @@ function consumeImportedDraft() {
       selected = presets.length - 1;
     }
 
-    if (draft.performance && typeof draft.performance === "object") {
-      performanceSettings = {
-        ...performanceSettings,
-        ring: clampInt(draft.performance.ring ?? performanceSettings.ring, 0, MAX_LEVEL),
-        noise: clampInt(draft.performance.noise ?? performanceSettings.noise, 0, MAX_LEVEL)
-      };
-    }
+    applyImportedPerformance(draft);
 
     savePresets();
     savePerformanceSettings();
