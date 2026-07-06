@@ -614,6 +614,10 @@ textarea {
   background: var(--performance-bg);
 }
 
+.performance-title {
+  grid-column: 1 / -1;
+}
+
 .performance-panel label {
   gap: 4px;
 }
