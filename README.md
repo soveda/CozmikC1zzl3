@@ -139,6 +139,9 @@ Button quick reference:
 - `Reset Preset`: restore the selected preset to its factory value.
 
 The editor can save up to eight custom envelopes. Factory presets are not overwritten.
+Custom presets are labelled `Local only`, `Saved - slot N`, or `Changed - slot N`.
+These labels track saves made by the current browser; the card cannot currently report
+which custom envelope slots are occupied.
 
 ## Build
 

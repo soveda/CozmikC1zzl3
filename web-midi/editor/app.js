@@ -131,12 +131,13 @@ const el = {
   turingMidiChannel: document.querySelector("#turingMidiChannel")
 };
 
-function preset(name, amp, pd, slot = null) {
+function preset(name, amp, pd, slot = null, cardDirty = false) {
   return {
     name,
     amp: normalizeStages(amp),
     pd: normalizeStages(pd),
-    slot: Number.isInteger(slot) ? clampInt(slot, 0, CUSTOM_SLOT_COUNT - 1) : null
+    slot: Number.isInteger(slot) ? clampInt(slot, 0, CUSTOM_SLOT_COUNT - 1) : null,
+    cardDirty: Boolean(cardDirty)
   };
 }
 
@@ -163,13 +164,13 @@ function loadPresets() {
     if (Array.isArray(saved)) {
       const custom = saved
         .slice(FACTORY_PRESET_COUNT)
-        .map((item) => preset(item.name || "Custom preset", item.amp, item.pd, item.slot))
+        .map((item) => preset(item.name || "Custom preset", item.amp, item.pd, item.slot, item.cardDirty))
         .slice(0, CUSTOM_SLOT_COUNT);
       return [...structuredClone(factoryPresets), ...custom];
     }
     if (Array.isArray(saved?.customPresets)) {
       const custom = saved.customPresets
-        .map((item) => preset(item.name || "Custom preset", item.amp, item.pd, item.slot))
+        .map((item) => preset(item.name || "Custom preset", item.amp, item.pd, item.slot, item.cardDirty))
         .slice(0, CUSTOM_SLOT_COUNT);
       return [...structuredClone(factoryPresets), ...custom];
     }
@@ -187,7 +188,8 @@ function savePresets() {
         name: item.name,
         amp: item.amp,
         pd: item.pd,
-        slot: Number.isInteger(item.slot) ? item.slot : null
+        slot: Number.isInteger(item.slot) ? item.slot : null,
+        cardDirty: Boolean(item.cardDirty)
       }))
   }));
 }
@@ -438,9 +440,25 @@ function renderPresetList() {
     const button = document.createElement("button");
     button.className = `preset-button${index === selected ? " is-active" : ""}`;
     button.type = "button";
-    button.innerHTML = `<span>${escapeHtml(item.name)}</span><span>${index < FACTORY_PRESET_COUNT ? index : `C${index - FACTORY_PRESET_COUNT + 1}`}</span>`;
+    if (index < FACTORY_PRESET_COUNT) {
+      button.innerHTML = `<span class="preset-name">${escapeHtml(item.name)}</span><span class="preset-code">${index}</span>`;
+    } else {
+      const status = item.slot === null
+        ? { label: "Local only", className: "is-local" }
+        : item.cardDirty
+          ? { label: `Changed - slot ${item.slot + 1}`, className: "is-changed" }
+          : { label: `Saved - slot ${item.slot + 1}`, className: "is-saved" };
+      button.innerHTML = `
+        <span class="preset-name">${escapeHtml(item.name)}</span>
+        <span class="preset-meta">
+          <span class="preset-state ${status.className}">${status.label}</span>
+          <span class="preset-code">C${index - FACTORY_PRESET_COUNT + 1}</span>
+        </span>`;
+      button.title = status.label;
+    }
     button.addEventListener("click", () => {
       selected = index;
+      if (Number.isInteger(item.slot)) el.customSlot.value = String(item.slot);
       render();
     });
     row.append(button);
@@ -501,7 +519,9 @@ function bindSelectedPresetToSlot(slot) {
   });
 
   presets[selected].slot = slot;
+  presets[selected].cardDirty = false;
   savePresets();
+  renderPresetList();
 }
 
 function renderStages(lane, container) {
@@ -531,7 +551,9 @@ function updateStage(lane, index, key, value) {
   const max = key === "level" ? MAX_LEVEL : 192000;
   const min = key === "level" ? 0 : 1;
   presets[selected][lane][index][key] = clampInt(value, min, max);
+  if (presets[selected].slot !== null) presets[selected].cardDirty = true;
   savePresets();
+  renderPresetList();
   drawCurves();
   updateExport();
 }
@@ -1451,7 +1473,9 @@ function updateDraggedStage(event) {
 
   stage.level = clampInt(level, 0, MAX_LEVEL);
   stage.time = clampInt(targetEnd - before, 1, maxStageTime);
+  if (presets[selected].slot !== null) presets[selected].cardDirty = true;
   savePresets();
+  renderPresetList();
   syncStageInputs(dragTarget.lane, dragTarget.index);
   drawCurves();
   updateExport();

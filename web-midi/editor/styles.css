@@ -256,15 +256,45 @@ h2 {
   box-shadow: inset 0 0 0 1px rgba(255, 216, 77, 0.18);
 }
 
-.preset-button span:first-child {
+.preset-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.preset-button span:last-child {
+.preset-code {
   color: var(--muted);
   font-size: 12px;
+}
+
+.preset-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 10px;
+  white-space: nowrap;
+}
+
+.preset-state {
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.preset-state.is-local {
+  color: var(--muted);
+}
+
+.preset-state.is-saved {
+  color: var(--pd);
+}
+
+.preset-state.is-changed {
+  color: var(--accent);
 }
 
 .editor {
