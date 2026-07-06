@@ -1,7 +1,12 @@
-# CZ Import Experiment
+# C1ZZL3 Import Lab Experiment
 
 This folder sketches a user-facing experiment for decoding Casio CZ `.syx`
 patches into approximate C1ZZL3 draft presets.
+
+User-facing page:
+
+- Hosted: `https://soveda.github.io/CozmikC1zzl3/experiments/cz-import/`
+- Local: `http://localhost:5174` when served from `experiments/cz-import`
 
 This is not a direct SysEx passthrough feature. It is a translation layer.
 

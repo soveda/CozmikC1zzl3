@@ -3,24 +3,34 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CZ Import Lab</title>
+  <title>C1ZZL3 Import Lab</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <main class="shell">
     <header class="topbar">
-      <div>
-        <p class="eyebrow">CZ Import Lab</p>
-        <h1>Translate CZ patches into C1ZZL3 drafts</h1>
+      <div class="hero-copy">
+        <p class="eyebrow">Import Workflow</p>
+        <h1>C1ZZL3 Import Lab</h1>
         <p class="top-note">
-          This page does a best-effort decode of a Casio CZ SysEx patch and
-          turns the result into a reviewable C1ZZL3 draft. It stays separate
-          from Envelope Lab so the workflows do not blur together.
+          Bring in a Casio CZ SysEx patch, translate it into a C1ZZL3 draft,
+          and then move into Envelope Lab for the final review and send stage.
         </p>
+        <div class="hero-panels">
+          <div class="hero-panel">
+            <span class="hero-label">What it does</span>
+            <strong>Decodes CZ patch data into a browser draft</strong>
+            <p>Wave family, amplitude envelope, PD envelope, and performance values are mapped into a C1ZZL3 starting point.</p>
+          </div>
+          <div class="hero-panel">
+            <span class="hero-label">How to use it</span>
+            <strong>Import here, refine in Envelope Lab</strong>
+            <p>Choose or drop a `.syx` file, inspect the draft, then open the result in Envelope Lab for editing and card transfer.</p>
+          </div>
+        </div>
       </div>
       <div class="top-actions">
-        <span class="pill">Separate page</span>
-        <span class="pill">Browser translation</span>
+        <button id="themeToggle" type="button" role="switch" aria-checked="false" title="Toggle light mode">Dark</button>
         <a class="pill pill-link" href="../../web-midi/editor/index.html" target="_blank" rel="noopener noreferrer">Open Envelope Lab</a>
       </div>
     </header>
@@ -91,7 +101,7 @@
       <article class="card">
         <div class="card-head">
           <h2>Decoded Data</h2>
-          <span class="meta">Developer details</span>
+          <span class="meta">Detailed readout</span>
         </div>
         <div class="card-body">
           <pre id="decodedBox">Raw parameter bytes, interpreted envelopes, waveform family, and unsupported features will appear here.</pre>
@@ -161,7 +171,7 @@
     </section>
 
     <div class="footer">
-      Dedicated import workflow. Separate from Envelope Lab.
+      Import Lab prepares the draft. Envelope Lab is where you edit, audition, and send it.
     </div>
   </main>
 

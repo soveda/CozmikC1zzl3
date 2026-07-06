@@ -2,6 +2,7 @@ const el = {
   file: document.querySelector("#czFile"),
   dropzone: document.querySelector(".dropzone"),
   importStatus: document.querySelector("#importStatus"),
+  themeToggle: document.querySelector("#themeToggle"),
   validationBox: document.querySelector("#validationBox"),
   patchTypeBox: document.querySelector("#patchTypeBox"),
   summaryBox: document.querySelector("#summaryBox"),
@@ -19,7 +20,9 @@ const el = {
 };
 
 let currentDraft = null;
+let themeMode = loadThemeMode();
 const HANDOFF_KEY = "c1zzl3-cz-import-draft";
+const THEME_KEY = "c1zzl3-theme-mode";
 const LOCAL_EDITOR_URL = "../../web-midi/editor/index.html";
 const HOSTED_EDITOR_URL = "https://soveda.github.io/CozmikC1zzl3/web-midi/editor/index.html";
 const ENVELOPE_LAB_WINDOW_NAME = "c1zzl3-envelope-lab";
@@ -35,6 +38,31 @@ const WAVE_FAMILIES = [
 ];
 const MIN_DECODED_PATCH_BYTES = 48;
 const MAX_DECODED_PATCH_BYTES = 512;
+
+function loadThemeMode() {
+  try {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved === "light" || saved === "dark") return saved;
+  } catch {
+    /* Keep default theme if saved data is unavailable. */
+  }
+  return "dark";
+}
+
+function saveThemeMode() {
+  try {
+    localStorage.setItem(THEME_KEY, themeMode);
+  } catch {
+    /* Theme persistence is optional. */
+  }
+}
+
+function renderThemeMode() {
+  document.body.classList.toggle("theme-light", themeMode === "light");
+  el.themeToggle.classList.toggle("is-active", themeMode === "light");
+  el.themeToggle.textContent = themeMode === "light" ? "Light" : "Dark";
+  el.themeToggle.setAttribute("aria-checked", String(themeMode === "light"));
+}
 
 function getEditorUrl() {
   const host = window.location.hostname;
@@ -318,6 +346,11 @@ async function handleFile(file) {
 }
 
 el.file.addEventListener("change", () => handleFile(el.file.files?.[0]));
+el.themeToggle.addEventListener("click", () => {
+  themeMode = themeMode === "light" ? "dark" : "light";
+  saveThemeMode();
+  renderThemeMode();
+});
 el.dropzone.addEventListener("dragover", (event) => {
   event.preventDefault();
 });
@@ -334,4 +367,5 @@ el.openDraft.addEventListener("click", () => {
     setStatus("Import a file first so there is a draft to open.", "warn");
   }
 });
+renderThemeMode();
 renderDraft(null);
