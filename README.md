@@ -29,6 +29,16 @@ Checksum:
 
 This is the hardware-tested 192 MHz RP2040 build promoted on 2026-06-25.
 
+Current stable experimental UF2 with Web MIDI PD, detune, and eight waveform
+families:
+
+```text
+experimental-firmware/pd-detune-wave/C1ZZL3_PD_DETUNE_WAVE.uf2
+```
+
+This experimental build works with Envelope Lab and CZ Import. It does not
+replace the production UF2 above.
+
 Previous UF2s are archived in:
 
 ```text
@@ -184,6 +194,7 @@ FUTURE_NOTES.md
 - `C1ZZL3_LUT.cpp` / `C1ZZL3_LUT.h`: phase-distortion lookup tables
 - `FUTURE_NOTES.md`: deferred optimisation and cleanup notes
 - `web-midi/editor/`: browser editor
+- `experimental-firmware/pd-detune-wave/`: current stable experimental firmware
 - `uf2/C1ZZL3.uf2`: current stable firmware
 - `uf2/archive/`: older UF2s and rollbacks
 - `archive/`: source snapshots and experiment notes

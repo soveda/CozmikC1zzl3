@@ -825,12 +825,19 @@ private:
         osc2Ring = ring;
         osc2Noise = noise;
         pdControl = clamp12(pd);
-        osc2Detune = clamp12(detune) - 2048;
-        if (osc2Detune > -32 && osc2Detune < 32)
-            osc2Detune = 0;
-        osc2Level = osc2Detune < 0 ? -osc2Detune : osc2Detune;
+        setDetuneFromControl(detune);
         waveControl = clamp12(wave);
         midiInChannel = channel;
+
+        // Remote settings hold until each physical control reaches its new value.
+        midiResetAltXPickup = true;
+        midiResetAltYPickup = true;
+        if (sysexLength == WebMidiSettingsPayloadLength + 6u)
+        {
+            midiResetSynthXPickup = true;
+            midiResetSynthYPickup = true;
+            midiResetAltMainPickup = true;
+        }
 
         if (sysexLength >= WebMidiRangeSettingsPayloadLength + 6u)
         {
