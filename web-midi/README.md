@@ -31,16 +31,38 @@ If that port is busy, use another one:
 python3 -m http.server 5174 --directory web-midi/editor
 ```
 
-Use Chrome or another browser with Web MIDI and SysEx support. Press `MIDI`,
-select the C1ZZL3 MIDI output, then use:
+Use Chrome or another browser with Web MIDI and SysEx support.
 
-- `Load RAM` to send the selected envelope to a custom RAM slot until reset
-- `Save Slot` to write the selected custom slot to card flash
-- `Delete Slot` to clear the selected custom slot from card flash
-- `Read` to load the current card settings into the editor
-- `Set` to save ring, noise, MIDI input channel, Turing CV range, and Turing
-  MIDI output settings to the card
-- `Reset Preset` to restore the selected envelope to the `Bounce` preset shape
+## C1ZZL3 Import Lab
+
+Use the hosted GitHub Pages import lab:
+
+```text
+https://soveda.github.io/CozmikC1zzl3/experiments/cz-import/
+```
+
+Run locally:
+
+```sh
+python3 -m http.server 5174 --directory experiments/cz-import
+```
+
+Open:
+
+```text
+http://localhost:5174
+```
+
+Import Lab decodes Casio CZ `.syx` patches into C1ZZL3 draft presets, shows a
+summary of the translation, and opens the result in Envelope Lab for final
+editing and sending.
+
+Current Import Lab features:
+
+- Light and dark mode toggle matching Envelope Lab.
+- Guided import layout with validation, summary, warnings, and mapped draft panels.
+- Drag-and-drop or file-picker import for Casio CZ `.syx` files.
+- `Open In Envelope Lab` handoff in a new tab for final editing and card send.
 
 ## How To Use The Editor
 
@@ -58,6 +80,18 @@ select the C1ZZL3 MIDI output, then use:
 - `Stop` stops the browser preview only. It does not send a stop command to the
   hardware.
 - `Bounce` is the reset preset because it shows the envelope shape clearly.
+
+Button quick reference:
+
+- `Load RAM`: send the selected envelope to the card until reset.
+- `Load Envelope + Settings`: temporarily load the selected envelope and the
+  current settings together.
+- `Save Envelope`: store the selected custom envelope in card flash.
+- `Delete Envelope Slot`: clear the selected custom slot from card flash.
+- `Read Envelopes from Card`: pull occupied card envelope slots into the editor.
+- `Read Settings from Card`: pull current performance settings into the editor.
+- `Send Settings`: send the current settings to the card.
+- `Reset Preset`: restore the selected preset to the `Bounce` preset shape.
 
 Factory presets are protected. Custom envelope names are stored by the browser;
 the card stores the envelope shapes.
@@ -90,3 +124,6 @@ behaviour afterward.
 The editor supports eight custom slots, matching the firmware. Custom envelope
 names are kept in browser storage; the card stores the envelope shapes and
 performance settings.
+
+Import Lab prepares browser drafts only. Envelope Lab is the page that edits,
+auditions, sends, saves, and reads back envelopes and settings from the card.
