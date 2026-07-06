@@ -130,8 +130,13 @@ const el = {
   turingMidiChannel: document.querySelector("#turingMidiChannel")
 };
 
-function preset(name, amp, pd) {
-  return { name, amp: normalizeStages(amp), pd: normalizeStages(pd) };
+function preset(name, amp, pd, slot = null) {
+  return {
+    name,
+    amp: normalizeStages(amp),
+    pd: normalizeStages(pd),
+    slot: Number.isInteger(slot) ? clampInt(slot, 0, CUSTOM_SLOT_COUNT - 1) : null
+  };
 }
 
 function fill(level, time) {
@@ -157,13 +162,13 @@ function loadPresets() {
     if (Array.isArray(saved)) {
       const custom = saved
         .slice(FACTORY_PRESET_COUNT)
-        .map((item) => preset(item.name || "Custom preset", item.amp, item.pd))
+        .map((item) => preset(item.name || "Custom preset", item.amp, item.pd, item.slot))
         .slice(0, CUSTOM_SLOT_COUNT);
       return [...structuredClone(factoryPresets), ...custom];
     }
     if (Array.isArray(saved?.customPresets)) {
       const custom = saved.customPresets
-        .map((item) => preset(item.name || "Custom preset", item.amp, item.pd))
+        .map((item) => preset(item.name || "Custom preset", item.amp, item.pd, item.slot))
         .slice(0, CUSTOM_SLOT_COUNT);
       return [...structuredClone(factoryPresets), ...custom];
     }
@@ -175,7 +180,14 @@ function loadPresets() {
 
 function savePresets() {
   localStorage.setItem("c1zzl3-envelope-presets", JSON.stringify({
-    customPresets: presets.slice(FACTORY_PRESET_COUNT, FACTORY_PRESET_COUNT + CUSTOM_SLOT_COUNT)
+    customPresets: presets
+      .slice(FACTORY_PRESET_COUNT, FACTORY_PRESET_COUNT + CUSTOM_SLOT_COUNT)
+      .map((item) => ({
+        name: item.name,
+        amp: item.amp,
+        pd: item.pd,
+        slot: Number.isInteger(item.slot) ? item.slot : null
+      }))
   }));
 }
 
@@ -466,12 +478,26 @@ function removeCustomPreset(index) {
 }
 
 function removeLocalCustomPresetForSlot(slot) {
-  const index = FACTORY_PRESET_COUNT + slot;
-  if (index >= presets.length) return;
+  const index = presets.findIndex((item, itemIndex) =>
+    itemIndex >= FACTORY_PRESET_COUNT && item.slot === slot);
+  if (index === -1) return;
   presets.splice(index, 1);
   selected = Math.min(selected, presets.length - 1);
   savePresets();
   render();
+}
+
+function bindSelectedPresetToSlot(slot) {
+  if (selected < FACTORY_PRESET_COUNT || !presets[selected]) return;
+
+  presets.forEach((item, index) => {
+    if (index >= FACTORY_PRESET_COUNT && item.slot === slot) {
+      item.slot = null;
+    }
+  });
+
+  presets[selected].slot = slot;
+  savePresets();
 }
 
 function renderStages(lane, container) {
@@ -1074,6 +1100,7 @@ async function sendSysex(command = SYSEX_COMMAND_PREVIEW) {
     return;
   }
   const isFlash = command === SYSEX_COMMAND_SAVE;
+  const slot = clampInt(el.customSlot.value, 0, CUSTOM_SLOT_COUNT - 1);
   const sendCooldownMs = isFlash ? 1800 : 250;
   const summary = frameSummary();
   sendingSysex = true;
@@ -1097,10 +1124,13 @@ async function sendSysex(command = SYSEX_COMMAND_PREVIEW) {
     setStatus("Web MIDI send failed. Open Developer tools for details.");
     return;
   }
-  const slotLabel = `Custom ${Number(el.customSlot.value) + 1}`;
+  const slotLabel = `Custom ${slot + 1}`;
   const status = isFlash
     ? `Saved ${slotLabel}; after reset it appears after the factory presets. Amp max ${summary.ampMax}, ${summary.seconds}s.`
     : `Loaded ${slotLabel} until reset. Amp max ${summary.ampMax}, ${summary.seconds}s.`;
+  if (isFlash) {
+    bindSelectedPresetToSlot(slot);
+  }
   setStatus(`${status} ${frame.length} byte SysEx to ${output.name || "MIDI output"}.`);
 
   window.setTimeout(() => {
