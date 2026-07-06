@@ -35,8 +35,9 @@ The previous production release 1.0 is archived at:
 uf2/archive/production-1.0-20260706/C1ZZL3_1.0_production.uf2
 ```
 
-Release 1.1 works with Envelope Lab and CZ Import and includes Web MIDI PD,
-detune, eight waveform families, and card-to-editor envelope readback.
+Release 1.1 works with Envelope Lab and C1ZZL3 Import Lab and includes Web
+MIDI PD, detune, eight waveform families, card-to-editor envelope readback,
+and browser CZ patch import handoff.
 
 Previous UF2s are archived in:
 
@@ -150,6 +151,23 @@ http://localhost:5174
 
 Use this page to decode Casio CZ `.syx` patches into C1ZZL3 drafts, then open
 the result in Envelope Lab for final editing and sending.
+
+Current Import Lab features:
+
+- Light and dark mode toggle matching the Envelope Lab palette.
+- Larger `C1ZZL3 Import Lab` header and a clearer guided import workflow.
+- Drag-and-drop or file-picker import for Casio CZ `.syx` files.
+- Browser-side validation, patch summary, decoded data, and draft mapping.
+- Draft handoff into Envelope Lab in a new tab for final editing and card send.
+- Separate import page so CZ translation and envelope editing stay distinct.
+
+Import Lab flow:
+
+1. Open `C1ZZL3 Import Lab`.
+2. Drop in or choose a Casio CZ patch file.
+3. Review the validation, decoded summary, warnings, and mapped draft.
+4. Use `Open In Envelope Lab` to carry the draft into the main editor.
+5. In Envelope Lab, review the result, adjust if needed, and send or save it.
 
 ## How To Use The Editor
 
