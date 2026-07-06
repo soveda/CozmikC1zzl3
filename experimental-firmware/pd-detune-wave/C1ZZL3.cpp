@@ -16,6 +16,11 @@ static constexpr uint8_t WebMidiCommandSaveSettings = 0x04u;
 static constexpr uint8_t WebMidiCommandDeleteEnvelope = 0x05u;
 static constexpr uint8_t WebMidiCommandRequestSettings = 0x06u;
 static constexpr uint8_t WebMidiCommandSettingsResponse = 0x07u;
+static constexpr uint8_t WebMidiCommandRequestEnvelopeSlots = 0x08u;
+static constexpr uint8_t WebMidiCommandEnvelopeSlotsResponse = 0x09u;
+static constexpr uint8_t WebMidiCommandRequestEnvelope = 0x0Au;
+static constexpr uint8_t WebMidiCommandEnvelopeResponse = 0x0Bu;
+static constexpr uint8_t WebMidiEnvelopeProtocolVersion = 1u;
 static constexpr uint32_t WebMidiSettingsPayloadLength = 14u;
 static constexpr uint32_t WebMidiStableSettingsPayloadLength = 8u;
 static constexpr uint32_t WebMidiRangeSettingsPayloadLength = 6u;
@@ -779,7 +784,19 @@ private:
         }
 
         if (command == WebMidiCommandRequestSettings)
+        {
             handleWebMidiRequestSettings();
+            return;
+        }
+
+        if (command == WebMidiCommandRequestEnvelopeSlots)
+        {
+            handleWebMidiRequestEnvelopeSlots();
+            return;
+        }
+
+        if (command == WebMidiCommandRequestEnvelope)
+            handleWebMidiRequestEnvelope();
     }
 
     bool webMidiHeaderMatches()
@@ -885,6 +902,62 @@ private:
         tud_midi_stream_write(0, frame, offset);
     }
 
+    void handleWebMidiRequestEnvelopeSlots()
+    {
+        if (sysexLength != 6u)
+            return;
+
+        uint8_t frame[11] = {
+            0xF0u,
+            WebMidiManufacturer,
+            WebMidiId[0],
+            WebMidiId[1],
+            WebMidiId[2],
+            WebMidiId[3],
+            WebMidiCommandEnvelopeSlotsResponse,
+            WebMidiEnvelopeProtocolVersion
+        };
+        uint32_t offset = 8;
+        appendWebMidiUint14(frame, offset, customEnvelopeMask());
+        frame[offset++] = 0xF7u;
+        tud_midi_stream_write(0, frame, offset);
+    }
+
+    void handleWebMidiRequestEnvelope()
+    {
+        if (sysexLength != 7u)
+            return;
+
+        uint8_t slot = sysexBuffer[6] & 0x07u;
+        if (!customEnvelopeLoaded[slot])
+            return;
+
+        uint8_t frame[89] = {
+            0xF0u,
+            WebMidiManufacturer,
+            WebMidiId[0],
+            WebMidiId[1],
+            WebMidiId[2],
+            WebMidiId[3],
+            WebMidiCommandEnvelopeResponse,
+            slot
+        };
+        uint32_t offset = 8;
+        const EnvelopeProgram& envelope = customEnvelopes[slot];
+        for (uint32_t i = 0; i < 8u; ++i)
+        {
+            appendWebMidiUint14(frame, offset, envelope.amp[i].level);
+            appendWebMidiUint21(frame, offset, envelope.amp[i].time);
+        }
+        for (uint32_t i = 0; i < 8u; ++i)
+        {
+            appendWebMidiUint14(frame, offset, envelope.pd[i].level);
+            appendWebMidiUint21(frame, offset, envelope.pd[i].time);
+        }
+        frame[offset++] = 0xF7u;
+        tud_midi_stream_write(0, frame, offset);
+    }
+
     void handleWebMidiEnvelope(bool persist)
     {
         if (sysexLength != WebMidiEnvelopePayloadLength + 6u)
@@ -959,6 +1032,18 @@ private:
         uint32_t packed = (uint32_t)clamp12(value);
         buffer[offset++] = packed & 0x7Fu;
         buffer[offset++] = (packed >> 7) & 0x7Fu;
+    }
+
+    void appendWebMidiUint21(uint8_t* buffer, uint32_t& offset, uint32_t value)
+    {
+        uint32_t packed = value;
+        if (packed < 1u)
+            packed = 1u;
+        if (packed > MaxWebMidiStageSamples)
+            packed = MaxWebMidiStageSamples;
+        buffer[offset++] = packed & 0x7Fu;
+        buffer[offset++] = (packed >> 7) & 0x7Fu;
+        buffer[offset++] = (packed >> 14) & 0x7Fu;
     }
 
     uint32_t decodeWebMidiUint21(uint32_t& offset)

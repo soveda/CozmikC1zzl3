@@ -2,6 +2,7 @@ const SAMPLE_RATE = 48000;
 const MAX_LEVEL = 4095;
 const STAGES = 8;
 const CUSTOM_SLOT_COUNT = 8;
+const MAX_BROWSER_CUSTOM_PRESETS = 32;
 const AUDITION_TIME_SCALE = 4;
 const EDITOR_VIEW_SAMPLES = SAMPLE_RATE * 4;
 const MIN_SEND_SAMPLES = 960;
@@ -14,6 +15,11 @@ const SYSEX_COMMAND_SAVE_SETTINGS = 0x04;
 const SYSEX_COMMAND_DELETE = 0x05;
 const SYSEX_COMMAND_REQUEST_SETTINGS = 0x06;
 const SYSEX_COMMAND_SETTINGS_RESPONSE = 0x07;
+const SYSEX_COMMAND_REQUEST_ENVELOPE_SLOTS = 0x08;
+const SYSEX_COMMAND_ENVELOPE_SLOTS_RESPONSE = 0x09;
+const SYSEX_COMMAND_REQUEST_ENVELOPE = 0x0a;
+const SYSEX_COMMAND_ENVELOPE_RESPONSE = 0x0b;
+const ENVELOPE_PROTOCOL_VERSION = 1;
 
 const factoryPresets = [
   preset("Off", fill(0, 1), fill(0, 1)),
@@ -62,6 +68,9 @@ let developerLogLines = [];
 let settingsProtocol = "unknown";
 let settingsRequestPending = false;
 let settingsRequestTimer = null;
+let envelopeReadSession = null;
+let envelopeReadTimer = null;
+let envelopeReadSupported = null;
 const CZ_IMPORT_HANDOFF_KEY = "c1zzl3-cz-import-draft";
 const HOSTED_EDITOR_URL = "https://soveda.github.io/CozmikC1zzl3/web-midi/editor/index.html";
 let messageImportedDraft = null;
@@ -120,6 +129,7 @@ const el = {
   flashSysex: document.querySelector("#flashSysex"),
   deleteSlot: document.querySelector("#deleteSlot"),
   requestSettings: document.querySelector("#requestSettings"),
+  requestEnvelopes: document.querySelector("#requestEnvelopes"),
   sendSettings: document.querySelector("#sendSettings"),
   downloadJson: document.querySelector("#downloadJson"),
   resetPreset: document.querySelector("#resetPreset"),
@@ -165,13 +175,13 @@ function loadPresets() {
       const custom = saved
         .slice(FACTORY_PRESET_COUNT)
         .map((item) => preset(item.name || "Custom preset", item.amp, item.pd, item.slot, item.cardDirty))
-        .slice(0, CUSTOM_SLOT_COUNT);
+        .slice(0, MAX_BROWSER_CUSTOM_PRESETS);
       return [...structuredClone(factoryPresets), ...custom];
     }
     if (Array.isArray(saved?.customPresets)) {
       const custom = saved.customPresets
         .map((item) => preset(item.name || "Custom preset", item.amp, item.pd, item.slot, item.cardDirty))
-        .slice(0, CUSTOM_SLOT_COUNT);
+        .slice(0, MAX_BROWSER_CUSTOM_PRESETS);
       return [...structuredClone(factoryPresets), ...custom];
     }
   } catch {
@@ -183,7 +193,7 @@ function loadPresets() {
 function savePresets() {
   localStorage.setItem("c1zzl3-envelope-presets", JSON.stringify({
     customPresets: presets
-      .slice(FACTORY_PRESET_COUNT, FACTORY_PRESET_COUNT + CUSTOM_SLOT_COUNT)
+      .slice(FACTORY_PRESET_COUNT, FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS)
       .map((item) => ({
         name: item.name,
         amp: item.amp,
@@ -270,9 +280,9 @@ function consumeImportedDraft() {
       const draft = payload?.draft;
       if (draft && Array.isArray(draft.amp) && Array.isArray(draft.pd)) {
         const imported = preset(draft.name || "Imported CZ patch", draft.amp, draft.pd);
-        if (customPresetCount() >= CUSTOM_SLOT_COUNT) {
-          presets[FACTORY_PRESET_COUNT + CUSTOM_SLOT_COUNT - 1] = imported;
-          selected = FACTORY_PRESET_COUNT + CUSTOM_SLOT_COUNT - 1;
+        if (customPresetCount() >= MAX_BROWSER_CUSTOM_PRESETS) {
+          presets[FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1] = imported;
+          selected = FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1;
         } else {
           presets.push(imported);
           selected = presets.length - 1;
@@ -294,9 +304,9 @@ function consumeImportedDraft() {
       const draft = payload?.draft;
       if (draft && Array.isArray(draft.amp) && Array.isArray(draft.pd)) {
         const imported = preset(draft.name || "Imported CZ patch", draft.amp, draft.pd);
-        if (customPresetCount() >= CUSTOM_SLOT_COUNT) {
-          presets[FACTORY_PRESET_COUNT + CUSTOM_SLOT_COUNT - 1] = imported;
-          selected = FACTORY_PRESET_COUNT + CUSTOM_SLOT_COUNT - 1;
+        if (customPresetCount() >= MAX_BROWSER_CUSTOM_PRESETS) {
+          presets[FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1] = imported;
+          selected = FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1;
         } else {
           presets.push(imported);
           selected = presets.length - 1;
@@ -317,9 +327,9 @@ function consumeImportedDraft() {
       const draft = payload?.draft;
       if (draft && Array.isArray(draft.amp) && Array.isArray(draft.pd)) {
         const imported = preset(draft.name || "Imported CZ patch", draft.amp, draft.pd);
-        if (customPresetCount() >= CUSTOM_SLOT_COUNT) {
-          presets[FACTORY_PRESET_COUNT + CUSTOM_SLOT_COUNT - 1] = imported;
-          selected = FACTORY_PRESET_COUNT + CUSTOM_SLOT_COUNT - 1;
+        if (customPresetCount() >= MAX_BROWSER_CUSTOM_PRESETS) {
+          presets[FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1] = imported;
+          selected = FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1;
         } else {
           presets.push(imported);
           selected = presets.length - 1;
@@ -345,9 +355,9 @@ function consumeImportedDraft() {
     }
 
     const imported = preset(draft.name || "Imported CZ patch", draft.amp, draft.pd);
-    if (customPresetCount() >= CUSTOM_SLOT_COUNT) {
-      presets[FACTORY_PRESET_COUNT + CUSTOM_SLOT_COUNT - 1] = imported;
-      selected = FACTORY_PRESET_COUNT + CUSTOM_SLOT_COUNT - 1;
+    if (customPresetCount() >= MAX_BROWSER_CUSTOM_PRESETS) {
+      presets[FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1] = imported;
+      selected = FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1;
     } else {
       presets.push(imported);
       selected = presets.length - 1;
@@ -372,7 +382,7 @@ function render() {
   renderPresetList();
   el.presetName.value = current.name;
   el.presetName.disabled = selected < FACTORY_PRESET_COUNT;
-  el.addPreset.disabled = customPresetCount() >= CUSTOM_SLOT_COUNT;
+  el.addPreset.disabled = customPresetCount() >= MAX_BROWSER_CUSTOM_PRESETS;
   renderStages("amp", el.ampStages);
   renderStages("pd", el.pdStages);
   renderPerformanceSettings();
@@ -490,25 +500,6 @@ function removeCustomPreset(index) {
   setStatus("Custom preset removed.");
 }
 
-function removeLocalCustomPresetForSlot(slot) {
-  const retained = presets.filter((item, itemIndex) =>
-    itemIndex < FACTORY_PRESET_COUNT || item.slot !== slot);
-  if (retained.length === presets.length) return;
-  presets = retained;
-  selected = Math.min(selected, presets.length - 1);
-  savePresets();
-  render();
-}
-
-function removeSelectedCustomPreset() {
-  if (selected < FACTORY_PRESET_COUNT || !presets[selected]) return false;
-  presets.splice(selected, 1);
-  selected = Math.min(Math.max(1, selected - 1), presets.length - 1);
-  savePresets();
-  render();
-  return true;
-}
-
 function bindSelectedPresetToSlot(slot) {
   if (selected < FACTORY_PRESET_COUNT || !presets[selected]) return;
 
@@ -560,7 +551,7 @@ function updateStage(lane, index, key, value) {
 
 function duplicateFactoryPreset() {
   if (selected >= FACTORY_PRESET_COUNT) return true;
-  if (customPresetCount() >= CUSTOM_SLOT_COUNT) {
+  if (customPresetCount() >= MAX_BROWSER_CUSTOM_PRESETS) {
     setStatus("Custom preset limit reached.");
     return false;
   }
@@ -905,6 +896,7 @@ function renderDeveloperMidiRaw() {
   el.developerMidiRaw.textContent = [
     `MIDIAccess: ${constructorName(midiAccess)}`,
     `Settings protocol: ${describeSettingsProtocol()}`,
+    `Envelope readback: ${describeEnvelopeReadback()}`,
     "",
     "Inputs map",
     inspectPortMap(midiAccess.inputs),
@@ -939,7 +931,7 @@ function renderDeveloperPorts() {
     ? outputs.map((port, index) => formatPort(port, index, "Output")).join("\n\n")
     : "None detected";
 
-  el.developerPorts.textContent = `Settings protocol: ${describeSettingsProtocol()}\n\nInputs (${inputs.length})\n${inputText}\n\nOutputs (${outputs.length})\n${outputText}`;
+  el.developerPorts.textContent = `Settings protocol: ${describeSettingsProtocol()}\nEnvelope readback: ${describeEnvelopeReadback()}\n\nInputs (${inputs.length})\n${inputText}\n\nOutputs (${outputs.length})\n${outputText}`;
   renderDeveloperMidiRaw();
 }
 
@@ -947,6 +939,12 @@ function describeSettingsProtocol() {
   if (settingsProtocol === "stable") return "Stable firmware";
   if (settingsProtocol === "experimental") return "Experimental firmware";
   return "Not detected yet";
+}
+
+function describeEnvelopeReadback() {
+  if (envelopeReadSupported === true) return "Supported";
+  if (envelopeReadSupported === false) return "No response";
+  return "Not checked yet";
 }
 
 function clearDeveloperLog() {
@@ -1112,6 +1110,7 @@ async function sendSysex(command = SYSEX_COMMAND_PREVIEW) {
   }
   const isFlash = command === SYSEX_COMMAND_SAVE;
   const slot = clampInt(el.customSlot.value, 0, CUSTOM_SLOT_COUNT - 1);
+  const expectedEnvelope = isFlash ? structuredClone(presets[selected]) : null;
   const sendCooldownMs = isFlash ? 1800 : 250;
   const summary = frameSummary();
   sendingSysex = true;
@@ -1141,6 +1140,9 @@ async function sendSysex(command = SYSEX_COMMAND_PREVIEW) {
     : `Loaded ${slotLabel} until reset. Amp max ${summary.ampMax}, ${summary.seconds}s.`;
   if (isFlash) {
     bindSelectedPresetToSlot(slot);
+    if (envelopeReadSupported === true) {
+      window.setTimeout(() => requestCardEnvelopes("save", slot, expectedEnvelope), 350);
+    }
   }
   setStatus(`${status} ${frame.length} byte SysEx to ${output.name || "MIDI output"}.`);
 
@@ -1200,10 +1202,15 @@ async function deleteCustomSlot() {
     setStatus("Delete failed. Open Developer tools for details.");
     return;
   }
-  const removedSelected = removeSelectedCustomPreset();
-  removeLocalCustomPresetForSlot(slot);
-  const browserStatus = removedSelected ? " The selected C preset was also removed from the editor." : "";
-  setStatus(`Deleted Custom ${slot + 1} from card flash.${browserStatus} ${frame.length} byte SysEx to ${output.name || "MIDI output"}.`);
+  if (envelopeReadSupported !== true) {
+    markCardSlotLocal(slot);
+    savePresets();
+    render();
+    setStatus(`Delete sent for card slot ${slot + 1}. Use Read Envelopes from Card to confirm it.`);
+  } else {
+    setStatus(`Delete sent for card slot ${slot + 1}; checking the card...`);
+    window.setTimeout(() => requestCardEnvelopes("delete", slot), 350);
+  }
 
   window.setTimeout(() => {
     sendingSysex = false;
@@ -1267,6 +1274,14 @@ function buildRequestSettingsSysex() {
   return [0xf0, SYSEX_MANUFACTURER, ...SYSEX_ID, SYSEX_COMMAND_REQUEST_SETTINGS, 0xf7];
 }
 
+function buildRequestEnvelopeSlotsSysex() {
+  return [0xf0, SYSEX_MANUFACTURER, ...SYSEX_ID, SYSEX_COMMAND_REQUEST_ENVELOPE_SLOTS, 0xf7];
+}
+
+function buildRequestEnvelopeSysex(slot) {
+  return [0xf0, SYSEX_MANUFACTURER, ...SYSEX_ID, SYSEX_COMMAND_REQUEST_ENVELOPE, slot & 0x07, 0xf7];
+}
+
 function canSendSelectedEnvelope() {
   return selected !== 0 &&
     presets[selected].amp.some((stage) => stage.level > 0) &&
@@ -1305,6 +1320,12 @@ function unpackUint14(data, offset) {
   return (data[offset] & 0x7f) | ((data[offset + 1] & 0x7f) << 7);
 }
 
+function unpackUint21(data, offset) {
+  return (data[offset] & 0x7f) |
+    ((data[offset + 1] & 0x7f) << 7) |
+    ((data[offset + 2] & 0x7f) << 14);
+}
+
 function packUint21(value) {
   const v = clampInt(value, 0, 0x1fffff);
   return [v & 0x7f, (v >> 7) & 0x7f, (v >> 14) & 0x7f];
@@ -1321,6 +1342,240 @@ function sysexHex() {
   return Array.from(ensureArray(buildSysex(SYSEX_COMMAND_PREVIEW), "buildSysex()"))
     .map((byte) => byte.toString(16).toUpperCase().padStart(2, "0"))
     .join(" ");
+}
+
+function stagesMatch(a, b) {
+  return a.length === b.length && a.every((stage, index) =>
+    stage.level === b[index].level && stage.time === b[index].time);
+}
+
+function envelopesMatch(a, b) {
+  return stagesMatch(a.amp, b.amp) && stagesMatch(a.pd, b.pd);
+}
+
+function markCardSlotLocal(slot) {
+  presets.forEach((item, index) => {
+    if (index >= FACTORY_PRESET_COUNT && item.slot === slot) {
+      item.slot = null;
+      item.cardDirty = false;
+    }
+  });
+}
+
+function reconcileCardEnvelopes(mask, cardEnvelopes) {
+  let preservedChanges = 0;
+  let skipped = 0;
+
+  for (let slot = 0; slot < CUSTOM_SLOT_COUNT; slot++) {
+    if ((mask & (1 << slot)) === 0) markCardSlotLocal(slot);
+  }
+
+  cardEnvelopes.forEach((cardEnvelope, slot) => {
+    const matching = [];
+    presets.forEach((item, index) => {
+      if (index >= FACTORY_PRESET_COUNT && item.slot === slot) matching.push(index);
+    });
+    const existingIndex = matching.shift();
+    matching.forEach((index) => {
+      presets[index].slot = null;
+      presets[index].cardDirty = false;
+    });
+
+    if (existingIndex !== undefined) {
+      const existing = presets[existingIndex];
+      if (existing.cardDirty && !envelopesMatch(existing, cardEnvelope)) {
+        existing.slot = null;
+        existing.cardDirty = false;
+        preservedChanges++;
+      } else {
+        existing.amp = normalizeStages(cardEnvelope.amp);
+        existing.pd = normalizeStages(cardEnvelope.pd);
+        existing.cardDirty = false;
+        return;
+      }
+    }
+
+    if (customPresetCount() >= MAX_BROWSER_CUSTOM_PRESETS) {
+      skipped++;
+      return;
+    }
+    presets.push(preset(`Card Envelope ${slot + 1}`, cardEnvelope.amp, cardEnvelope.pd, slot, false));
+  });
+
+  savePresets();
+  render();
+  return { preservedChanges, skipped };
+}
+
+function clearEnvelopeReadTimer() {
+  if (envelopeReadTimer !== null) {
+    window.clearTimeout(envelopeReadTimer);
+    envelopeReadTimer = null;
+  }
+}
+
+function armEnvelopeReadTimeout() {
+  clearEnvelopeReadTimer();
+  envelopeReadTimer = window.setTimeout(() => {
+    const session = envelopeReadSession;
+    envelopeReadSession = null;
+    envelopeReadTimer = null;
+    envelopeReadSupported = false;
+    el.requestEnvelopes.disabled = false;
+    renderDeveloperPorts();
+    if (session?.reason === "delete") {
+      markCardSlotLocal(session.slot);
+      savePresets();
+      render();
+    }
+    setStatus("The card did not reply to the envelope read request. This firmware may not support envelope readback.");
+  }, 2500);
+}
+
+function sendNextEnvelopeRequest() {
+  if (!envelopeReadSession) return;
+  if (envelopeReadSession.pendingSlots.length === 0) {
+    finishEnvelopeRead();
+    return;
+  }
+
+  const output = selectedMidiOutput();
+  if (!output) {
+    envelopeReadSession = null;
+    el.requestEnvelopes.disabled = false;
+    setStatus("No MIDI output found for envelope readback.");
+    return;
+  }
+  const slot = envelopeReadSession.pendingSlots[0];
+  envelopeReadSession.waitingForSlot = slot;
+  try {
+    output.send(buildRequestEnvelopeSysex(slot));
+    armEnvelopeReadTimeout();
+  } catch (error) {
+    envelopeReadSession = null;
+    el.requestEnvelopes.disabled = false;
+    logDeveloper("Envelope slot request failed.", {
+      slot: slot + 1,
+      message: error?.message || "Unknown error",
+      stack: error?.stack || "No stack trace"
+    });
+    setStatus(`Could not request card envelope slot ${slot + 1}.`);
+  }
+}
+
+function finishEnvelopeRead() {
+  const session = envelopeReadSession;
+  if (!session) return;
+  clearEnvelopeReadTimer();
+  envelopeReadSession = null;
+  envelopeReadSupported = true;
+  el.requestEnvelopes.disabled = false;
+  renderDeveloperPorts();
+
+  const result = reconcileCardEnvelopes(session.mask, session.cardEnvelopes);
+  const count = session.cardEnvelopes.size;
+  if (session.reason === "save") {
+    const cardEnvelope = session.cardEnvelopes.get(session.slot);
+    const verified = cardEnvelope && session.expectedEnvelope &&
+      envelopesMatch(cardEnvelope, session.expectedEnvelope);
+    setStatus(verified
+      ? `Verified envelope saved in card slot ${session.slot + 1}.`
+      : `The envelope in card slot ${session.slot + 1} did not match the saved draft.`);
+    return;
+  }
+  if (session.reason === "delete") {
+    const deleted = (session.mask & (1 << session.slot)) === 0;
+    setStatus(deleted
+      ? `Verified card slot ${session.slot + 1} is empty. The browser draft was retained as Local only.`
+      : `Card slot ${session.slot + 1} still reports a saved envelope.`);
+    return;
+  }
+
+  const notes = [];
+  if (result.preservedChanges) notes.push(`${result.preservedChanges} changed local draft${result.preservedChanges === 1 ? " was" : "s were"} preserved`);
+  if (result.skipped) notes.push(`${result.skipped} card envelope${result.skipped === 1 ? " was" : "s were"} not added because the browser list is full`);
+  setStatus(`Loaded ${count} envelope${count === 1 ? "" : "s"} from the card.${notes.length ? ` ${notes.join("; ")}.` : ""}`);
+}
+
+async function requestCardEnvelopes(reason = "manual", slot = null, expectedEnvelope = null) {
+  if (envelopeReadSession) {
+    setStatus("An envelope read is already in progress.");
+    return;
+  }
+  if (!midiAccess) await connectMidi();
+  const output = selectedMidiOutput();
+  if (!output) {
+    setStatus("No MIDI output found for envelope readback.");
+    return;
+  }
+
+  envelopeReadSession = {
+    reason,
+    slot,
+    expectedEnvelope,
+    mask: 0,
+    pendingSlots: [],
+    waitingForSlot: null,
+    cardEnvelopes: new Map()
+  };
+  el.requestEnvelopes.disabled = true;
+  try {
+    output.send(buildRequestEnvelopeSlotsSysex());
+    armEnvelopeReadTimeout();
+    if (reason === "manual") setStatus("Reading saved envelopes from the card...");
+  } catch (error) {
+    envelopeReadSession = null;
+    clearEnvelopeReadTimer();
+    el.requestEnvelopes.disabled = false;
+    logDeveloper("Envelope inventory request failed.", {
+      message: error?.message || "Unknown error",
+      stack: error?.stack || "No stack trace"
+    });
+    setStatus("Envelope read request failed. Open Developer tools for details.");
+  }
+}
+
+function handleEnvelopeSlotsResponse(data) {
+  if (!envelopeReadSession || data.length !== 11) return;
+  const version = data[7] & 0x7f;
+  if (version !== ENVELOPE_PROTOCOL_VERSION) {
+    clearEnvelopeReadTimer();
+    envelopeReadSession = null;
+    envelopeReadSupported = false;
+    el.requestEnvelopes.disabled = false;
+    renderDeveloperPorts();
+    setStatus(`Unsupported card envelope protocol version ${version}.`);
+    return;
+  }
+
+  envelopeReadSupported = true;
+  renderDeveloperPorts();
+  envelopeReadSession.mask = unpackUint14(data, 8) & 0xff;
+  envelopeReadSession.pendingSlots = Array.from({ length: CUSTOM_SLOT_COUNT }, (_, slot) => slot)
+    .filter((slot) => (envelopeReadSession.mask & (1 << slot)) !== 0);
+  clearEnvelopeReadTimer();
+  sendNextEnvelopeRequest();
+}
+
+function handleEnvelopeResponse(data) {
+  if (!envelopeReadSession || data.length !== 89) return;
+  const slot = data[7] & 0x07;
+  if (slot !== envelopeReadSession.waitingForSlot) return;
+
+  let offset = 8;
+  const readStages = () => Array.from({ length: STAGES }, () => {
+    const stage = {
+      level: clampInt(unpackUint14(data, offset), 0, MAX_LEVEL),
+      time: clampInt(unpackUint21(data, offset + 2), 1, 192000)
+    };
+    offset += 5;
+    return stage;
+  });
+  envelopeReadSession.cardEnvelopes.set(slot, { amp: readStages(), pd: readStages() });
+  envelopeReadSession.pendingSlots.shift();
+  envelopeReadSession.waitingForSlot = null;
+  clearEnvelopeReadTimer();
+  sendNextEnvelopeRequest();
 }
 
 function handleMidi(event) {
@@ -1347,15 +1602,24 @@ function handleSysexResponse(data) {
       data[3] !== SYSEX_ID[1] ||
       data[4] !== SYSEX_ID[2] ||
       data[5] !== SYSEX_ID[3] ||
-      data[6] !== SYSEX_COMMAND_SETTINGS_RESPONSE ||
       data[data.length - 1] !== 0xf7) {
     return;
   }
 
+  if (data[6] === SYSEX_COMMAND_ENVELOPE_SLOTS_RESPONSE) {
+    handleEnvelopeSlotsResponse(data);
+    return;
+  }
+  if (data[6] === SYSEX_COMMAND_ENVELOPE_RESPONSE) {
+    handleEnvelopeResponse(data);
+    return;
+  }
+  if (data[6] !== SYSEX_COMMAND_SETTINGS_RESPONSE) return;
+
   if (!settingsRequestPending) {
     logDeveloper("Ignored unsolicited settings response.", {
       length: data.length,
-      reason: "Use Read Card to replace editor settings with card settings."
+      reason: "Use Read Settings from Card to replace editor settings with card settings."
     });
     return;
   }
@@ -1571,7 +1835,7 @@ async function requestPerformanceSettings(isProbe = false) {
     settingsRequestTimer = window.setTimeout(() => {
       settingsRequestPending = false;
       settingsRequestTimer = null;
-      setStatus("The card did not reply to Read Card.");
+      setStatus("The card did not reply to Read Settings from Card.");
     }, 1500);
     output.send(buildRequestSettingsSysex());
   } catch (error) {
@@ -1594,7 +1858,7 @@ async function requestPerformanceSettings(isProbe = false) {
 }
 
 el.addPreset.addEventListener("click", () => {
-  if (customPresetCount() >= CUSTOM_SLOT_COUNT) {
+  if (customPresetCount() >= MAX_BROWSER_CUSTOM_PRESETS) {
     setStatus("Custom preset limit reached.");
     return;
   }
@@ -1678,6 +1942,7 @@ el.copySysex.addEventListener("click", async () => {
 el.sendSysex.addEventListener("click", () => sendSysex(SYSEX_COMMAND_PREVIEW));
 el.flashSysex.addEventListener("click", () => sendSysex(SYSEX_COMMAND_SAVE));
 el.deleteSlot.addEventListener("click", deleteCustomSlot);
+el.requestEnvelopes.addEventListener("click", () => requestCardEnvelopes());
 el.requestSettings.addEventListener("click", requestPerformanceSettings);
 el.sendSettings.addEventListener("click", () => sendPerformanceSettings(SYSEX_COMMAND_SETTINGS));
 el.pdControl.addEventListener("input", () => updatePerformanceSetting("pd", el.pdControl.value));

@@ -14,6 +14,15 @@ Current UF2:
 C1ZZL3_PD_DETUNE_WAVE.uf2
 ```
 
+Envelope-readback test UF2:
+
+```text
+C1ZZL3_PD_DETUNE_WAVE_envelope_readback_test.uf2
+```
+
+Keep the current UF2 as the rollback build until envelope readback has been
+tested on hardware.
+
 It keeps the stable C1ZZL3 firmware untouched and adds an extended Web MIDI
 performance settings protocol for testing:
 
@@ -29,6 +38,9 @@ performance settings protocol for testing:
 - Web MIDI settings use hardware pickup, so physical knobs do not immediately
   overwrite remotely received PD, detune, waveform, ring, or noise values.
 - The eight waveform families use compressed transition regions.
+- Envelope Lab can read the occupied custom-slot mask and retrieve saved
+  amplitude and phase-distortion envelopes one slot at a time.
+- Envelope saves and deletions can be verified by browser readback.
 
 ## Compatibility
 

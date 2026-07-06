@@ -143,15 +143,18 @@ Button quick reference:
 - `Load RAM`: send the envelope to the card until reset.
 - `Save Envelope`: store the selected custom envelope in flash.
 - `Delete Envelope Slot`: clear the selected custom slot from card flash.
-- `Read Card`: pull the current performance settings into the editor.
+- `Read Envelopes from Card`: load occupied card slots into the editor without
+  overwriting changed local drafts.
+- `Read Settings from Card`: pull the current performance settings into the editor.
 - `Send Settings`: send the current performance settings to the card.
 - `Export JSON`: download all editor presets.
 - `Reset Preset`: restore the selected preset to its factory value.
 
-The editor can save up to eight custom envelopes. Factory presets are not overwritten.
+The card can save up to eight custom envelopes. The browser can retain additional
+local drafts. Factory presets are not overwritten.
 Custom presets are labelled `Local only`, `Saved - slot N`, or `Changed - slot N`.
-These labels track saves made by the current browser; the card cannot currently report
-which custom envelope slots are occupied.
+Envelope readback confirms which custom slots are occupied and verifies saves and
+deletions when supported by the experimental firmware.
 
 ## Build
 
