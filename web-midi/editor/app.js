@@ -73,6 +73,8 @@ let envelopeReadTimer = null;
 let envelopeReadSupported = null;
 const CZ_IMPORT_HANDOFF_KEY = "c1zzl3-cz-import-draft";
 const HOSTED_EDITOR_URL = "https://soveda.github.io/CozmikC1zzl3/web-midi/editor/index.html";
+const HOSTED_IMPORT_LAB_URL = "https://soveda.github.io/CozmikC1zzl3/experiments/cz-import/";
+const LOCAL_IMPORT_LAB_URL = "../../experiments/cz-import/index.html";
 let messageImportedDraft = null;
 const WAVE_FAMILIES = [
   "Saw",
@@ -101,6 +103,7 @@ const el = {
   canvas: document.querySelector("#curveCanvas"),
   themeToggle: document.querySelector("#themeToggle"),
   onlineEditorLink: document.querySelector("#onlineEditorLink"),
+  importLabLink: document.querySelector("#importLabLink"),
   ampStages: document.querySelector("#ampStages"),
   pdStages: document.querySelector("#pdStages"),
   ampView: document.querySelector("#ampView"),
@@ -403,6 +406,11 @@ function renderThemeMode() {
     const host = window.location.hostname;
     const isLocalDev = host === "localhost" || host === "127.0.0.1" || host === "::1";
     el.onlineEditorLink.classList.toggle("is-active", !isLocalDev && window.location.href.startsWith(HOSTED_EDITOR_URL));
+  }
+  if (el.importLabLink) {
+    const host = window.location.hostname;
+    const isLocalDev = host === "localhost" || host === "127.0.0.1" || host === "::1";
+    el.importLabLink.href = isLocalDev ? LOCAL_IMPORT_LAB_URL : HOSTED_IMPORT_LAB_URL;
   }
   drawCurves();
 }
