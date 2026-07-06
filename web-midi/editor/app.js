@@ -200,7 +200,7 @@ function loadPerformanceSettings() {
     if (saved && typeof saved === "object") {
       return {
         pd: clampInt(saved.pd ?? 0, 0, MAX_LEVEL),
-        detune: clampInt(saved.detune ?? 0, 0, MAX_LEVEL),
+        detune: clampInt(saved.detune ?? 2048, 0, MAX_LEVEL),
         waveform: clampInt(saved.waveform ?? 0, 0, 7),
         ring: clampInt(saved.ring, 0, MAX_LEVEL),
         noise: clampInt(saved.noise, 0, MAX_LEVEL),
@@ -216,7 +216,7 @@ function loadPerformanceSettings() {
 
   return {
     pd: 0,
-    detune: 0,
+    detune: 2048,
     waveform: 0,
     ring: 0,
     noise: 0,
