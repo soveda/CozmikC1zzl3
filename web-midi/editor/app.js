@@ -1168,7 +1168,10 @@ async function deleteCustomSlot() {
     return;
   }
 
-  const slot = clampInt(el.customSlot.value, 0, CUSTOM_SLOT_COUNT - 1);
+  const selectedPreset = presets[selected];
+  const slot = Number.isInteger(selectedPreset?.slot)
+    ? selectedPreset.slot
+    : clampInt(el.customSlot.value, 0, CUSTOM_SLOT_COUNT - 1);
   let frame;
   try {
     frame = buildDeleteSlotSysex(slot);
@@ -1177,6 +1180,12 @@ async function deleteCustomSlot() {
     el.flashSysex.disabled = true;
     el.deleteSlot.disabled = true;
     output.send(frame);
+    logDeveloper("Delete slot SysEx sent.", {
+      slot: slot + 1,
+      preset: selectedPreset?.name || "No selected custom preset",
+      output: output.name || output.id || "Unknown output",
+      bytes: frame
+    });
   } catch (error) {
     logDeveloper("Delete slot SysEx failed.", {
       slot,
