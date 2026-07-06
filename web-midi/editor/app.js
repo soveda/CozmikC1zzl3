@@ -242,11 +242,16 @@ function saveThemeMode() {
   localStorage.setItem("c1zzl3-theme-mode", themeMode);
 }
 
+function clearImportedDraftSources() {
+  messageImportedDraft = null;
+  localStorage.removeItem(CZ_IMPORT_HANDOFF_KEY);
+  window.history.replaceState(null, "", window.location.pathname);
+}
+
 function consumeImportedDraft() {
   try {
     if (messageImportedDraft) {
       const payload = messageImportedDraft;
-      messageImportedDraft = null;
       const draft = payload?.draft;
       if (draft && Array.isArray(draft.amp) && Array.isArray(draft.pd)) {
         const imported = preset(draft.name || "Imported CZ patch", draft.amp, draft.pd);
@@ -268,6 +273,7 @@ function consumeImportedDraft() {
 
         savePresets();
         savePerformanceSettings();
+        clearImportedDraftSources();
         return true;
       }
     }
@@ -297,7 +303,7 @@ function consumeImportedDraft() {
 
         savePresets();
         savePerformanceSettings();
-        window.history.replaceState(null, "", window.location.pathname);
+        clearImportedDraftSources();
         return true;
       }
     }
@@ -326,7 +332,7 @@ function consumeImportedDraft() {
 
         savePresets();
         savePerformanceSettings();
-        window.history.replaceState(null, "", window.location.pathname);
+        clearImportedDraftSources();
         return true;
       }
     }
@@ -360,7 +366,7 @@ function consumeImportedDraft() {
 
     savePresets();
     savePerformanceSettings();
-    localStorage.removeItem(CZ_IMPORT_HANDOFF_KEY);
+    clearImportedDraftSources();
     return true;
   } catch {
     localStorage.removeItem(CZ_IMPORT_HANDOFF_KEY);
@@ -478,10 +484,10 @@ function removeCustomPreset(index) {
 }
 
 function removeLocalCustomPresetForSlot(slot) {
-  const index = presets.findIndex((item, itemIndex) =>
-    itemIndex >= FACTORY_PRESET_COUNT && item.slot === slot);
-  if (index === -1) return;
-  presets.splice(index, 1);
+  const retained = presets.filter((item, itemIndex) =>
+    itemIndex < FACTORY_PRESET_COUNT || item.slot !== slot);
+  if (retained.length === presets.length) return;
+  presets = retained;
   selected = Math.min(selected, presets.length - 1);
   savePresets();
   render();
@@ -1503,8 +1509,9 @@ async function sendPerformanceSettings(command = SYSEX_COMMAND_SETTINGS) {
     setStatus("Card settings send failed. Open Developer tools for details.");
     return;
   }
-  const action = command === SYSEX_COMMAND_SAVE_SETTINGS ? "Saved" : "Set";
-  setStatus(`${action} PD ${performanceSettings.pd}, detune ${performanceSettings.detune}, wave ${WAVE_FAMILIES[performanceSettings.waveform] || performanceSettings.waveform}, ring ${performanceSettings.ring}, noise ${performanceSettings.noise}, MIDI in ch ${performanceSettings.midiInChannel}, Turing ${performanceSettings.turingRange} oct, Turing MIDI ${performanceSettings.turingMidiOut ? "on" : "off"} ch ${performanceSettings.turingMidiChannel} on ${output.name || "MIDI output"}.`);
+  const action = command === SYSEX_COMMAND_SAVE_SETTINGS ? "Saved to card" : "Sent to card";
+  const protocolLabel = settingsProtocol === "unknown" ? "Protocol not confirmed yet." : `Protocol: ${describeSettingsProtocol()}.`;
+  setStatus(`${action}: PD ${performanceSettings.pd}, detune ${performanceSettings.detune}, wave ${WAVE_FAMILIES[performanceSettings.waveform] || performanceSettings.waveform}, ring ${performanceSettings.ring}, noise ${performanceSettings.noise}, MIDI in ch ${performanceSettings.midiInChannel}, Turing ${performanceSettings.turingRange} oct, Turing MIDI ${performanceSettings.turingMidiOut ? "on" : "off"} ch ${performanceSettings.turingMidiChannel} on ${output.name || "MIDI output"}. ${protocolLabel}`);
 }
 
 async function requestPerformanceSettings(isProbe = false) {
@@ -1620,7 +1627,7 @@ el.sendSysex.addEventListener("click", () => sendSysex(SYSEX_COMMAND_PREVIEW));
 el.flashSysex.addEventListener("click", () => sendSysex(SYSEX_COMMAND_SAVE));
 el.deleteSlot.addEventListener("click", deleteCustomSlot);
 el.requestSettings.addEventListener("click", requestPerformanceSettings);
-el.sendSettings.addEventListener("click", () => sendPerformanceSettings(SYSEX_COMMAND_SAVE_SETTINGS));
+el.sendSettings.addEventListener("click", () => sendPerformanceSettings(SYSEX_COMMAND_SETTINGS));
 el.pdControl.addEventListener("input", () => updatePerformanceSetting("pd", el.pdControl.value));
 el.detuneControl.addEventListener("input", () => updatePerformanceSetting("detune", el.detuneControl.value));
 el.performanceWaveSelect.addEventListener("change", () => updatePerformanceSetting("waveform", el.performanceWaveSelect.value));
