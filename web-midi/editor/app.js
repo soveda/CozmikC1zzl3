@@ -60,7 +60,6 @@ let developerMode = false;
 let themeMode = loadThemeMode();
 let developerLogLines = [];
 let settingsProtocol = "unknown";
-let settingsProbePending = false;
 const CZ_IMPORT_HANDOFF_KEY = "c1zzl3-cz-import-draft";
 const HOSTED_EDITOR_URL = "https://soveda.github.io/CozmikC1zzl3/web-midi/editor/index.html";
 let messageImportedDraft = null;
@@ -1027,25 +1026,10 @@ function refreshMidiPorts() {
     inputNames: inputs.map((input) => input.name || input.id || "Unnamed input"),
     outputNames: outputs.map((output) => output.name || output.id || "Unnamed output")
   });
-  if (outputs.length > 0) {
-    scheduleSettingsProbe();
-  } else {
-    settingsProbePending = false;
+  if (outputs.length === 0) {
     settingsProtocol = "unknown";
   }
   setStatus(`MIDI ready: ${inputs.length} input${inputs.length === 1 ? "" : "s"}, ${outputs.length} output${outputs.length === 1 ? "" : "s"}.`);
-}
-
-function scheduleSettingsProbe() {
-  if (settingsProbePending) return;
-  if (!selectedMidiOutput()) return;
-
-  settingsProbePending = true;
-  window.setTimeout(() => {
-    settingsProbePending = false;
-    if (!selectedMidiOutput()) return;
-    requestPerformanceSettings(true);
-  }, 120);
 }
 
 function selectedMidiOutput() {

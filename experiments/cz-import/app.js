@@ -22,6 +22,7 @@ let currentDraft = null;
 const HANDOFF_KEY = "c1zzl3-cz-import-draft";
 const LOCAL_EDITOR_URL = "../../web-midi/editor/index.html";
 const HOSTED_EDITOR_URL = "https://soveda.github.io/CozmikC1zzl3/web-midi/editor/index.html";
+const ENVELOPE_LAB_WINDOW_NAME = "c1zzl3-envelope-lab";
 const WAVE_FAMILIES = [
   { label: "Saw", value: 0, hint: "lower CC23 range" },
   { label: "Square", value: 1, hint: "lower-mid CC23 range" },
@@ -217,7 +218,7 @@ function openEditorTab() {
   const handoffUrl = payload
     ? `${editorUrl}?cz-import=${encodeURIComponent(JSON.stringify(payload))}`
     : editorUrl;
-  const tab = window.open(handoffUrl, "_blank", "noopener,noreferrer");
+  const tab = window.open(handoffUrl, ENVELOPE_LAB_WINDOW_NAME);
   if (tab && payload) {
     setTimeout(() => {
       try {
