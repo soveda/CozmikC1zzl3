@@ -59,6 +59,8 @@ let activeLaneView = "amp";
 let developerMode = false;
 let themeMode = loadThemeMode();
 let developerLogLines = [];
+let settingsProtocol = "unknown";
+let settingsProbePending = false;
 const CZ_IMPORT_HANDOFF_KEY = "c1zzl3-cz-import-draft";
 const HOSTED_EDITOR_URL = "https://soveda.github.io/CozmikC1zzl3/web-midi/editor/index.html";
 let messageImportedDraft = null;
@@ -850,6 +852,7 @@ function renderDeveloperMidiRaw() {
 
   el.developerMidiRaw.textContent = [
     `MIDIAccess: ${constructorName(midiAccess)}`,
+    `Settings protocol: ${describeSettingsProtocol()}`,
     "",
     "Inputs map",
     inspectPortMap(midiAccess.inputs),
@@ -884,8 +887,14 @@ function renderDeveloperPorts() {
     ? outputs.map((port, index) => formatPort(port, index, "Output")).join("\n\n")
     : "None detected";
 
-  el.developerPorts.textContent = `Inputs (${inputs.length})\n${inputText}\n\nOutputs (${outputs.length})\n${outputText}`;
+  el.developerPorts.textContent = `Settings protocol: ${describeSettingsProtocol()}\n\nInputs (${inputs.length})\n${inputText}\n\nOutputs (${outputs.length})\n${outputText}`;
   renderDeveloperMidiRaw();
+}
+
+function describeSettingsProtocol() {
+  if (settingsProtocol === "stable") return "Stable firmware";
+  if (settingsProtocol === "experimental") return "Experimental firmware";
+  return "Not detected yet";
 }
 
 function clearDeveloperLog() {
@@ -998,7 +1007,25 @@ function refreshMidiPorts() {
     inputNames: inputs.map((input) => input.name || input.id || "Unnamed input"),
     outputNames: outputs.map((output) => output.name || output.id || "Unnamed output")
   });
+  if (outputs.length > 0) {
+    scheduleSettingsProbe();
+  } else {
+    settingsProbePending = false;
+    settingsProtocol = "unknown";
+  }
   setStatus(`MIDI ready: ${inputs.length} input${inputs.length === 1 ? "" : "s"}, ${outputs.length} output${outputs.length === 1 ? "" : "s"}.`);
+}
+
+function scheduleSettingsProbe() {
+  if (settingsProbePending) return;
+  if (!selectedMidiOutput()) return;
+
+  settingsProbePending = true;
+  window.setTimeout(() => {
+    settingsProbePending = false;
+    if (!selectedMidiOutput()) return;
+    requestPerformanceSettings(true);
+  }, 120);
 }
 
 function selectedMidiOutput() {
@@ -1148,6 +1175,14 @@ function buildSysex(command) {
 }
 
 function buildSettingsSysex(command) {
+  if (settingsProtocol === "experimental") {
+    return buildExperimentalSettingsSysex(command);
+  }
+
+  return buildStableSettingsSysex(command);
+}
+
+function buildStableSettingsSysex(command) {
   const payload = [];
   payload.push(...ensureArray(packUint14(performanceSettings.ring), "packUint14(ring)"));
   payload.push(...ensureArray(packUint14(performanceSettings.noise), "packUint14(noise)"));
@@ -1156,6 +1191,20 @@ function buildSettingsSysex(command) {
   payload.push(performanceSettings.turingMidiOut ? 1 : 0);
   payload.push(clampInt(performanceSettings.turingMidiChannel, 1, 16) - 1);
   return [0xf0, SYSEX_MANUFACTURER, ...ensureArray(SYSEX_ID, "SYSEX_ID"), command, ...ensureArray(payload, "settings payload"), 0xf7];
+}
+
+function buildExperimentalSettingsSysex(command) {
+  const payload = [];
+  payload.push(...ensureArray(packUint14(performanceSettings.ring), "packUint14(ring)"));
+  payload.push(...ensureArray(packUint14(performanceSettings.noise), "packUint14(noise)"));
+  payload.push(...ensureArray(packUint14(performanceSettings.pd), "packUint14(pd)"));
+  payload.push(...ensureArray(packUint14(performanceSettings.detune), "packUint14(detune)"));
+  payload.push(...ensureArray(packUint14(performanceSettings.waveform), "packUint14(waveform)"));
+  payload.push(clampInt(performanceSettings.midiInChannel, 1, 16) - 1);
+  payload.push(clampInt(performanceSettings.turingRange, 1, 8));
+  payload.push(performanceSettings.turingMidiOut ? 1 : 0);
+  payload.push(clampInt(performanceSettings.turingMidiChannel, 1, 16) - 1);
+  return [0xf0, SYSEX_MANUFACTURER, ...ensureArray(SYSEX_ID, "SYSEX_ID"), command, ...ensureArray(payload, "experimental settings payload"), 0xf7];
 }
 
 function buildDeleteSlotSysex(slot) {
@@ -1232,28 +1281,52 @@ function handleMidi(event) {
 }
 
 function handleSysexResponse(data) {
-  if (data.length !== 16 ||
-      data[0] !== 0xf0 ||
+  if (data[0] !== 0xf0 ||
       data[1] !== SYSEX_MANUFACTURER ||
       data[2] !== SYSEX_ID[0] ||
       data[3] !== SYSEX_ID[1] ||
       data[4] !== SYSEX_ID[2] ||
       data[5] !== SYSEX_ID[3] ||
       data[6] !== SYSEX_COMMAND_SETTINGS_RESPONSE ||
-      data[15] !== 0xf7) {
+      data[data.length - 1] !== 0xf7) {
     return;
   }
 
-  performanceSettings = {
-    ring: clampInt(unpackUint14(data, 7), 0, MAX_LEVEL),
-    noise: clampInt(unpackUint14(data, 9), 0, MAX_LEVEL),
-    midiInChannel: clampInt((data[11] & 0x0f) + 1, 1, 16),
-    turingRange: clampInt(data[12], 1, 8),
-    turingMidiOut: (data[13] & 0x01) !== 0,
-    turingMidiChannel: clampInt((data[14] & 0x0f) + 1, 1, 16)
-  };
+  if (data.length === 16) {
+    settingsProtocol = "stable";
+    performanceSettings = {
+      ...performanceSettings,
+      ring: clampInt(unpackUint14(data, 7), 0, MAX_LEVEL),
+      noise: clampInt(unpackUint14(data, 9), 0, MAX_LEVEL),
+      midiInChannel: clampInt((data[11] & 0x0f) + 1, 1, 16),
+      turingRange: clampInt(data[12], 1, 8),
+      turingMidiOut: (data[13] & 0x01) !== 0,
+      turingMidiChannel: clampInt((data[14] & 0x0f) + 1, 1, 16)
+    };
+  } else if (data.length === 22) {
+    settingsProtocol = "experimental";
+    performanceSettings = {
+      ...performanceSettings,
+      ring: clampInt(unpackUint14(data, 7), 0, MAX_LEVEL),
+      noise: clampInt(unpackUint14(data, 9), 0, MAX_LEVEL),
+      pd: clampInt(unpackUint14(data, 11), 0, MAX_LEVEL),
+      detune: clampInt(unpackUint14(data, 13), 0, MAX_LEVEL),
+      waveform: clampInt(unpackUint14(data, 15), 0, 7),
+      midiInChannel: clampInt((data[17] & 0x0f) + 1, 1, 16),
+      turingRange: clampInt(data[18], 1, 8),
+      turingMidiOut: (data[19] & 0x01) !== 0,
+      turingMidiChannel: clampInt((data[20] & 0x0f) + 1, 1, 16)
+    };
+  } else {
+    logDeveloper("Ignored unexpected settings response.", {
+      length: data.length,
+      bytes: Array.from(data)
+    });
+    return;
+  }
   savePerformanceSettings();
   renderPerformanceSettings();
+  renderDeveloperPorts();
   setStatus(`Loaded settings from card: PD ${performanceSettings.pd}, detune ${performanceSettings.detune}, wave ${WAVE_FAMILIES[performanceSettings.waveform] || performanceSettings.waveform}, ring ${performanceSettings.ring}, noise ${performanceSettings.noise}, MIDI in ch ${performanceSettings.midiInChannel}, Turing ${performanceSettings.turingRange} oct, Turing MIDI ${performanceSettings.turingMidiOut ? "on" : "off"} ch ${performanceSettings.turingMidiChannel}.`);
 }
 
@@ -1380,8 +1453,16 @@ async function sendPerformanceSettings(command = SYSEX_COMMAND_SETTINGS) {
   }
 
   try {
-    const frame = buildSettingsSysex(command);
-    output.send(frame);
+    if (settingsProtocol === "experimental") {
+      output.send(buildExperimentalSettingsSysex(command));
+    } else if (settingsProtocol === "stable") {
+      output.send(buildStableSettingsSysex(command));
+    } else {
+      output.send(buildStableSettingsSysex(command));
+      if (command === SYSEX_COMMAND_SETTINGS) {
+        output.send(buildExperimentalSettingsSysex(command), window.performance.now() + 40);
+      }
+    }
   } catch (error) {
     logDeveloper("Settings SysEx failed.", {
       command,
@@ -1396,7 +1477,7 @@ async function sendPerformanceSettings(command = SYSEX_COMMAND_SETTINGS) {
   setStatus(`${action} PD ${performanceSettings.pd}, detune ${performanceSettings.detune}, wave ${WAVE_FAMILIES[performanceSettings.waveform] || performanceSettings.waveform}, ring ${performanceSettings.ring}, noise ${performanceSettings.noise}, MIDI in ch ${performanceSettings.midiInChannel}, Turing ${performanceSettings.turingRange} oct, Turing MIDI ${performanceSettings.turingMidiOut ? "on" : "off"} ch ${performanceSettings.turingMidiChannel} on ${output.name || "MIDI output"}.`);
 }
 
-async function requestPerformanceSettings() {
+async function requestPerformanceSettings(isProbe = false) {
   if (!midiAccess) {
     await connectMidi();
   }
@@ -1418,7 +1499,9 @@ async function requestPerformanceSettings() {
     setStatus("Settings request failed. Open Developer tools for details.");
     return;
   }
-  setStatus(`Requested settings from ${output.name || "MIDI output"}.`);
+  if (!isProbe) {
+    setStatus(`Requested settings from ${output.name || "MIDI output"}.`);
+  }
 }
 
 el.addPreset.addEventListener("click", () => {

@@ -16,7 +16,8 @@ static constexpr uint8_t WebMidiCommandSaveSettings = 0x04u;
 static constexpr uint8_t WebMidiCommandDeleteEnvelope = 0x05u;
 static constexpr uint8_t WebMidiCommandRequestSettings = 0x06u;
 static constexpr uint8_t WebMidiCommandSettingsResponse = 0x07u;
-static constexpr uint32_t WebMidiSettingsPayloadLength = 13u;
+static constexpr uint32_t WebMidiSettingsPayloadLength = 14u;
+static constexpr uint32_t WebMidiStableSettingsPayloadLength = 8u;
 static constexpr uint32_t WebMidiRangeSettingsPayloadLength = 6u;
 static constexpr uint32_t WebMidiLegacySettingsPayloadLength = 5u;
 static constexpr uint32_t WebMidiEnvelopePayloadLength = 97u;
@@ -801,6 +802,7 @@ private:
     void handleWebMidiSettings(bool persist)
     {
         if (sysexLength != WebMidiSettingsPayloadLength + 6u &&
+            sysexLength != WebMidiStableSettingsPayloadLength + 6u &&
             sysexLength != WebMidiRangeSettingsPayloadLength + 6u &&
             sysexLength != WebMidiLegacySettingsPayloadLength + 6u)
             return;
@@ -809,10 +811,12 @@ private:
         int32_t ring = decodeWebMidiUint14(offset);
         int32_t noise = decodeWebMidiUint14(offset);
         int32_t pd = pdControl;
+        int32_t detune = osc2Detune + 2048;
         int32_t wave = waveControl;
         if (sysexLength == WebMidiSettingsPayloadLength + 6u)
         {
             pd = decodeWebMidiUint14(offset);
+            detune = decodeWebMidiUint14(offset);
             wave = decodeWebMidiUint14(offset);
         }
         uint8_t channel = sysexBuffer[offset] & 0x0Fu;
@@ -821,6 +825,10 @@ private:
         osc2Ring = ring;
         osc2Noise = noise;
         pdControl = clamp12(pd);
+        osc2Detune = clamp12(detune) - 2048;
+        if (osc2Detune > -32 && osc2Detune < 32)
+            osc2Detune = 0;
+        osc2Level = osc2Detune < 0 ? -osc2Detune : osc2Detune;
         waveControl = clamp12(wave);
         midiInChannel = channel;
 
@@ -859,6 +867,7 @@ private:
         appendWebMidiUint14(frame, offset, clamp12(osc2Ring));
         appendWebMidiUint14(frame, offset, clamp12(osc2Noise));
         appendWebMidiUint14(frame, offset, clamp12(pdControl));
+        appendWebMidiUint14(frame, offset, clamp12(osc2Detune + 2048));
         appendWebMidiUint14(frame, offset, clamp12(waveControl));
         frame[offset++] = midiInChannel & 0x0Fu;
         frame[offset++] = clampTuringCvOctaveRange(turingCvOctaveRange);
