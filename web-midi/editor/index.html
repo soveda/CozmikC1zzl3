@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>C1ZZL3 Envelope Lab</title>
-  <link rel="stylesheet" href="styles.css?v=20260706-7">
+  <link rel="stylesheet" href="styles.css?v=20260706-8">
 </head>
 <body>
   <main class="shell">
@@ -94,12 +94,16 @@
 
         <div class="output-actions editor-actions">
           <button id="sendSysex" type="button" title="Load this envelope until reset">Load RAM</button>
+          <button id="loadEnvelopeAndSettings" type="button" title="Load this envelope and send the current settings until reset">Load Envelope + Settings</button>
           <button id="flashSysex" type="button" title="Save this envelope after reset">Save Envelope</button>
           <button id="deleteSlot" type="button" title="Delete the selected custom slot from card flash">Delete Envelope Slot</button>
           <button id="requestEnvelopes" type="button" title="Load saved card envelopes into the editor">Read Envelopes from Card</button>
           <button id="requestSettings" type="button" title="Load current card settings into the editor">Read Settings from Card</button>
           <button id="sendSettings" type="button" title="Send these settings to the card">Send Settings</button>
           <button id="resetPreset" type="button">Reset Preset</button>
+        </div>
+        <div class="volatility-warning" role="note">
+          <strong>Temporary changes:</strong> Load RAM, Load Envelope + Settings, and Send Settings are lost when the card restarts. Use Save Envelope to keep the envelope. To make the current settings the hardware baseline, move the switch from middle to down and hold it until the card confirms the save.
         </div>
       </section>
 
@@ -206,6 +210,6 @@
     </section>
   </main>
 
-  <script src="app.js?v=20260706-7"></script>
+  <script src="app.js?v=20260706-8"></script>
 </body>
 </html>

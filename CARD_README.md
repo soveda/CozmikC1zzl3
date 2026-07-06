@@ -99,15 +99,21 @@ choose the C1ZZL3 output, then:
 Button quick reference:
 
 - `Load RAM` to send a custom envelope until reset.
-- `Save Slot` to write a custom envelope to the card.
-- `Delete Slot` to clear a custom envelope slot.
-- `Read Card` to load the current card settings into the editor.
-- `Set Card` to save performance settings to the card.
+- `Load Envelope + Settings` to temporarily send the selected envelope and all
+  current settings together.
+- `Save Envelope` to write a custom envelope to the card.
+- `Delete Envelope Slot` to clear a custom envelope slot.
+- `Read Envelopes from Card` to load saved card envelopes into the editor.
+- `Read Settings from Card` to load the current card settings into the editor.
+- `Send Settings` to send performance settings until reset.
 - `Export JSON` to download all editor presets.
 - `Reset Preset` to restore the selected preset to its factory value.
 
-The editor can save up to eight custom envelopes. Factory presets are not
-overwritten.
+The card can save up to eight custom envelopes. Factory presets are not
+overwritten. Temporary envelope and settings changes are lost at restart. Use
+`Save Envelope` for the envelope, then hold the hardware switch down from the
+middle position to save the current performance settings as the startup
+baseline.
 
 ## Envelope Presets
 

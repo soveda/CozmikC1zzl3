@@ -141,6 +141,8 @@ Use Chrome or another browser with Web MIDI and SysEx support.
 Button quick reference:
 
 - `Load RAM`: send the envelope to the card until reset.
+- `Load Envelope + Settings`: temporarily load the selected envelope and send
+  all current settings in one action.
 - `Save Envelope`: store the selected custom envelope in flash.
 - `Delete Envelope Slot`: clear the selected custom slot from card flash.
 - `Read Envelopes from Card`: load occupied card slots into the editor without
@@ -149,6 +151,11 @@ Button quick reference:
 - `Send Settings`: send the current performance settings to the card.
 - `Export JSON`: download all editor presets.
 - `Reset Preset`: restore the selected preset to its factory value.
+
+`Load RAM`, `Load Envelope + Settings`, and `Send Settings` are temporary.
+Use `Save Envelope` to retain an envelope in flash. To make the current
+performance settings the startup baseline, move the hardware switch from
+middle to down and hold it until the card confirms the save.
 
 The card can save up to eight custom envelopes. The browser can retain additional
 local drafts. Factory presets are not overwritten.

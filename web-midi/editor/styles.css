@@ -529,7 +529,8 @@ canvas {
 }
 
 .editor-actions button:nth-child(1),
-.editor-actions button:nth-child(2) {
+.editor-actions button:nth-child(2),
+.editor-actions button:nth-child(3) {
   background: var(--control-bg);
 }
 
@@ -538,13 +539,29 @@ canvas {
   background: var(--control-bg);
 }
 
-.editor-actions button:nth-child(4),
-.editor-actions button:nth-child(5) {
+.editor-actions button:nth-child(5),
+.editor-actions button:nth-child(6) {
   border-color: rgba(255, 204, 102, 0.35);
 }
 
-.editor-actions button:nth-child(3) {
+.editor-actions button:nth-child(4) {
   border-color: rgba(255, 115, 92, 0.5);
+}
+
+.volatility-warning {
+  margin: 0 16px 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 204, 102, 0.5);
+  border-left: 4px solid var(--amp);
+  border-radius: 6px;
+  background: var(--legend-bg);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.volatility-warning strong {
+  color: var(--text);
 }
 
 .output-actions button {

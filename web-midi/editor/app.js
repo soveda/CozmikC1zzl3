@@ -126,6 +126,7 @@ const el = {
   copyCpp: document.querySelector("#copyCpp"),
   copySysex: document.querySelector("#copySysex"),
   sendSysex: document.querySelector("#sendSysex"),
+  loadEnvelopeAndSettings: document.querySelector("#loadEnvelopeAndSettings"),
   flashSysex: document.querySelector("#flashSysex"),
   deleteSlot: document.querySelector("#deleteSlot"),
   requestSettings: document.querySelector("#requestSettings"),
@@ -1115,6 +1116,7 @@ async function sendSysex(command = SYSEX_COMMAND_PREVIEW) {
   const summary = frameSummary();
   sendingSysex = true;
   el.sendSysex.disabled = true;
+  el.loadEnvelopeAndSettings.disabled = true;
   el.flashSysex.disabled = true;
   el.deleteSlot.disabled = true;
   try {
@@ -1129,6 +1131,7 @@ async function sendSysex(command = SYSEX_COMMAND_PREVIEW) {
     });
     sendingSysex = false;
     el.sendSysex.disabled = false;
+    el.loadEnvelopeAndSettings.disabled = false;
     el.flashSysex.disabled = false;
     el.deleteSlot.disabled = false;
     setStatus("Web MIDI send failed. Open Developer tools for details.");
@@ -1149,9 +1152,56 @@ async function sendSysex(command = SYSEX_COMMAND_PREVIEW) {
   window.setTimeout(() => {
     sendingSysex = false;
     el.sendSysex.disabled = false;
+    el.loadEnvelopeAndSettings.disabled = false;
     el.flashSysex.disabled = false;
     el.deleteSlot.disabled = false;
   }, sendCooldownMs);
+}
+
+async function loadEnvelopeAndSettings() {
+  if (sendingSysex) {
+    setStatus("SysEx send already in progress.");
+    return;
+  }
+  if (!canSendSelectedEnvelope()) {
+    setStatus("Preset 0, silent envelopes, and very short envelopes cannot be loaded to the card.");
+    return;
+  }
+  if (!midiAccess) await connectMidi();
+  const output = selectedMidiOutput();
+  if (!output) {
+    setStatus("No MIDI output found for combined load.");
+    return;
+  }
+
+  try {
+    const envelopeFrame = buildSysex(SYSEX_COMMAND_PREVIEW);
+    sendingSysex = true;
+    el.sendSysex.disabled = true;
+    el.loadEnvelopeAndSettings.disabled = true;
+    el.flashSysex.disabled = true;
+    el.deleteSlot.disabled = true;
+    output.send(envelopeFrame);
+    sendSettingsFrames(output, SYSEX_COMMAND_SETTINGS, 60);
+    const slot = clampInt(el.customSlot.value, 0, CUSTOM_SLOT_COUNT - 1);
+    setStatus(`Loaded ${presets[selected].name} into RAM slot ${slot + 1} and sent the current settings. Both are temporary until saved.`);
+  } catch (error) {
+    logDeveloper("Combined envelope and settings load failed.", {
+      preset: presets[selected]?.name,
+      output: output.name || output.id || "Unknown output",
+      message: error?.message || "Unknown error",
+      stack: error?.stack || "No stack trace"
+    });
+    setStatus("Combined load failed. Open Developer tools for details.");
+  }
+
+  window.setTimeout(() => {
+    sendingSysex = false;
+    el.sendSysex.disabled = false;
+    el.loadEnvelopeAndSettings.disabled = false;
+    el.flashSysex.disabled = false;
+    el.deleteSlot.disabled = false;
+  }, 350);
 }
 
 async function deleteCustomSlot() {
@@ -1179,6 +1229,7 @@ async function deleteCustomSlot() {
     frame = buildDeleteSlotSysex(slot);
     sendingSysex = true;
     el.sendSysex.disabled = true;
+    el.loadEnvelopeAndSettings.disabled = true;
     el.flashSysex.disabled = true;
     el.deleteSlot.disabled = true;
     output.send(frame);
@@ -1197,6 +1248,7 @@ async function deleteCustomSlot() {
     });
     sendingSysex = false;
     el.sendSysex.disabled = false;
+    el.loadEnvelopeAndSettings.disabled = false;
     el.flashSysex.disabled = false;
     el.deleteSlot.disabled = false;
     setStatus("Delete failed. Open Developer tools for details.");
@@ -1215,6 +1267,7 @@ async function deleteCustomSlot() {
   window.setTimeout(() => {
     sendingSysex = false;
     el.sendSysex.disabled = false;
+    el.loadEnvelopeAndSettings.disabled = false;
     el.flashSysex.disabled = false;
     el.deleteSlot.disabled = false;
   }, 1800);
@@ -1793,16 +1846,7 @@ async function sendPerformanceSettings(command = SYSEX_COMMAND_SETTINGS) {
   }
 
   try {
-    if (settingsProtocol === "experimental") {
-      output.send(buildExperimentalSettingsSysex(command));
-    } else if (settingsProtocol === "stable") {
-      output.send(buildStableSettingsSysex(command));
-    } else {
-      output.send(buildStableSettingsSysex(command));
-      if (command === SYSEX_COMMAND_SETTINGS) {
-        output.send(buildExperimentalSettingsSysex(command), window.performance.now() + 40);
-      }
-    }
+    sendSettingsFrames(output, command);
   } catch (error) {
     logDeveloper("Settings SysEx failed.", {
       command,
@@ -1816,6 +1860,25 @@ async function sendPerformanceSettings(command = SYSEX_COMMAND_SETTINGS) {
   const action = command === SYSEX_COMMAND_SAVE_SETTINGS ? "Saved to card" : "Sent to card";
   const protocolLabel = settingsProtocol === "unknown" ? "Protocol not confirmed yet." : `Protocol: ${describeSettingsProtocol()}.`;
   setStatus(`${action}: PD ${performanceSettings.pd}, detune ${performanceSettings.detune}, wave ${WAVE_FAMILIES[performanceSettings.waveform] || performanceSettings.waveform}, ring ${performanceSettings.ring}, noise ${performanceSettings.noise}, MIDI in ch ${performanceSettings.midiInChannel}, Turing ${performanceSettings.turingRange} oct, Turing MIDI ${performanceSettings.turingMidiOut ? "on" : "off"} ch ${performanceSettings.turingMidiChannel} on ${output.name || "MIDI output"}. ${protocolLabel}`);
+}
+
+function sendSettingsFrames(output, command, delayMs = 0) {
+  const sendAt = (frame, extraDelay = 0) => {
+    const delay = delayMs + extraDelay;
+    if (delay > 0) output.send(frame, window.performance.now() + delay);
+    else output.send(frame);
+  };
+
+  if (settingsProtocol === "experimental") {
+    sendAt(buildExperimentalSettingsSysex(command));
+  } else if (settingsProtocol === "stable") {
+    sendAt(buildStableSettingsSysex(command));
+  } else {
+    sendAt(buildStableSettingsSysex(command));
+    if (command === SYSEX_COMMAND_SETTINGS) {
+      sendAt(buildExperimentalSettingsSysex(command), 40);
+    }
+  }
 }
 
 async function requestPerformanceSettings(isProbe = false) {
@@ -1940,6 +2003,7 @@ el.copySysex.addEventListener("click", async () => {
   setStatus(`SysEx preview frame copied for Custom ${Number(el.customSlot.value) + 1}.`);
 });
 el.sendSysex.addEventListener("click", () => sendSysex(SYSEX_COMMAND_PREVIEW));
+el.loadEnvelopeAndSettings.addEventListener("click", loadEnvelopeAndSettings);
 el.flashSysex.addEventListener("click", () => sendSysex(SYSEX_COMMAND_SAVE));
 el.deleteSlot.addEventListener("click", deleteCustomSlot);
 el.requestEnvelopes.addEventListener("click", () => requestCardEnvelopes());
