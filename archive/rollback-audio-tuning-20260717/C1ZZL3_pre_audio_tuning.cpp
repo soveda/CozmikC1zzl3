@@ -328,9 +328,8 @@ private:
     static constexpr uint32_t StartupSelectWindowSamples = 24000u;
     static constexpr uint32_t SaveMagic = 0x43315A33u; // C1Z3
     static constexpr uint16_t SaveVersion = 3;
-    static constexpr int32_t OutputLowpassAlphaQ12 = 2008; // ~5.2 kHz at 48 kHz.
+    static constexpr int32_t OutputLowpassAlphaQ12 = 2458; // 7 kHz at 48 kHz.
     static constexpr int32_t OutputHighpassAlphaQ12 = 4075; // 40 Hz at 48 kHz.
-    static constexpr int32_t PdCompensationFloorQ12 = 3000; // Keep high-PD tones present but less inflated.
     static constexpr uint32_t SaveFlashOffset =
         (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE) &
         ~(FLASH_SECTOR_SIZE - 1u);
@@ -483,7 +482,6 @@ private:
         osc1 = mix(osc1, ringSig, ringMix);
 
         int32_t ampScale = envelopeAmpScale(envelopeLevel);
-        ampScale = (ampScale * pdCompensationScale(pd)) >> 12;
         ampScale = (ampScale * updateSyncFade()) >> 12;
         osc1 = (osc1 * ampScale) >> 12;
         osc2 = (osc2 * ampScale) >> 12;
@@ -2112,13 +2110,6 @@ private:
         uint32_t ux = (uint32_t)clamp12(x);
 
         return (ux * ux) >> 12;
-    }
-
-    int32_t pdCompensationScale(int32_t pd)
-    {
-        int32_t pdCurve = responseCurve(pd);
-        int32_t reduction = (pdCurve * (4095 - PdCompensationFloorQ12)) >> 12;
-        return 4095 - reduction;
     }
 
     uint32_t smoothStep12(uint32_t x)
