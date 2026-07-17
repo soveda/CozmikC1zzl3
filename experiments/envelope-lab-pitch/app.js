@@ -60,6 +60,7 @@ let sendingSysex = false;
 let auditionLoop = false;
 let auditionToken = 0;
 let dragTarget = null;
+let pitchDragTarget = null;
 let performanceSettings = loadPerformanceSettings();
 let activeLaneView = "amp";
 let developerMode = false;
@@ -72,9 +73,9 @@ let envelopeReadSession = null;
 let envelopeReadTimer = null;
 let envelopeReadSupported = null;
 const CZ_IMPORT_HANDOFF_KEY = "c1zzl3-cz-import-draft";
-const HOSTED_EDITOR_URL = "https://soveda.github.io/CozmikC1zzl3/web-midi/editor/index.html";
-const HOSTED_IMPORT_LAB_URL = "https://soveda.github.io/CozmikC1zzl3/experiments/cz-import/";
-const LOCAL_IMPORT_LAB_URL = "../../experiments/cz-import/index.html";
+const HOSTED_EDITOR_URL = "https://soveda.github.io/CozmikC1zzl3/experiments/envelope-lab-pitch/index.html";
+const HOSTED_IMPORT_LAB_URL = "https://soveda.github.io/CozmikC1zzl3/experiments/envelope-lab-pitch/import-lab/";
+const LOCAL_IMPORT_LAB_URL = "import-lab/index.html";
 let messageImportedDraft = null;
 const WAVE_FAMILIES = [
   "Saw",
@@ -101,11 +102,14 @@ const el = {
   waveSelect: document.querySelector("#waveSelect"),
   customSlot: document.querySelector("#customSlot"),
   canvas: document.querySelector("#curveCanvas"),
+  pitchCanvas: document.querySelector("#pitchCanvas"),
+  pitchSourceLabel: document.querySelector("#pitchSourceLabel"),
   themeToggle: document.querySelector("#themeToggle"),
   onlineEditorLink: document.querySelector("#onlineEditorLink"),
   importLabLink: document.querySelector("#importLabLink"),
   ampStages: document.querySelector("#ampStages"),
   pdStages: document.querySelector("#pdStages"),
+  pitchStages: document.querySelector("#pitchStages"),
   ampView: document.querySelector("#ampView"),
   pdView: document.querySelector("#pdView"),
   developerToggle: document.querySelector("#developerToggle"),
@@ -145,11 +149,13 @@ const el = {
   turingMidiChannel: document.querySelector("#turingMidiChannel")
 };
 
-function preset(name, amp, pd, slot = null, cardDirty = false) {
+function preset(name, amp, pd, slot = null, cardDirty = false, pitch = null, pitchSource = null) {
   return {
     name,
     amp: normalizeStages(amp),
     pd: normalizeStages(pd),
+    pitch: normalizePitchStages(pitch),
+    pitchSource: pitchSource || null,
     slot: Number.isInteger(slot) ? clampInt(slot, 0, CUSTOM_SLOT_COUNT - 1) : null,
     cardDirty: Boolean(cardDirty)
   };
@@ -172,19 +178,26 @@ function normalizeStages(stages) {
   }));
 }
 
+function normalizePitchStages(stages) {
+  return Array.from({ length: STAGES }, (_, i) => ({
+    level: clampInt(stages?.[i]?.level ?? stages?.[i]?.[0] ?? 2048, 0, MAX_LEVEL),
+    time: clampInt(stages?.[i]?.time ?? stages?.[i]?.[1] ?? 1, 1, 192000)
+  }));
+}
+
 function loadPresets() {
   try {
     const saved = JSON.parse(localStorage.getItem("c1zzl3-envelope-presets"));
     if (Array.isArray(saved)) {
       const custom = saved
         .slice(FACTORY_PRESET_COUNT)
-        .map((item) => preset(item.name || "Custom preset", item.amp, item.pd, item.slot, item.cardDirty))
+        .map((item) => preset(item.name || "Custom preset", item.amp, item.pd, item.slot, item.cardDirty, item.pitch, item.pitchSource))
         .slice(0, MAX_BROWSER_CUSTOM_PRESETS);
       return [...structuredClone(factoryPresets), ...custom];
     }
     if (Array.isArray(saved?.customPresets)) {
       const custom = saved.customPresets
-        .map((item) => preset(item.name || "Custom preset", item.amp, item.pd, item.slot, item.cardDirty))
+        .map((item) => preset(item.name || "Custom preset", item.amp, item.pd, item.slot, item.cardDirty, item.pitch, item.pitchSource))
         .slice(0, MAX_BROWSER_CUSTOM_PRESETS);
       return [...structuredClone(factoryPresets), ...custom];
     }
@@ -202,6 +215,8 @@ function savePresets() {
         name: item.name,
         amp: item.amp,
         pd: item.pd,
+        pitch: item.pitch,
+        pitchSource: item.pitchSource || null,
         slot: Number.isInteger(item.slot) ? item.slot : null,
         cardDirty: Boolean(item.cardDirty)
       }))
@@ -277,13 +292,39 @@ function applyImportedPerformance(draft) {
   };
 }
 
+function importedPitchStages(draft) {
+  const directPitch = draft?.pitch || draft?.sourceEnvelopes?.pitch;
+  return Array.isArray(directPitch) ? directPitch : null;
+}
+
+function importedPitchSource(draft) {
+  const cz = draft?.sourceEnvelopes?.cz;
+  if (!cz) return null;
+  return {
+    dco1Pitch: cz.dco1Pitch || null,
+    dco2Pitch: cz.dco2Pitch || null
+  };
+}
+
+function makeImportedPreset(draft) {
+  return preset(
+    draft.name || "Imported CZ patch",
+    draft.amp,
+    draft.pd,
+    null,
+    false,
+    importedPitchStages(draft),
+    importedPitchSource(draft)
+  );
+}
+
 function consumeImportedDraft() {
   try {
     if (messageImportedDraft) {
       const payload = messageImportedDraft;
       const draft = payload?.draft;
       if (draft && Array.isArray(draft.amp) && Array.isArray(draft.pd)) {
-        const imported = preset(draft.name || "Imported CZ patch", draft.amp, draft.pd);
+        const imported = makeImportedPreset(draft);
         if (customPresetCount() >= MAX_BROWSER_CUSTOM_PRESETS) {
           presets[FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1] = imported;
           selected = FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1;
@@ -307,7 +348,7 @@ function consumeImportedDraft() {
       const payload = JSON.parse(decodeURIComponent(queryPayload));
       const draft = payload?.draft;
       if (draft && Array.isArray(draft.amp) && Array.isArray(draft.pd)) {
-        const imported = preset(draft.name || "Imported CZ patch", draft.amp, draft.pd);
+        const imported = makeImportedPreset(draft);
         if (customPresetCount() >= MAX_BROWSER_CUSTOM_PRESETS) {
           presets[FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1] = imported;
           selected = FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1;
@@ -330,7 +371,7 @@ function consumeImportedDraft() {
       const payload = JSON.parse(decodeURIComponent(hashMatch[1]));
       const draft = payload?.draft;
       if (draft && Array.isArray(draft.amp) && Array.isArray(draft.pd)) {
-        const imported = preset(draft.name || "Imported CZ patch", draft.amp, draft.pd);
+        const imported = makeImportedPreset(draft);
         if (customPresetCount() >= MAX_BROWSER_CUSTOM_PRESETS) {
           presets[FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1] = imported;
           selected = FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1;
@@ -358,7 +399,7 @@ function consumeImportedDraft() {
       return false;
     }
 
-    const imported = preset(draft.name || "Imported CZ patch", draft.amp, draft.pd);
+    const imported = makeImportedPreset(draft);
     if (customPresetCount() >= MAX_BROWSER_CUSTOM_PRESETS) {
       presets[FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1] = imported;
       selected = FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1;
@@ -389,11 +430,14 @@ function render() {
   el.addPreset.disabled = customPresetCount() >= MAX_BROWSER_CUSTOM_PRESETS;
   renderStages("amp", el.ampStages);
   renderStages("pd", el.pdStages);
+  renderStages("pitch", el.pitchStages);
+  renderPitchSource(current);
   renderPerformanceSettings();
   renderThemeMode();
   renderLaneView();
   renderDeveloperMode();
   drawCurves();
+  drawPitchCurve();
   updateExport();
 }
 
@@ -413,6 +457,7 @@ function renderThemeMode() {
     el.importLabLink.href = isLocalDev ? LOCAL_IMPORT_LAB_URL : HOSTED_IMPORT_LAB_URL;
   }
   drawCurves();
+  drawPitchCurve();
 }
 
 function renderLaneView() {
@@ -427,6 +472,14 @@ function renderLaneView() {
   el.pdStages.classList.toggle("is-hidden", ampActive);
   el.ampStages.setAttribute("aria-hidden", String(!ampActive));
   el.pdStages.setAttribute("aria-hidden", String(ampActive));
+}
+
+function renderPitchSource(current) {
+  if (!el.pitchSourceLabel) return;
+  const hasSource = Boolean(current.pitchSource?.dco1Pitch || current.pitchSource?.dco2Pitch);
+  el.pitchSourceLabel.textContent = hasSource
+    ? "CZ DCO1/DCO2 pitch source loaded"
+    : "No CZ pitch source loaded";
 }
 
 function renderDeveloperMode() {
@@ -554,7 +607,8 @@ function updateStage(lane, index, key, value) {
   if (presets[selected].slot !== null) presets[selected].cardDirty = true;
   savePresets();
   renderPresetList();
-  drawCurves();
+  if (lane === "pitch") drawPitchCurve();
+  else drawCurves();
   updateExport();
 }
 
@@ -566,7 +620,7 @@ function duplicateFactoryPreset() {
   }
 
   const source = presets[selected];
-  presets.push(preset(`${source.name} copy`, source.amp, source.pd));
+  presets.push(preset(`${source.name} copy`, source.amp, source.pd, null, false, source.pitch, source.pitchSource));
   selected = presets.length - 1;
   savePresets();
   render();
@@ -614,6 +668,55 @@ function drawCurves() {
   ctx.fillText(`${(totalSamples(presets[selected].amp) / SAMPLE_RATE).toFixed(2)}s / ${(viewSamples / SAMPLE_RATE).toFixed(0)}s`, w - 94, h - 16);
 }
 
+function drawPitchCurve() {
+  if (!el.pitchCanvas) return;
+  const ctx = el.pitchCanvas.getContext("2d");
+  const dpr = window.devicePixelRatio || 1;
+  const rect = el.pitchCanvas.getBoundingClientRect();
+  el.pitchCanvas.width = Math.max(640, Math.floor(rect.width * dpr));
+  el.pitchCanvas.height = Math.max(180, Math.floor(rect.height * dpr));
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const theme = getThemeColors();
+  const w = rect.width;
+  const h = rect.height;
+  const centerY = h / 2;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = theme.canvasBg;
+  ctx.fillRect(0, 0, w, h);
+
+  ctx.strokeStyle = theme.grid;
+  ctx.lineWidth = 1;
+  [0.25, 0.5, 0.75].forEach((ratio) => {
+    const y = h * ratio;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(w, y);
+    ctx.stroke();
+  });
+
+  ctx.strokeStyle = theme.pitchCenter;
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 6]);
+  ctx.beginPath();
+  ctx.moveTo(0, centerY);
+  ctx.lineTo(w, centerY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  const current = presets[selected];
+  const viewSamples = editorViewSamples();
+  drawLane(ctx, current.pitch, theme.pitch, w, h, viewSamples);
+  drawHandles(ctx, current.pitch, theme.pitch, w, h, viewSamples, true, theme);
+
+  ctx.fillStyle = theme.pitch;
+  ctx.font = "12px system-ui";
+  ctx.fillText("Pitch", 14, 22);
+  ctx.fillStyle = theme.muted;
+  ctx.fillText("center = no pitch offset", 64, 22);
+  ctx.fillText(`${(totalSamples(current.pitch) / SAMPLE_RATE).toFixed(2)}s / ${(viewSamples / SAMPLE_RATE).toFixed(0)}s`, w - 94, h - 16);
+}
+
 function drawHandles(ctx, stages, color, w, h, viewSamples, active, theme) {
   let x = 0;
   const points = [];
@@ -624,7 +727,11 @@ function drawHandles(ctx, stages, color, w, h, viewSamples, active, theme) {
   });
 
   points.forEach((point, index) => {
-    const pointColor = color === theme.amp ? theme.ampPoint : theme.pdPoint;
+    const pointColor = color === theme.amp
+      ? theme.ampPoint
+      : color === theme.pitch
+        ? theme.pitchPoint
+        : theme.pdPoint;
     ctx.fillStyle = pointColor;
     ctx.beginPath();
     ctx.arc(point.x, point.y, active ? 7 : 5, 0, Math.PI * 2);
@@ -653,8 +760,11 @@ function getThemeColors() {
     grid: styles.getPropertyValue("--line").trim() || "#242932",
     amp: styles.getPropertyValue("--graph-amp").trim() || styles.getPropertyValue("--amp").trim() || "#ffcc66",
     pd: styles.getPropertyValue("--graph-pd").trim() || styles.getPropertyValue("--pd").trim() || "#6ee7c8",
+    pitch: styles.getPropertyValue("--graph-pitch").trim() || "#b38cff",
     ampPoint: styles.getPropertyValue("--graph-amp-point").trim() || styles.getPropertyValue("--amp").trim() || "#ffcc66",
     pdPoint: styles.getPropertyValue("--graph-pd-point").trim() || styles.getPropertyValue("--pd").trim() || "#6ee7c8",
+    pitchPoint: styles.getPropertyValue("--graph-pitch-point").trim() || styles.getPropertyValue("--graph-pitch").trim() || "#d8c7ff",
+    pitchCenter: styles.getPropertyValue("--graph-pitch-center").trim() || styles.getPropertyValue("--muted").trim() || "#a5adba",
     muted: styles.getPropertyValue("--muted").trim() || "#a5adba",
     text: styles.getPropertyValue("--text").trim() || "#f4f0e8"
   };
@@ -691,7 +801,8 @@ function editorViewSamples() {
   const longest = Math.max(
     EDITOR_VIEW_SAMPLES,
     totalSamples(current.amp),
-    totalSamples(current.pd));
+    totalSamples(current.pd),
+    totalSamples(current.pitch));
   return Math.ceil(longest / SAMPLE_RATE) * SAMPLE_RATE;
 }
 
@@ -740,16 +851,18 @@ function playAudition(note, token) {
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
   const filter = audioCtx.createBiquadFilter();
+  const baseFrequency = midiToHz(note);
 
   osc.type = auditionOscType(el.waveSelect.value);
-  osc.frequency.value = midiToHz(note);
+  osc.frequency.value = baseFrequency;
   filter.type = "lowpass";
   filter.frequency.value = 220;
   gain.gain.value = 0;
 
-  const duration = scaledSamples(current.amp) / SAMPLE_RATE;
+  const duration = scaledSamples(longestAuditionLane(current)) / SAMPLE_RATE;
   scheduleEnvelope(gain.gain, current.amp, now, 0, 0.35);
   scheduleEnvelope(filter.frequency, current.pd, now, 220, 4200);
+  schedulePitchEnvelope(osc.frequency, current.pitch, now, baseFrequency);
 
   osc.connect(filter).connect(gain).connect(audioCtx.destination);
   osc.start(now);
@@ -782,6 +895,18 @@ function scheduleEnvelope(param, stages, startTime, base, depth) {
   });
 }
 
+function schedulePitchEnvelope(param, stages, startTime, baseFrequency) {
+  let t = startTime;
+  param.cancelScheduledValues(startTime);
+  param.setValueAtTime(baseFrequency, startTime);
+
+  stages.forEach((stage) => {
+    t += (stage.time * AUDITION_TIME_SCALE) / SAMPLE_RATE;
+    const semitoneOffset = ((stage.level - 2048) / 2047) * 24;
+    param.linearRampToValueAtTime(baseFrequency * Math.pow(2, semitoneOffset / 12), t);
+  });
+}
+
 function stopAudio() {
   auditionLoop = false;
   auditionToken++;
@@ -798,6 +923,11 @@ function stopAudio() {
 
 function scaledSamples(stages) {
   return totalSamples(stages) * AUDITION_TIME_SCALE;
+}
+
+function longestAuditionLane(current) {
+  return [current.amp, current.pd, current.pitch]
+    .sort((a, b) => totalSamples(b) - totalSamples(a))[0];
 }
 
 function midiToHz(note) {
@@ -1769,6 +1899,16 @@ function canvasPoint(event) {
   };
 }
 
+function pitchCanvasPoint(event) {
+  const rect = el.pitchCanvas.getBoundingClientRect();
+  return {
+    x: Math.max(0, Math.min(rect.width, event.clientX - rect.left)),
+    y: Math.max(0, Math.min(rect.height, event.clientY - rect.top)),
+    width: rect.width,
+    height: rect.height
+  };
+}
+
 function findDragTarget(point) {
   const current = presets[selected];
   let best = null;
@@ -1784,6 +1924,24 @@ function findDragTarget(point) {
     const distance = Math.hypot(point.x - x, point.y - y);
     if (!best || distance < best.distance) {
       best = { lane, index, distance };
+    }
+  });
+
+  return best && best.distance <= 28 ? best : null;
+}
+
+function findPitchDragTarget(point) {
+  const current = presets[selected];
+  let best = null;
+  const viewSamples = editorViewSamples();
+  let x = 0;
+
+  current.pitch.forEach((stage, index) => {
+    x = Math.min(point.width, x + (stage.time / viewSamples) * point.width);
+    const y = levelY(stage.level, point.height);
+    const distance = Math.hypot(point.x - x, point.y - y);
+    if (!best || distance < best.distance) {
+      best = { lane: "pitch", index, distance };
     }
   });
 
@@ -1812,6 +1970,31 @@ function updateDraggedStage(event) {
   renderPresetList();
   syncStageInputs(dragTarget.lane, dragTarget.index);
   drawCurves();
+  drawPitchCurve();
+  updateExport();
+}
+
+function updateDraggedPitchStage(event) {
+  if (!pitchDragTarget) return;
+  const point = pitchCanvasPoint(event);
+
+  if (selected < FACTORY_PRESET_COUNT) {
+    if (!duplicateFactoryPreset()) return;
+  }
+
+  const level = Math.round((1 - ((point.y - 18) / Math.max(1, point.height - 36))) * MAX_LEVEL);
+  const stages = presets[selected].pitch;
+  const stage = stages[pitchDragTarget.index];
+  const before = samplesBeforeStage(stages, pitchDragTarget.index);
+  const targetEnd = Math.round((point.x / Math.max(1, point.width)) * editorViewSamples());
+  const maxStageTime = Math.max(1, 192000 - before);
+
+  stage.level = clampInt(level, 0, MAX_LEVEL);
+  stage.time = clampInt(targetEnd - before, 1, maxStageTime);
+  savePresets();
+  renderPresetList();
+  syncStageInputs("pitch", pitchDragTarget.index);
+  drawPitchCurve();
   updateExport();
 }
 
@@ -2041,7 +2224,25 @@ el.canvas.addEventListener("pointercancel", () => {
   dragTarget = null;
 });
 
-window.addEventListener("resize", drawCurves);
+el.pitchCanvas.addEventListener("pointerdown", (event) => {
+  const target = findPitchDragTarget(pitchCanvasPoint(event));
+  if (!target) return;
+  pitchDragTarget = target;
+  el.pitchCanvas.setPointerCapture(event.pointerId);
+  updateDraggedPitchStage(event);
+});
+el.pitchCanvas.addEventListener("pointermove", updateDraggedPitchStage);
+el.pitchCanvas.addEventListener("pointerup", () => {
+  pitchDragTarget = null;
+});
+el.pitchCanvas.addEventListener("pointercancel", () => {
+  pitchDragTarget = null;
+});
+
+window.addEventListener("resize", () => {
+  drawCurves();
+  drawPitchCurve();
+});
 renderDeveloperLog();
 consumeImportedDraft();
 render();
