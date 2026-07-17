@@ -84,8 +84,9 @@ Current Import Lab features:
 - `Stop` stops the browser preview only. It does not send a stop command to the
   hardware.
 - `Bounce` is the reset preset because it shows the envelope shape clearly.
-- Hardware and MIDI gates hold the envelope before its final release stage;
-  Pulse In 2 falling edge or MIDI note-off starts the release.
+- Hardware and MIDI gates loop supported envelopes while held. Short triggers
+  complete naturally, and Pulse In 2 gate-off or MIDI note-off exits the loop
+  so the envelope can finish from its current point.
 
 Button quick reference:
 

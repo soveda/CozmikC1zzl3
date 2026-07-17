@@ -229,16 +229,19 @@ public:
 
             updateTuringClockState(false);
 
-            bool pulse2Trigger = PulseIn2RisingEdge();
+            bool pulse2GateHigh = PulseIn2();
+            bool pulse2Trigger = pulse2GateHigh && !pulse2GateWasHigh;
+            pulse2GateWasHigh = pulse2GateHigh;
+
             if (pulse2Trigger)
             {
                 if (envelopePreset != (uint8_t)EnvelopePreset::Off)
                 {
                     syncOscillators();
-                    triggerEnvelope(true);
+                    triggerEnvelope(true, true);
                 }
             }
-            else if (PulseIn2FallingEdge())
+            else if (pulse2EnvelopeHolding && !pulse2GateHigh)
             {
                 requestEnvelopeRelease();
             }
@@ -326,6 +329,10 @@ private:
     static constexpr uint8_t EnvelopePresetCount = 9;
     static constexpr uint8_t CustomEnvelopePreset = EnvelopePresetCount;
     static constexpr uint8_t CustomEnvelopeSlotCount = 8;
+    static constexpr uint8_t EnvelopeLoopStartStage = 2;
+    static constexpr uint8_t EnvelopeLoopEndStage = 5;
+    static constexpr uint16_t EnvelopeLoopLevelThreshold = 128;
+    static constexpr uint32_t EnvelopeLoopMinStageSamples = 960u;
     static constexpr uint32_t MinWebMidiEnvelopeSamples = 960u;
     static constexpr uint32_t MaxWebMidiStageSamples = 192000u;
     static constexpr uint32_t StartupSelectDelaySamples = 12000u;
@@ -568,7 +575,7 @@ private:
         phase += (uint32_t)phaseJitter;
     }
 
-    void triggerEnvelope(bool held = false)
+    void triggerEnvelope(bool held = false, bool heldByPulse = false)
     {
         if (envelopePreset == (uint8_t)EnvelopePreset::Off)
             return;
@@ -589,6 +596,7 @@ private:
         envelopeActive = true;
         envelopeHeld = held;
         envelopeReleaseRequested = !held;
+        pulse2EnvelopeHolding = heldByPulse;
     }
 
     void triggerTuringEnvelope()
@@ -603,6 +611,7 @@ private:
             return 0;
 
         const EnvelopeProgram& program = envelopeProgram();
+        bool loopEnabled = envelopeLoopEnabled(program);
 
         bool ampDone = updateEnvelopeRunner(
             program.amp,
@@ -610,7 +619,9 @@ private:
             ampEnvelopeSample,
             ampEnvelopeLevel,
             ampEnvelopeStartLevel,
-            envelopeReleaseRequested);
+            envelopeHeld,
+            envelopeReleaseRequested,
+            loopEnabled);
 
         bool pdDone = updateEnvelopeRunner(
             program.pd,
@@ -618,13 +629,16 @@ private:
             pdEnvelopeSample,
             pdEnvelopeLevel,
             pdEnvelopeStartLevel,
-            envelopeReleaseRequested);
+            envelopeHeld,
+            envelopeReleaseRequested,
+            loopEnabled);
 
         if (ampDone && pdDone)
         {
             envelopeActive = false;
             envelopeHeld = false;
             envelopeReleaseRequested = false;
+            pulse2EnvelopeHolding = false;
             if (midiNoteReleased)
                 midiNoteActive = false;
         }
@@ -1115,11 +1129,11 @@ private:
         }};
 
         static const EnvelopeProgram brass = {{
-            {4095, 4800}, {3400, 30000}, {0, 18000}, {0, 1},
-            {0, 1}, {0, 1}, {0, 1}, {0, 1}
+            {4095, 4800}, {3400, 30000}, {3200, 18000}, {3000, 18000},
+            {3300, 18000}, {3100, 18000}, {1600, 18000}, {0, 24000}
         }, {
-            {1792, 4800}, {900, 30000}, {0, 18000}, {0, 1},
-            {0, 1}, {0, 1}, {0, 1}, {0, 1}
+            {1792, 4800}, {900, 30000}, {1200, 18000}, {1000, 18000},
+            {1300, 18000}, {900, 18000}, {500, 18000}, {0, 24000}
         }};
 
         static const EnvelopeProgram strings = {{
@@ -1183,13 +1197,15 @@ private:
         uint32_t& sample,
         int32_t& level,
         int32_t& startLevel,
-        bool releaseRequested)
+        bool held,
+        bool releaseRequested,
+        bool loopEnabled)
     {
         if (stage >= 8)
             return true;
 
-        if (stage == 7 && !releaseRequested)
-            return false;
+        if (loopEnabled && stage > EnvelopeLoopEndStage && held && !releaseRequested)
+            stage = EnvelopeLoopStartStage;
 
         uint32_t time = stages[stage].time;
         if (time == 0)
@@ -1205,32 +1221,36 @@ private:
             stage++;
             sample = 0;
             startLevel = level;
+
+            if (loopEnabled && stage > EnvelopeLoopEndStage && held && !releaseRequested)
+                stage = EnvelopeLoopStartStage;
         }
 
         return stage >= 8;
+    }
+
+    bool envelopeLoopEnabled(const EnvelopeProgram& program)
+    {
+        return laneHasLoopBody(program.amp) || laneHasLoopBody(program.pd);
+    }
+
+    bool laneHasLoopBody(const EnvelopeStage* stages)
+    {
+        for (uint32_t i = EnvelopeLoopStartStage; i <= EnvelopeLoopEndStage; ++i)
+        {
+            if (stages[i].level >= EnvelopeLoopLevelThreshold &&
+                stages[i].time >= EnvelopeLoopMinStageSamples)
+                return true;
+        }
+
+        return false;
     }
 
     void requestEnvelopeRelease()
     {
         envelopeHeld = false;
         envelopeReleaseRequested = true;
-
-        if (!envelopeActive)
-            return;
-
-        if (ampEnvelopeStage < 7)
-        {
-            ampEnvelopeStage = 7;
-            ampEnvelopeSample = 0;
-            ampEnvelopeStartLevel = ampEnvelopeLevel;
-        }
-
-        if (pdEnvelopeStage < 7)
-        {
-            pdEnvelopeStage = 7;
-            pdEnvelopeSample = 0;
-            pdEnvelopeStartLevel = pdEnvelopeLevel;
-        }
+        pulse2EnvelopeHolding = false;
     }
 
     inline int32_t morphWave(uint32_t phase, int32_t wave)
@@ -2228,6 +2248,8 @@ private:
     bool envelopeActive = false;
     bool envelopeHeld = false;
     bool envelopeReleaseRequested = true;
+    bool pulse2GateWasHigh = false;
+    bool pulse2EnvelopeHolding = false;
     uint8_t envelopePreset = 0;
     uint32_t startupSelectSamples = 0;
     uint32_t envelopeSelectHoldSamples = 0;

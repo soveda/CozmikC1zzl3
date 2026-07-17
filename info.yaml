@@ -1,9 +1,9 @@
 draft: true
 Name: Cosmik C1ZZL3
-Description: Stable phase-distortion synthesiser and Turing machine firmware with gate-held Web MIDI envelopes, CZ Import Lab handoff, PD, detune, eight waveform families, USB MIDI device/host operation, and optional Turing MIDI output.
+Description: Stable phase-distortion synthesiser and Turing machine firmware with gate-held looping Web MIDI envelopes, CZ Import Lab handoff, PD, detune, eight waveform families, USB MIDI device/host operation, and optional Turing MIDI output.
 Language: C++ (Pico SDK)
 Creator: Adrian Vos
-Version: 1.2
+Version: 1.3
 Status: Released
 License: MIT
 Editor: https://soveda.github.io/CozmikC1zzl3/web-midi/editor/
@@ -18,7 +18,7 @@ tags:
 manual: |
   Phase-distortion synth card with Turing machine mode, USB MIDI, browser Envelope Lab, and C1ZZL3 Import Lab handoff.
   Switch middle is PD synth mode (Main = pitch, X = phase distortion, Y = waveform morph).
-  Pulse In 2 and MIDI note-on hold the selected envelope until gate/note-off starts the release stage.
+  Pulse In 2 and MIDI note-on loop supported envelopes while held; gate/note-off lets the envelope complete naturally.
   Hold switch down from middle for performance edit (detune, ring modulation, noise/grit) and save.
   Switch up is Turing mode (Main = mutation, X = length, Y = clock speed).
   Turing CV and pulse outputs continue running in synth mode.
@@ -40,7 +40,7 @@ panel:
       description: External Turing clock in switch-up mode
     - id: PulseIn2
       name: Envelope Trigger
-      description: Triggers and holds the selected envelope in synth mode; release starts on gate-off
+      description: Triggers the selected envelope in synth mode; held gates loop supported envelopes and gate-off lets them complete
   outputs:
     - id: AudioOut1
       name: Oscillator 1 / Turing Voice A

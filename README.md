@@ -24,22 +24,22 @@ uf2/C1ZZL3.uf2
 Checksum:
 
 ```text
-5472a7c1f999c060cf90ae10ce715120de6b7d6697795a2fce80511384bb0231
+254fa4e525b8c66201a4bfe944b4cdcd2909a61caff440e383ef23d9b3e1890a
 ```
 
-This is hardware-tested production release 1.2, promoted on 2026-07-17.
+This is hardware-tested production release 1.3, promoted on 2026-07-17.
 
-The previous production release 1.1 is archived as a fallback at:
+The previous production release 1.2 is archived as a fallback at:
 
 ```text
-uf2/archive/production-1.1-pre-gate-sustain-20260717/C1ZZL3_1.1_pre_gate_sustain.uf2
+uf2/archive/production-1.2-pre-pulse-source-release-20260717/C1ZZL3_1.2_pre_pulse_source_release.uf2
 ```
 
-Release 1.2 works with Envelope Lab and C1ZZL3 Import Lab and includes Web
+Release 1.3 works with Envelope Lab and C1ZZL3 Import Lab and includes Web
 MIDI PD, detune, eight waveform families, card-to-editor envelope readback,
-browser CZ patch import handoff, gate-held envelope sustain/release, corrected
-CZ DCW-to-PD and DCA-to-amplitude import mapping, and the audio smoothing pass
-for high-PD tones.
+browser CZ patch import handoff, gate-held envelope looping with natural
+completion on gate/note release, corrected CZ DCW-to-PD and DCA-to-amplitude
+import mapping, and the audio smoothing pass for high-PD tones.
 
 Previous UF2s are archived in:
 
@@ -214,9 +214,11 @@ Envelope behaviour:
 
 - Pulse In 2 and MIDI note-on trigger the selected envelope and sync the
   oscillators.
-- While the gate or MIDI note is held, the envelope runs through stages 1-7 and
-  holds before the final release stage.
-- Pulse In 2 falling edge or MIDI note-off starts the final release stage.
+- While the gate or MIDI note is held, loop-capable envelopes cycle their middle
+  stages.
+- A short trigger runs the envelope through to completion.
+- Pulse In 2 gate-off or MIDI note-off exits the loop and lets the envelope
+  complete naturally from its current point.
 - Turing-triggered envelopes continue to run through without waiting for a gate
   release.
 

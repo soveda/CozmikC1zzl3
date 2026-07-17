@@ -23,8 +23,9 @@ Put the switch in the middle.
 - `Audio/CV In 1` adds pitch at 1V/oct.
 - `CV In 1` adds phase distortion.
 - `CV In 2` adds wave control.
-- `Pulse In 2` triggers the selected envelope, holds it while the gate is high,
-  starts the release when the gate falls, and syncs the oscillators.
+- `Pulse In 2` triggers the selected envelope, loops supported envelopes while
+  the gate is high, exits the loop when the gate falls, and syncs the
+  oscillators.
 
 The Turing CV and pulse outputs continue running in synth mode, so they can be
 used while playing the synth.
@@ -80,7 +81,8 @@ Physical knobs use pickup after MIDI changes, so values do not jump until the
 knob is swept through the current setting.
 
 MIDI note-on behaves like a held gate. It triggers the selected envelope and
-keeps it at its hold point until MIDI note-off starts the release stage.
+keeps loop-capable envelopes cycling until MIDI note-off lets the envelope
+complete naturally.
 
 ## Web MIDI Editor
 
