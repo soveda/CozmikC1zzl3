@@ -281,17 +281,23 @@ function buildDraftPreset(decodedBytes, patchName) {
     .trim() || "Imported CZ patch";
 
   const wave = classifyWave(decodedBytes);
-  const amp = buildStagesFromBytes(decodedBytes, 0, 0, 140, 14000);
-  const pd = buildStagesFromBytes(decodedBytes, 16, 0, 120, 18000);
-  const detune = clamp(Math.round((decodedBytes[32] ?? 128) / 255 * 4095), 0, 4095);
-  const ring = clamp(Math.round((decodedBytes[33] ?? 0) / 255 * 1200), 0, 4095);
-  const noise = clamp(Math.round((decodedBytes[34] ?? 0) / 255 * 700), 0, 4095);
+  const pitchEnvelope = buildStagesFromBytes(decodedBytes, 0, 0, 120, 18000);
+  const dcwEnvelope = buildStagesFromBytes(decodedBytes, 16, 0, 120, 18000);
+  const ampEnvelope = buildStagesFromBytes(decodedBytes, 32, 0, 140, 14000);
+  const detune = clamp(Math.round((decodedBytes[48] ?? 128) / 255 * 4095), 0, 4095);
+  const ring = clamp(Math.round((decodedBytes[49] ?? 0) / 255 * 1200), 0, 4095);
+  const noise = clamp(Math.round((decodedBytes[50] ?? 0) / 255 * 700), 0, 4095);
 
   return {
     name: `${baseName} draft`,
     wave,
-    amp,
-    pd,
+    amp: ampEnvelope,
+    pd: dcwEnvelope,
+    sourceEnvelopes: {
+      pitch: pitchEnvelope,
+      dcw: dcwEnvelope,
+      amp: ampEnvelope
+    },
     performance: { detune, ring, noise },
     confidence: "medium"
   };
@@ -316,7 +322,7 @@ function renderDraft(draft) {
   }
 
   el.decodedPatchBox.textContent = `${draft.name} decoded and unpacked into a draft preset.`;
-  el.mappedDraftBox.textContent = `8-wave family ${draft.wave.label}, translated amplitude envelope, and translated phase distortion envelope are ready for review.`;
+  el.mappedDraftBox.textContent = `8-wave family ${draft.wave.label}, CZ DCW envelope -> C1ZZL3 phase distortion, and CZ amplitude envelope -> C1ZZL3 amplitude are ready for review. Pitch envelope is decoded but not assigned yet.`;
   el.confidenceBox.textContent = draft.confidence;
   el.supportedOutputBox.textContent = "Envelope Lab draft handoff";
   el.draftNameBox.textContent = `${draft.name} (${draft.confidence} confidence)`;

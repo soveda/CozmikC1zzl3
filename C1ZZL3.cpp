@@ -235,8 +235,12 @@ public:
                 if (envelopePreset != (uint8_t)EnvelopePreset::Off)
                 {
                     syncOscillators();
-                    triggerEnvelope();
+                    triggerEnvelope(true);
                 }
+            }
+            else if (PulseIn2FallingEdge())
+            {
+                requestEnvelopeRelease();
             }
 
             outputSynthVoice(freq, pd, wave, ring, noiseAmt);
@@ -564,7 +568,7 @@ private:
         phase += (uint32_t)phaseJitter;
     }
 
-    void triggerEnvelope()
+    void triggerEnvelope(bool held = false)
     {
         if (envelopePreset == (uint8_t)EnvelopePreset::Off)
             return;
@@ -583,6 +587,8 @@ private:
         pdEnvelopeStartLevel = pdStartLevel;
         pdEnvelopeLevel = pdStartLevel;
         envelopeActive = true;
+        envelopeHeld = held;
+        envelopeReleaseRequested = !held;
     }
 
     void triggerTuringEnvelope()
@@ -603,18 +609,22 @@ private:
             ampEnvelopeStage,
             ampEnvelopeSample,
             ampEnvelopeLevel,
-            ampEnvelopeStartLevel);
+            ampEnvelopeStartLevel,
+            envelopeReleaseRequested);
 
         bool pdDone = updateEnvelopeRunner(
             program.pd,
             pdEnvelopeStage,
             pdEnvelopeSample,
             pdEnvelopeLevel,
-            pdEnvelopeStartLevel);
+            pdEnvelopeStartLevel,
+            envelopeReleaseRequested);
 
         if (ampDone && pdDone)
         {
             envelopeActive = false;
+            envelopeHeld = false;
+            envelopeReleaseRequested = false;
             if (midiNoteReleased)
                 midiNoteActive = false;
         }
@@ -676,7 +686,10 @@ private:
                 if (envelopePreset == (uint8_t)EnvelopePreset::Off || !envelopeActive)
                     midiNoteActive = false;
                 else
+                {
                     midiNoteReleased = true;
+                    requestEnvelopeRelease();
+                }
             }
             return;
         }
@@ -742,7 +755,7 @@ private:
         if (envelopePreset != (uint8_t)EnvelopePreset::Off)
         {
             syncOscillators();
-            triggerEnvelope();
+            triggerEnvelope(true);
         }
     }
 
@@ -1169,10 +1182,14 @@ private:
         uint8_t& stage,
         uint32_t& sample,
         int32_t& level,
-        int32_t& startLevel)
+        int32_t& startLevel,
+        bool releaseRequested)
     {
         if (stage >= 8)
             return true;
+
+        if (stage == 7 && !releaseRequested)
+            return false;
 
         uint32_t time = stages[stage].time;
         if (time == 0)
@@ -1191,6 +1208,29 @@ private:
         }
 
         return stage >= 8;
+    }
+
+    void requestEnvelopeRelease()
+    {
+        envelopeHeld = false;
+        envelopeReleaseRequested = true;
+
+        if (!envelopeActive)
+            return;
+
+        if (ampEnvelopeStage < 7)
+        {
+            ampEnvelopeStage = 7;
+            ampEnvelopeSample = 0;
+            ampEnvelopeStartLevel = ampEnvelopeLevel;
+        }
+
+        if (pdEnvelopeStage < 7)
+        {
+            pdEnvelopeStage = 7;
+            pdEnvelopeSample = 0;
+            pdEnvelopeStartLevel = pdEnvelopeLevel;
+        }
     }
 
     inline int32_t morphWave(uint32_t phase, int32_t wave)
@@ -2186,6 +2226,8 @@ private:
     uint8_t ampEnvelopeStage = 8;
     uint8_t pdEnvelopeStage = 8;
     bool envelopeActive = false;
+    bool envelopeHeld = false;
+    bool envelopeReleaseRequested = true;
     uint8_t envelopePreset = 0;
     uint32_t startupSelectSamples = 0;
     uint32_t envelopeSelectHoldSamples = 0;
