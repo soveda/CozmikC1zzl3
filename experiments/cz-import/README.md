@@ -63,7 +63,20 @@ the main envelope editor page.
 - Light and dark mode toggle matching Envelope Lab.
 - Drag-and-drop or file-picker import.
 - Validation, summary, decoded readout, warnings, and draft mapping panels.
+- CZ frame awareness for common `F0 44 00 00 7n 20 ... F7` patch-send
+  SysEx files, including command, location, channel, and selected data offset.
 - `Open In Envelope Lab` handoff for final editing and card send.
+
+## Decoder Accuracy Notes
+
+The importer now checks for the common Casio CZ family header and patch-send
+command before creating a draft. It also reports the data offset it selected,
+because CZ files can include command/location bytes before the nibble-packed
+patch data.
+
+This is still a draft translator rather than a verified CZ librarian. The next
+accuracy step is to compare decoded named parameters against known-good CZ
+software such as Patch Base, CZSYSEXY, Arturia CZ V, or other reference editors.
 
 ## Editor Handoff
 
