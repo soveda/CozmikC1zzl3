@@ -24,20 +24,22 @@ uf2/C1ZZL3.uf2
 Checksum:
 
 ```text
-12c356ad75d6d25fccab5060dbb057f1e3ed86169c2429a798c66f835825ed61
+5472a7c1f999c060cf90ae10ce715120de6b7d6697795a2fce80511384bb0231
 ```
 
-This is hardware-tested production release 1.1, promoted on 2026-07-06.
+This is hardware-tested production release 1.2, promoted on 2026-07-17.
 
-The previous production release 1.0 is archived at:
+The previous production release 1.1 is archived as a fallback at:
 
 ```text
-uf2/archive/production-1.0-20260706/C1ZZL3_1.0_production.uf2
+uf2/archive/production-1.1-pre-gate-sustain-20260717/C1ZZL3_1.1_pre_gate_sustain.uf2
 ```
 
-Release 1.1 works with Envelope Lab and C1ZZL3 Import Lab and includes Web
+Release 1.2 works with Envelope Lab and C1ZZL3 Import Lab and includes Web
 MIDI PD, detune, eight waveform families, card-to-editor envelope readback,
-and browser CZ patch import handoff.
+browser CZ patch import handoff, gate-held envelope sustain/release, corrected
+CZ DCW-to-PD and DCA-to-amplitude import mapping, and the audio smoothing pass
+for high-PD tones.
 
 Previous UF2s are archived in:
 
@@ -58,7 +60,7 @@ archive/
 - Web MIDI envelope editor.
 - USB MIDI device mode for DAW/browser use.
 - USB MIDI host mode for class-compliant controllers.
-- MIDI notes with envelope triggering.
+- MIDI notes with gate-held envelope sustain/release.
 - MIDI CC control with knob pickup handoff.
 - Turing machine audio, CV, pulse, and optional MIDI note output.
 - Turing CV and pulse outputs continue running in synth mode.
@@ -74,7 +76,7 @@ Switch middle: synth mode.
 - Y: waveform
 - `CV In 1`: phase-distortion modulation
 - `CV In 2`: waveform modulation
-- `Pulse In 2`: envelope trigger and oscillator sync
+- `Pulse In 2`: gate-held envelope trigger/release and oscillator sync
 
 Switch down from middle: performance edit and save.
 
@@ -158,6 +160,11 @@ Current Import Lab features:
 - Larger `C1ZZL3 Import Lab` header and a clearer guided import workflow.
 - Drag-and-drop or file-picker import for Casio CZ `.syx` files.
 - Browser-side validation, patch summary, decoded data, and draft mapping.
+- CZ frame awareness for common patch-send SysEx files, including command,
+  location, channel, selected data offset, and payload candidates.
+- Correct first-pass envelope assignment: CZ DCW maps to C1ZZL3 phase
+  distortion, CZ DCA maps to C1ZZL3 amplitude, and CZ pitch is decoded but not
+  assigned.
 - Draft handoff into Envelope Lab in a new tab for final editing and card send.
 - Separate import page so CZ translation and envelope editing stay distinct.
 
@@ -202,6 +209,16 @@ local drafts. Factory presets are not overwritten.
 Custom presets are labelled `Local only`, `Saved - slot N`, or `Changed - slot N`.
 Envelope readback confirms which custom slots are occupied and verifies saves and
 deletions when supported by the experimental firmware.
+
+Envelope behaviour:
+
+- Pulse In 2 and MIDI note-on trigger the selected envelope and sync the
+  oscillators.
+- While the gate or MIDI note is held, the envelope runs through stages 1-7 and
+  holds before the final release stage.
+- Pulse In 2 falling edge or MIDI note-off starts the final release stage.
+- Turing-triggered envelopes continue to run through without waiting for a gate
+  release.
 
 ## Build
 

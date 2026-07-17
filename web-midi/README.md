@@ -62,6 +62,10 @@ Current Import Lab features:
 - Light and dark mode toggle matching Envelope Lab.
 - Guided import layout with validation, summary, warnings, and mapped draft panels.
 - Drag-and-drop or file-picker import for Casio CZ `.syx` files.
+- CZ frame awareness for common patch-send SysEx files.
+- Correct first-pass envelope assignment: CZ DCW maps to C1ZZL3 phase
+  distortion, CZ DCA maps to C1ZZL3 amplitude, and CZ pitch is decoded but not
+  assigned.
 - `Open In Envelope Lab` handoff in a new tab for final editing and card send.
 
 ## How To Use The Editor
@@ -80,6 +84,8 @@ Current Import Lab features:
 - `Stop` stops the browser preview only. It does not send a stop command to the
   hardware.
 - `Bounce` is the reset preset because it shows the envelope shape clearly.
+- Hardware and MIDI gates hold the envelope before its final release stage;
+  Pulse In 2 falling edge or MIDI note-off starts the release.
 
 Button quick reference:
 
