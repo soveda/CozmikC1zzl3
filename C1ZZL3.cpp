@@ -331,6 +331,9 @@ private:
     static constexpr int32_t OutputLowpassAlphaQ12 = 2008; // ~5.2 kHz at 48 kHz.
     static constexpr int32_t OutputHighpassAlphaQ12 = 4075; // 40 Hz at 48 kHz.
     static constexpr int32_t PdCompensationFloorQ12 = 3000; // Keep high-PD tones present but less inflated.
+    static constexpr int32_t HighPitchSofteningStart = 28000000;
+    static constexpr int32_t HighPitchSofteningRange = 42000000;
+    static constexpr int32_t HighPitchSofteningMaxQ12 = 1200;
     static constexpr uint32_t SaveFlashOffset =
         (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE) &
         ~(FLASH_SECTOR_SIZE - 1u);
@@ -539,6 +542,7 @@ private:
 
         int32_t sine = getSine(renderPhase);
         int32_t target = morphWave(renderPhase, wave);
+        target = softenHighPitchTarget(sine, target, freq, pdCurve);
 
         return mix(sine, target, pdCurve);
     }
@@ -2119,6 +2123,26 @@ private:
         int32_t pdCurve = responseCurve(pd);
         int32_t reduction = (pdCurve * (4095 - PdCompensationFloorQ12)) >> 12;
         return 4095 - reduction;
+    }
+
+    int32_t softenHighPitchTarget(
+        int32_t sine,
+        int32_t target,
+        int32_t freq,
+        int32_t pdCurve)
+    {
+        int32_t pitchAmount = freq - HighPitchSofteningStart;
+        if (pitchAmount <= 0 || pdCurve <= 0)
+            return target;
+
+        if (pitchAmount > HighPitchSofteningRange)
+            pitchAmount = HighPitchSofteningRange;
+
+        int32_t pitchCurve = (pitchAmount << 12) / HighPitchSofteningRange;
+        int32_t soften =
+            (((pitchCurve * pdCurve) >> 12) * HighPitchSofteningMaxQ12) >> 12;
+
+        return mix(target, sine, soften);
     }
 
     uint32_t smoothStep12(uint32_t x)
