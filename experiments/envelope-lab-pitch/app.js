@@ -19,7 +19,7 @@ const SYSEX_COMMAND_REQUEST_ENVELOPE_SLOTS = 0x08;
 const SYSEX_COMMAND_ENVELOPE_SLOTS_RESPONSE = 0x09;
 const SYSEX_COMMAND_REQUEST_ENVELOPE = 0x0a;
 const SYSEX_COMMAND_ENVELOPE_RESPONSE = 0x0b;
-const ENVELOPE_PROTOCOL_VERSION = 1;
+const ENVELOPE_PROTOCOL_VERSION = 2;
 
 const factoryPresets = [
   preset("Off", fill(0, 1), fill(0, 1)),
@@ -1421,6 +1421,7 @@ function buildSysex(command) {
   const payload = [slot & 0x7f, ...nameBytes];
   appendStages(payload, presets[selected].amp);
   appendStages(payload, presets[selected].pd);
+  appendStages(payload, presets[selected].pitch);
   return [0xf0, SYSEX_MANUFACTURER, ...ensureArray(SYSEX_ID, "SYSEX_ID"), command, ...ensureArray(payload, "payload"), 0xf7];
 }
 
@@ -1541,7 +1542,9 @@ function stagesMatch(a, b) {
 }
 
 function envelopesMatch(a, b) {
-  return stagesMatch(a.amp, b.amp) && stagesMatch(a.pd, b.pd);
+  return stagesMatch(a.amp, b.amp) &&
+    stagesMatch(a.pd, b.pd) &&
+    stagesMatch(normalizePitchStages(a.pitch), normalizePitchStages(b.pitch));
 }
 
 function markCardSlotLocal(slot) {
@@ -1581,6 +1584,7 @@ function reconcileCardEnvelopes(mask, cardEnvelopes) {
       } else {
         existing.amp = normalizeStages(cardEnvelope.amp);
         existing.pd = normalizeStages(cardEnvelope.pd);
+        existing.pitch = normalizePitchStages(cardEnvelope.pitch);
         existing.cardDirty = false;
         return;
       }
@@ -1590,7 +1594,7 @@ function reconcileCardEnvelopes(mask, cardEnvelopes) {
       skipped++;
       return;
     }
-    presets.push(preset(`Card Envelope ${slot + 1}`, cardEnvelope.amp, cardEnvelope.pd, slot, false));
+    presets.push(preset(`Card Envelope ${slot + 1}`, cardEnvelope.amp, cardEnvelope.pd, slot, false, cardEnvelope.pitch));
   });
 
   savePresets();
@@ -1729,7 +1733,7 @@ async function requestCardEnvelopes(reason = "manual", slot = null, expectedEnve
 function handleEnvelopeSlotsResponse(data) {
   if (!envelopeReadSession || data.length !== 11) return;
   const version = data[7] & 0x7f;
-  if (version !== ENVELOPE_PROTOCOL_VERSION) {
+  if (version < 1 || version > ENVELOPE_PROTOCOL_VERSION) {
     clearEnvelopeReadTimer();
     envelopeReadSession = null;
     envelopeReadSupported = false;
@@ -1749,7 +1753,7 @@ function handleEnvelopeSlotsResponse(data) {
 }
 
 function handleEnvelopeResponse(data) {
-  if (!envelopeReadSession || data.length !== 89) return;
+  if (!envelopeReadSession || (data.length !== 89 && data.length !== 129)) return;
   const slot = data[7] & 0x07;
   if (slot !== envelopeReadSession.waitingForSlot) return;
 
@@ -1762,7 +1766,10 @@ function handleEnvelopeResponse(data) {
     offset += 5;
     return stage;
   });
-  envelopeReadSession.cardEnvelopes.set(slot, { amp: readStages(), pd: readStages() });
+  const amp = readStages();
+  const pd = readStages();
+  const pitch = data.length === 129 ? readStages() : normalizePitchStages(null);
+  envelopeReadSession.cardEnvelopes.set(slot, { amp, pd, pitch });
   envelopeReadSession.pendingSlots.shift();
   envelopeReadSession.waitingForSlot = null;
   clearEnvelopeReadTimer();

@@ -4,10 +4,11 @@ This folder is a separate firmware experiment.
 
 ## Status
 
-This is stable experimental release 1.1. Its settings, envelope
-readback, save/delete verification, hardware pickup, waveform selection, and
-restart behaviour have been hardware-tested with Envelope Lab and CZ Import.
-The main production C1ZZL3 firmware remains unchanged.
+This is an unpromoted pitch-envelope test build based on stable experimental
+release 1.1. Its inherited settings, envelope readback, save/delete
+verification, hardware pickup, waveform selection, and restart behaviour were
+hardware-tested with Envelope Lab and CZ Import before the pitch-envelope
+experiment was added. The main production C1ZZL3 firmware remains unchanged.
 
 Current UF2:
 
@@ -27,6 +28,7 @@ performance settings protocol for testing:
 - PD amount
 - oscillator 2 detune
 - waveform amount
+- experimental pitch-envelope send, readback, save, and playback
 
 ## What changed
 
@@ -37,8 +39,10 @@ performance settings protocol for testing:
   overwrite remotely received PD, detune, waveform, ring, or noise values.
 - The eight waveform families use compressed transition regions.
 - Envelope Lab can read the occupied custom-slot mask and retrieve saved
-  amplitude and phase-distortion envelopes one slot at a time.
+  amplitude, phase-distortion, and pitch envelopes one slot at a time.
 - Envelope saves and deletions can be verified by browser readback.
+- The pitch-envelope protocol is version 2. Legacy two-lane envelope payloads
+  are accepted and treated as pitch-neutral.
 
 ## Compatibility
 
@@ -46,6 +50,10 @@ performance settings protocol for testing:
 - Older Web MIDI clients can still use the shorter settings payload on this
   experimental firmware.
 - Newer clients can send and read the extended payload.
+- Older envelope clients can still send two-lane amplitude/PD envelopes; pitch
+  remains centred when they do.
+- Pitch-envelope editing requires the experimental Envelope Lab in
+  `experiments/envelope-lab-pitch/`.
 
 ## Build
 

@@ -84,6 +84,10 @@ function renderThemeMode() {
 }
 
 function getEditorUrl() {
+  const path = window.location.pathname;
+  const isExperimentalImportLab = path.includes("/experiments/envelope-lab-pitch/import-lab/");
+  if (isExperimentalImportLab) return LOCAL_EDITOR_URL;
+
   const host = window.location.hostname;
   const isLocalDev = host === "localhost" || host === "127.0.0.1" || host === "::1";
   return isLocalDev ? LOCAL_EDITOR_URL : HOSTED_EDITOR_URL;
