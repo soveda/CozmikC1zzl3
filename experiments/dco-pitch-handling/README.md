@@ -19,6 +19,8 @@ visible and lets the user choose how the single C1ZZL3 pitch lane is generated:
 - No firmware protocol changes.
 - Uses the current production UF2.
 - The card still receives one pitch envelope.
+- Beta browser presets use separate storage from the production Envelope Lab, so
+  stale production drafts are not loaded as beta card envelopes.
 - The imported draft preserves all pitch alternatives in browser handoff data
   so we can compare mappings before deciding whether separate oscillator pitch
   envelopes are worth implementing in firmware.

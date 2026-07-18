@@ -1641,10 +1641,14 @@ function markCardSlotLocal(slot) {
 }
 
 function removeCardSlotDraft(slot) {
-  const previousSelected = selected;
+  const removedSelected = presets[selected]?.slot === slot;
   presets = presets.filter((item, index) =>
     index < FACTORY_PRESET_COUNT || item.slot !== slot);
-  selected = Math.min(previousSelected, presets.length - 1);
+  if (removedSelected) {
+    selected = Math.min(3, presets.length - 1);
+  } else {
+    selected = Math.min(selected, presets.length - 1);
+  }
   if (selected < 0) selected = 0;
 }
 
@@ -1835,7 +1839,7 @@ function finishEnvelopeRead() {
   if (session.reason === "delete") {
     const deleted = (session.mask & (1 << session.slot)) === 0;
     setStatus(deleted
-      ? `Verified card slot ${session.slot + 1} is empty. The browser draft was retained as Local only.`
+      ? `Verified card slot ${session.slot + 1} is empty. Any matching beta card-slot draft was removed.`
       : `Card slot ${session.slot + 1} still reports a saved envelope.`);
     return;
   }
@@ -1844,7 +1848,14 @@ function finishEnvelopeRead() {
   if (result.preservedChanges) notes.push(`${result.preservedChanges} changed local draft${result.preservedChanges === 1 ? " was" : "s were"} preserved`);
   if (result.replacedLocal) notes.push(`${result.replacedLocal} local draft${result.replacedLocal === 1 ? " was" : "s were"} replaced to show card data`);
   if (result.skipped) notes.push(`${result.skipped} card envelope${result.skipped === 1 ? " was" : "s were"} not added because the browser list is full`);
-  setStatus(`Loaded ${count} envelope${count === 1 ? "" : "s"} from the card.${notes.length ? ` ${notes.join("; ")}.` : ""}`);
+  const emptyNote = count === 0
+    ? " No saved card envelopes were reported; any remaining presets are beta browser drafts."
+    : "";
+  if (count === 0 && session.reason === "manual") {
+    selected = Math.min(3, presets.length - 1);
+    render();
+  }
+  setStatus(`Loaded ${count} envelope${count === 1 ? "" : "s"} from the card.${emptyNote}${notes.length ? ` ${notes.join("; ")}.` : ""}`);
 }
 
 async function requestCardEnvelopes(reason = "manual", slot = null, expectedEnvelope = null) {
