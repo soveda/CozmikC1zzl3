@@ -63,9 +63,8 @@ Current Import Lab features:
 - Guided import layout with validation, summary, warnings, and mapped draft panels.
 - Drag-and-drop or file-picker import for Casio CZ `.syx` files.
 - CZ frame awareness for common patch-send SysEx files.
-- Correct first-pass envelope assignment: CZ DCW maps to C1ZZL3 phase
-  distortion, CZ DCA maps to C1ZZL3 amplitude, and CZ pitch is decoded but not
-  assigned.
+- CZ envelope assignment: CZ DCW maps to C1ZZL3 phase distortion, CZ DCA maps
+  to C1ZZL3 amplitude, and CZ DCO pitch envelopes map to the pitch lane.
 - `Open In Envelope Lab` handoff in a new tab for final editing and card send.
 
 ## How To Use The Editor
@@ -74,7 +73,8 @@ Current Import Lab features:
 - Factory presets are protected. The first edit creates a custom copy.
 - Use the `Amplitude` and `Phase Distortion` buttons to choose which lane you
   are editing.
-- Drag points on the graph to change level and timing together.
+- Use the Pitch Envelope graph below the main graph to adjust pitch movement.
+- Drag points on the graphs to change level and timing together.
 - Only the active lane can be moved.
 - If several stages land on the same point, only the highest stage number is
   shown on the graph.
@@ -101,7 +101,7 @@ Button quick reference:
 - `Reset Preset`: restore the selected preset to the `Bounce` preset shape.
 
 Factory presets are protected. Custom envelope names are stored by the browser;
-the card stores the envelope shapes.
+the card stores the amplitude, phase-distortion, and pitch envelope shapes.
 
 Turing CV range defaults to 2 octaves. It can also be changed live with MIDI
 CC24 on the selected MIDI input channel. Turing MIDI output on/off and output

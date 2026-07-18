@@ -1,9 +1,9 @@
-draft: true
+draft: false
 Name: Cosmik C1ZZL3
-Description: Stable phase-distortion synthesiser and Turing machine firmware with gate-held looping Web MIDI envelopes, CZ Import Lab handoff, PD, detune, eight waveform families, USB MIDI device/host operation, and optional Turing MIDI output.
+Description: Stable phase-distortion synthesiser and Turing machine firmware with gate-held looping Web MIDI amplitude, phase-distortion, and pitch envelopes, CZ Import Lab handoff, PD, detune, eight waveform families, USB MIDI device/host operation, and optional Turing MIDI output.
 Language: C++ (Pico SDK)
 Creator: Adrian Vos
-Version: 1.3
+Version: 1.4
 Status: Released
 License: MIT
 Editor: https://soveda.github.io/CozmikC1zzl3/web-midi/editor/
@@ -16,9 +16,9 @@ tags:
   - phase-distortion
 
 manual: |
-  Phase-distortion synth card with Turing machine mode, USB MIDI, browser Envelope Lab, and C1ZZL3 Import Lab handoff.
+  Phase-distortion synth card with Turing machine mode, USB MIDI, browser Envelope Lab, pitch envelopes, and C1ZZL3 Import Lab handoff.
   Switch middle is PD synth mode (Main = pitch, X = phase distortion, Y = waveform morph).
-  Pulse In 2 and MIDI note-on loop supported envelopes while held; gate/note-off lets the envelope complete naturally.
+  Pulse In 2 and MIDI note-on loop supported envelopes while held; gate/note-off lets the envelope complete naturally. Rapid retriggers keep oscillator phase continuous while an envelope is already active.
   Hold switch down from middle for performance edit (detune, ring modulation, noise/grit) and save.
   Switch up is Turing mode (Main = mutation, X = length, Y = clock speed).
   Turing CV and pulse outputs continue running in synth mode.
@@ -141,7 +141,8 @@ host:
   usb:
     - name: Web MIDI Envelope Editor
       role: editor
-      description: Browser editor for custom envelopes and performance settings
+      description: Browser editor for amplitude, phase-distortion, and pitch envelopes plus performance settings
   notes: |
     MIDI CC1 controls phase distortion, CC20 detune, CC21 ring modulation, CC22 noise,
-    CC23 waveform, and CC24 Turing CV octave range.
+    CC23 waveform, and CC24 Turing CV octave range. C1ZZL3 Import Lab can translate
+    Casio CZ `.syx` patches into Envelope Lab drafts for review and card transfer.

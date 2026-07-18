@@ -244,7 +244,8 @@ public:
             {
                 if (envelopePreset != (uint8_t)EnvelopePreset::Off)
                 {
-                    syncOscillators();
+                    if (!envelopeActive)
+                        syncOscillators();
                     triggerEnvelope(true, true);
                 }
             }
@@ -826,7 +827,8 @@ private:
 
         if (envelopePreset != (uint8_t)EnvelopePreset::Off)
         {
-            syncOscillators();
+            if (!envelopeActive)
+                syncOscillators();
             triggerEnvelope(true);
         }
     }

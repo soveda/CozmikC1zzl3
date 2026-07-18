@@ -1,4 +1,4 @@
-# C1ZZL3 Import Lab Experiment
+# C1ZZL3 Import Lab
 
 This folder contains the user-facing C1ZZL3 Import Lab work for decoding Casio
 CZ `.syx` patches into approximate C1ZZL3 draft presets.
@@ -37,6 +37,7 @@ C1ZZL3 has:
 - one phase-distortion control
 - custom amplitude envelope
 - custom phase-distortion envelope
+- custom pitch envelope
 - detune, ring, and noise controls
 
 Casio CZ patches include things like:
@@ -65,6 +66,8 @@ the main envelope editor page.
 - Validation, summary, decoded readout, warnings, and draft mapping panels.
 - CZ frame awareness for common `F0 44 00 00 7n 20 ... F7` patch-send
   SysEx files, including command, location, channel, and selected data offset.
+- CZ DCA maps to amplitude, DCW maps to phase distortion, and DCO pitch
+  envelopes map to the Envelope Lab pitch lane.
 - `Open In Envelope Lab` handoff for final editing and card send.
 
 ## Decoder Accuracy Notes

@@ -1,4 +1,5 @@
-254fa4e525b8c66201a4bfe944b4cdcd2909a61caff440e383ef23d9b3e1890a  uf2/C1ZZL3.uf2
+41c11af1b546cd3e1b459b166da8d6ecc9f972290e896e0cc088ceb4910d640a  uf2/C1ZZL3.uf2
+254fa4e525b8c66201a4bfe944b4cdcd2909a61caff440e383ef23d9b3e1890a  uf2/archive/production-1.3-pre-pitch-envelope-20260718/C1ZZL3_1.3_pre_pitch_envelope.uf2
 5472a7c1f999c060cf90ae10ce715120de6b7d6697795a2fce80511384bb0231  uf2/archive/production-1.2-pre-pulse-source-release-20260717/C1ZZL3_1.2_pre_pulse_source_release.uf2
 12c356ad75d6d25fccab5060dbb057f1e3ed86169c2429a798c66f835825ed61  uf2/archive/production-1.1-pre-gate-sustain-20260717/C1ZZL3_1.1_pre_gate_sustain.uf2
 6cb55940ab502cb38926d20f3cdd76e5f93909ebb391569d82ee385bb20fbf55  uf2/archive/production-1.0-20260706/C1ZZL3_1.0_production.uf2

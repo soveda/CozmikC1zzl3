@@ -13,19 +13,19 @@
         <p class="eyebrow">Import Workflow</p>
         <h1>C1ZZL3 Import Lab</h1>
         <p class="top-note">
-          Bring in a Casio CZ SysEx patch, decode its amplitude, DCW, and DCO
-          pitch envelopes, then move into Envelope Lab.
+          Bring in a Casio CZ SysEx patch, translate it into a C1ZZL3 draft,
+          and then move into Envelope Lab for the final review and send stage.
         </p>
         <div class="hero-panels">
           <div class="hero-panel">
             <span class="hero-label">What it does</span>
-            <strong>Decodes CZ patch data including pitch envelopes</strong>
-            <p>Amplitude, DCW, DCO1 pitch, DCO2 pitch, waveform family, and performance values are mapped into a C1ZZL3 draft.</p>
+            <strong>Decodes CZ patch data into a browser draft</strong>
+            <p>Wave family, amplitude envelope, PD envelope, and performance values are mapped into a C1ZZL3 starting point.</p>
           </div>
           <div class="hero-panel">
             <span class="hero-label">How to use it</span>
             <strong>Import here, refine in Envelope Lab</strong>
-            <p>Choose or drop a `.syx` file, inspect the decoded envelopes, then open the result in Envelope Lab.</p>
+            <p>Choose or drop a `.syx` file, inspect the draft, then open the result in Envelope Lab for editing and card transfer.</p>
           </div>
         </div>
       </div>
@@ -116,7 +116,7 @@
         <div class="card-body">
           <ul>
             <li>Waveform behavior is approximate.</li>
-            <li>Pitch envelope decoding is approximate and may need adjustment in Envelope Lab.</li>
+            <li>Pitch envelope may be simplified or ignored.</li>
             <li>Dual-oscillator structure may not map exactly.</li>
             <li>Modulation details may be dropped in the first pass.</li>
             <li>Only files that pass the CZ frame checks are treated as draft candidates.</li>
@@ -150,23 +150,13 @@
               <pre id="pdDraftBox">No draft yet.</pre>
             </div>
           </div>
-          <div class="grid-2">
-            <div class="field">
-              <label>DCO1 pitch envelope</label>
-              <pre id="pitchDco1Box">No draft yet.</pre>
-            </div>
-            <div class="field">
-              <label>DCO2 pitch envelope</label>
-              <pre id="pitchDco2Box">No draft yet.</pre>
-            </div>
-          </div>
         </div>
       </article>
 
       <article class="card full-span">
         <div class="card-head">
           <h2>Next Step</h2>
-          <span class="meta">Send the decoded draft into Envelope Lab</span>
+          <span class="meta">Send the decoded draft into Envelope Lab for final editing</span>
         </div>
         <div class="card-body stack">
           <div class="top-actions start">
@@ -174,14 +164,14 @@
           </div>
           <div class="banner">
             <strong>Note:</strong>
-            <span>This page decodes the CZ patch, including DCO pitch envelopes. Use Envelope Lab for review and card transfer.</span>
+            <span>This page only decodes the CZ patch and prepares a draft. Use Envelope Lab to review it and send it to the card.</span>
           </div>
         </div>
       </article>
     </section>
 
     <div class="footer">
-      Import Lab prepares the pitch-aware draft. Envelope Lab is where you edit, audition, and send it.
+      Import Lab prepares the draft. Envelope Lab is where you edit, audition, and send it.
     </div>
   </main>
 

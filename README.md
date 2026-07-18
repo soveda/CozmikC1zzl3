@@ -3,9 +3,9 @@
 Stable production firmware for the Cosmik C1ZZL3 Music Thing Modular Workshop
 Computer card.
 
-C1ZZL3 is a dual phase-distortion synthesiser with custom Web MIDI envelopes,
-USB MIDI device/host support, optional Turing MIDI output, and a Turing machine
-mode with CV and pulse outputs.
+C1ZZL3 is a dual phase-distortion synthesiser with browser-editable amplitude,
+phase-distortion, and pitch envelopes, USB MIDI device/host support, optional
+Turing MIDI output, and a Turing machine mode with CV and pulse outputs.
 
 For the user-facing card guide, see:
 
@@ -24,22 +24,23 @@ uf2/C1ZZL3.uf2
 Checksum:
 
 ```text
-254fa4e525b8c66201a4bfe944b4cdcd2909a61caff440e383ef23d9b3e1890a
+41c11af1b546cd3e1b459b166da8d6ecc9f972290e896e0cc088ceb4910d640a
 ```
 
-This is hardware-tested production release 1.3, promoted on 2026-07-17.
+This is hardware-tested production release 1.4, promoted on 2026-07-18.
 
-The previous production release 1.2 is archived as a fallback at:
+The previous production release 1.3 is archived as a fallback at:
 
 ```text
-uf2/archive/production-1.2-pre-pulse-source-release-20260717/C1ZZL3_1.2_pre_pulse_source_release.uf2
+uf2/archive/production-1.3-pre-pitch-envelope-20260718/C1ZZL3_1.3_pre_pitch_envelope.uf2
 ```
 
-Release 1.3 works with Envelope Lab and C1ZZL3 Import Lab and includes Web
+Release 1.4 works with Envelope Lab and C1ZZL3 Import Lab and includes Web
 MIDI PD, detune, eight waveform families, card-to-editor envelope readback,
-browser CZ patch import handoff, gate-held envelope looping with natural
-completion on gate/note release, corrected CZ DCW-to-PD and DCA-to-amplitude
-import mapping, and the audio smoothing pass for high-PD tones.
+browser CZ patch import handoff, pitch envelopes, gate-held envelope looping
+with natural completion on gate/note release, corrected CZ DCW-to-PD,
+DCA-to-amplitude, and DCO-to-pitch import mapping, high-PD audio smoothing, and
+rapid-retrigger oscillator phase continuity.
 
 Previous UF2s are archived in:
 
@@ -57,7 +58,7 @@ archive/
 
 - Phase-distortion synth voice.
 - Factory envelopes plus eight protected custom envelope slots.
-- Web MIDI envelope editor.
+- Web MIDI envelope editor with amplitude, phase-distortion, and pitch lanes.
 - USB MIDI device mode for DAW/browser use.
 - USB MIDI host mode for class-compliant controllers.
 - MIDI notes with gate-held envelope sustain/release.
@@ -65,6 +66,7 @@ archive/
 - Turing machine audio, CV, pulse, and optional MIDI note output.
 - Turing CV and pulse outputs continue running in synth mode.
 - Settings readback from the card into the Web MIDI editor.
+- Saved envelope readback from the card, including pitch envelope data.
 - Ring, noise, MIDI channel, Turing range, and Turing MIDI settings persist.
 
 ## Controls
@@ -162,9 +164,8 @@ Current Import Lab features:
 - Browser-side validation, patch summary, decoded data, and draft mapping.
 - CZ frame awareness for common patch-send SysEx files, including command,
   location, channel, selected data offset, and payload candidates.
-- Correct first-pass envelope assignment: CZ DCW maps to C1ZZL3 phase
-  distortion, CZ DCA maps to C1ZZL3 amplitude, and CZ pitch is decoded but not
-  assigned.
+- CZ envelope assignment: CZ DCW maps to C1ZZL3 phase distortion, CZ DCA maps
+  to C1ZZL3 amplitude, and CZ DCO pitch envelopes map to the pitch lane.
 - Draft handoff into Envelope Lab in a new tab for final editing and card send.
 - Separate import page so CZ translation and envelope editing stay distinct.
 
@@ -179,11 +180,12 @@ Import Lab flow:
 ## How To Use The Editor
 
 1. Pick a preset on the left, or add a custom one.
-2. Choose `Amplitude` or `Phase Distortion` to focus on one lane at a time.
-3. Drag points on the graph to change both level and timing.
-4. Watch the point numbers. Matching numbers mean the stages are stacked at the same spot.
-5. Use the tables below the graph for exact values when you want precise edits.
-6. Use the action buttons on the right when you want to send, save, read, or export.
+2. Choose `Amplitude` or `Phase Distortion` to focus the main graph lane.
+3. Use the Pitch Envelope graph below it to adjust pitch movement.
+4. Drag points on the graphs to change both level and timing.
+5. Watch the point numbers. When stages stack, only the highest number is shown.
+6. Use the tables below the graphs for exact values when you want precise edits.
+7. Use the action buttons on the right when you want to send, save, read, or reset.
 
 Button quick reference:
 
@@ -196,7 +198,6 @@ Button quick reference:
   overwriting changed local drafts.
 - `Read Settings from Card`: pull the current performance settings into the editor.
 - `Send Settings`: send the current performance settings to the card.
-- `Export JSON`: download all editor presets.
 - `Reset Preset`: restore the selected preset to its factory value.
 
 `Load RAM`, `Load Envelope + Settings`, and `Send Settings` are temporary.
@@ -208,12 +209,12 @@ The card can save up to eight custom envelopes. The browser can retain additiona
 local drafts. Factory presets are not overwritten.
 Custom presets are labelled `Local only`, `Saved - slot N`, or `Changed - slot N`.
 Envelope readback confirms which custom slots are occupied and verifies saves and
-deletions when supported by the experimental firmware.
+deletions when supported by the card firmware.
 
 Envelope behaviour:
 
 - Pulse In 2 and MIDI note-on trigger the selected envelope and sync the
-  oscillators.
+  oscillators when the envelope starts from inactive.
 - While the gate or MIDI note is held, loop-capable envelopes cycle their middle
   stages.
 - A short trigger runs the envelope through to completion.
@@ -221,6 +222,8 @@ Envelope behaviour:
   complete naturally from its current point.
 - Turing-triggered envelopes continue to run through without waiting for a gate
   release.
+- Rapid retriggers keep oscillator phase continuous while the envelope is active
+  to reduce clicks.
 
 ## Build
 
@@ -238,8 +241,8 @@ build/C1ZZL3.uf2
 The production source build currently reports:
 
 ```text
-FLASH: 138160 B
-RAM: 146500 B
+FLASH: 146704 B
+RAM: 155612 B
 ```
 
 ## Stability Notes
@@ -263,7 +266,6 @@ FUTURE_NOTES.md
 - `C1ZZL3_LUT.cpp` / `C1ZZL3_LUT.h`: phase-distortion lookup tables
 - `FUTURE_NOTES.md`: deferred optimisation and cleanup notes
 - `web-midi/editor/`: browser editor
-- `experimental-firmware/pd-detune-wave/`: current stable experimental firmware
 - `uf2/C1ZZL3.uf2`: current stable firmware
 - `uf2/archive/`: older UF2s and rollbacks
 - `archive/`: source snapshots and experiment notes

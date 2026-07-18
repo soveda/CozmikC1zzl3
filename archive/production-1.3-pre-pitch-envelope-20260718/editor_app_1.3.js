@@ -6,10 +6,6 @@ const MAX_BROWSER_CUSTOM_PRESETS = 32;
 const AUDITION_TIME_SCALE = 4;
 const EDITOR_VIEW_SAMPLES = SAMPLE_RATE * 4;
 const MIN_SEND_SAMPLES = 960;
-const ENVELOPE_READ_TIMEOUT_MS = 7000;
-const ENVELOPE_READ_RETRIES = 2;
-const SAVE_VERIFY_DELAY_MS = 2500;
-const DELETE_VERIFY_DELAY_MS = 500;
 const SYSEX_MANUFACTURER = 0x7d;
 const SYSEX_ID = [0x43, 0x31, 0x5a, 0x33];
 const SYSEX_COMMAND_PREVIEW = 0x01;
@@ -23,9 +19,7 @@ const SYSEX_COMMAND_REQUEST_ENVELOPE_SLOTS = 0x08;
 const SYSEX_COMMAND_ENVELOPE_SLOTS_RESPONSE = 0x09;
 const SYSEX_COMMAND_REQUEST_ENVELOPE = 0x0a;
 const SYSEX_COMMAND_ENVELOPE_RESPONSE = 0x0b;
-const SYSEX_COMMAND_REQUEST_PITCH_ENVELOPE = 0x0c;
-const SYSEX_COMMAND_PITCH_ENVELOPE_RESPONSE = 0x0d;
-const ENVELOPE_PROTOCOL_VERSION = 2;
+const ENVELOPE_PROTOCOL_VERSION = 1;
 
 const factoryPresets = [
   preset("Off", fill(0, 1), fill(0, 1)),
@@ -66,7 +60,6 @@ let sendingSysex = false;
 let auditionLoop = false;
 let auditionToken = 0;
 let dragTarget = null;
-let pitchDragTarget = null;
 let performanceSettings = loadPerformanceSettings();
 let activeLaneView = "amp";
 let developerMode = false;
@@ -108,15 +101,11 @@ const el = {
   waveSelect: document.querySelector("#waveSelect"),
   customSlot: document.querySelector("#customSlot"),
   canvas: document.querySelector("#curveCanvas"),
-  pitchCanvas: document.querySelector("#pitchCanvas"),
-  pitchSourceLabel: document.querySelector("#pitchSourceLabel"),
-  spreadPitchPoints: document.querySelector("#spreadPitchPoints"),
   themeToggle: document.querySelector("#themeToggle"),
   onlineEditorLink: document.querySelector("#onlineEditorLink"),
   importLabLink: document.querySelector("#importLabLink"),
   ampStages: document.querySelector("#ampStages"),
   pdStages: document.querySelector("#pdStages"),
-  pitchStages: document.querySelector("#pitchStages"),
   ampView: document.querySelector("#ampView"),
   pdView: document.querySelector("#pdView"),
   developerToggle: document.querySelector("#developerToggle"),
@@ -128,7 +117,6 @@ const el = {
   developerPorts: document.querySelector("#developerPorts"),
   developerMidiRaw: document.querySelector("#developerMidiRaw"),
   developerLog: document.querySelector("#developerLog"),
-  resetBrowserState: document.querySelector("#resetBrowserState"),
   clearDeveloperLog: document.querySelector("#clearDeveloperLog"),
   status: document.querySelector("#status"),
   audition: document.querySelector("#audition"),
@@ -157,13 +145,11 @@ const el = {
   turingMidiChannel: document.querySelector("#turingMidiChannel")
 };
 
-function preset(name, amp, pd, slot = null, cardDirty = false, pitch = null, pitchSource = null) {
+function preset(name, amp, pd, slot = null, cardDirty = false) {
   return {
     name,
     amp: normalizeStages(amp),
     pd: normalizeStages(pd),
-    pitch: normalizePitchStages(pitch),
-    pitchSource: pitchSource || null,
     slot: Number.isInteger(slot) ? clampInt(slot, 0, CUSTOM_SLOT_COUNT - 1) : null,
     cardDirty: Boolean(cardDirty)
   };
@@ -186,72 +172,19 @@ function normalizeStages(stages) {
   }));
 }
 
-function normalizePitchStages(stages) {
-  return Array.from({ length: STAGES }, (_, i) => ({
-    level: clampInt(stages?.[i]?.level ?? stages?.[i]?.[0] ?? 2048, 0, MAX_LEVEL),
-    time: clampInt(stages?.[i]?.time ?? stages?.[i]?.[1] ?? 1, 1, 192000)
-  }));
-}
-
-function envelopeMaxSamples(presetItem) {
-  return Math.max(
-    totalSamples(normalizeStages(presetItem.amp)),
-    totalSamples(normalizeStages(presetItem.pd)),
-    1
-  );
-}
-
-function constrainPitchToEnvelope(presetItem) {
-  const maxSamples = envelopeMaxSamples(presetItem);
-  let remaining = maxSamples;
-  presetItem.pitch = normalizePitchStages(presetItem.pitch).map((stage, index) => {
-    const stagesLeft = STAGES - index - 1;
-    const reserve = stagesLeft;
-    const time = Math.max(1, Math.min(stage.time, Math.max(1, remaining - reserve)));
-    remaining = Math.max(0, remaining - time);
-    return {
-      level: remaining > 0 || index === 0 ? stage.level : 2048,
-      time
-    };
-  });
-  return presetItem;
-}
-
-function spreadPitchPoints() {
-  if (selected < FACTORY_PRESET_COUNT) {
-    if (!duplicateFactoryPreset()) return;
-  }
-
-  const current = presets[selected];
-  const maxSamples = envelopeMaxSamples(current);
-  const baseTime = Math.max(1, Math.floor(maxSamples / STAGES));
-  let remainder = Math.max(0, maxSamples - (baseTime * STAGES));
-
-  current.pitch = normalizePitchStages(current.pitch).map((stage) => {
-    const extra = remainder > 0 ? 1 : 0;
-    if (remainder > 0) remainder--;
-    return { level: stage.level, time: baseTime + extra };
-  });
-  constrainPitchToEnvelope(current);
-  if (current.slot !== null) current.cardDirty = true;
-  savePresets();
-  render();
-  setStatus("Pitch points spread across the current amplitude/PD envelope length.");
-}
-
 function loadPresets() {
   try {
     const saved = JSON.parse(localStorage.getItem("c1zzl3-envelope-presets"));
     if (Array.isArray(saved)) {
       const custom = saved
         .slice(FACTORY_PRESET_COUNT)
-        .map((item) => constrainPitchToEnvelope(preset(item.name || "Custom preset", item.amp, item.pd, item.slot, item.cardDirty, item.pitch, item.pitchSource)))
+        .map((item) => preset(item.name || "Custom preset", item.amp, item.pd, item.slot, item.cardDirty))
         .slice(0, MAX_BROWSER_CUSTOM_PRESETS);
       return [...structuredClone(factoryPresets), ...custom];
     }
     if (Array.isArray(saved?.customPresets)) {
       const custom = saved.customPresets
-        .map((item) => constrainPitchToEnvelope(preset(item.name || "Custom preset", item.amp, item.pd, item.slot, item.cardDirty, item.pitch, item.pitchSource)))
+        .map((item) => preset(item.name || "Custom preset", item.amp, item.pd, item.slot, item.cardDirty))
         .slice(0, MAX_BROWSER_CUSTOM_PRESETS);
       return [...structuredClone(factoryPresets), ...custom];
     }
@@ -269,8 +202,6 @@ function savePresets() {
         name: item.name,
         amp: item.amp,
         pd: item.pd,
-        pitch: item.pitch,
-        pitchSource: item.pitchSource || null,
         slot: Number.isInteger(item.slot) ? item.slot : null,
         cardDirty: Boolean(item.cardDirty)
       }))
@@ -314,14 +245,6 @@ function savePerformanceSettings() {
   localStorage.setItem("c1zzl3-performance-settings", JSON.stringify(performanceSettings));
 }
 
-function resetBrowserState() {
-  localStorage.removeItem("c1zzl3-envelope-presets");
-  localStorage.removeItem("c1zzl3-performance-settings");
-  localStorage.removeItem(CZ_IMPORT_HANDOFF_KEY);
-  setStatus("Browser state cleared. Reloading baseline editor...");
-  window.setTimeout(() => window.location.reload(), 120);
-}
-
 function loadThemeMode() {
   try {
     const saved = localStorage.getItem("c1zzl3-theme-mode");
@@ -354,39 +277,13 @@ function applyImportedPerformance(draft) {
   };
 }
 
-function importedPitchStages(draft) {
-  const directPitch = draft?.pitch || draft?.sourceEnvelopes?.pitch;
-  return Array.isArray(directPitch) ? directPitch : null;
-}
-
-function importedPitchSource(draft) {
-  const cz = draft?.sourceEnvelopes?.cz;
-  if (!cz) return null;
-  return {
-    dco1Pitch: cz.dco1Pitch || null,
-    dco2Pitch: cz.dco2Pitch || null
-  };
-}
-
-function makeImportedPreset(draft) {
-  return preset(
-    draft.name || "Imported CZ patch",
-    draft.amp,
-    draft.pd,
-    null,
-    false,
-    importedPitchStages(draft),
-    importedPitchSource(draft)
-  );
-}
-
 function consumeImportedDraft() {
   try {
     if (messageImportedDraft) {
       const payload = messageImportedDraft;
       const draft = payload?.draft;
       if (draft && Array.isArray(draft.amp) && Array.isArray(draft.pd)) {
-        const imported = makeImportedPreset(draft);
+        const imported = preset(draft.name || "Imported CZ patch", draft.amp, draft.pd);
         if (customPresetCount() >= MAX_BROWSER_CUSTOM_PRESETS) {
           presets[FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1] = imported;
           selected = FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1;
@@ -410,7 +307,7 @@ function consumeImportedDraft() {
       const payload = JSON.parse(decodeURIComponent(queryPayload));
       const draft = payload?.draft;
       if (draft && Array.isArray(draft.amp) && Array.isArray(draft.pd)) {
-        const imported = makeImportedPreset(draft);
+        const imported = preset(draft.name || "Imported CZ patch", draft.amp, draft.pd);
         if (customPresetCount() >= MAX_BROWSER_CUSTOM_PRESETS) {
           presets[FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1] = imported;
           selected = FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1;
@@ -433,7 +330,7 @@ function consumeImportedDraft() {
       const payload = JSON.parse(decodeURIComponent(hashMatch[1]));
       const draft = payload?.draft;
       if (draft && Array.isArray(draft.amp) && Array.isArray(draft.pd)) {
-        const imported = makeImportedPreset(draft);
+        const imported = preset(draft.name || "Imported CZ patch", draft.amp, draft.pd);
         if (customPresetCount() >= MAX_BROWSER_CUSTOM_PRESETS) {
           presets[FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1] = imported;
           selected = FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1;
@@ -461,7 +358,7 @@ function consumeImportedDraft() {
       return false;
     }
 
-    const imported = makeImportedPreset(draft);
+    const imported = preset(draft.name || "Imported CZ patch", draft.amp, draft.pd);
     if (customPresetCount() >= MAX_BROWSER_CUSTOM_PRESETS) {
       presets[FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1] = imported;
       selected = FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1;
@@ -485,7 +382,6 @@ function consumeImportedDraft() {
 function render() {
   selected = Math.max(0, Math.min(selected, presets.length - 1));
   const current = presets[selected];
-  constrainPitchToEnvelope(current);
 
   renderPresetList();
   el.presetName.value = current.name;
@@ -493,14 +389,11 @@ function render() {
   el.addPreset.disabled = customPresetCount() >= MAX_BROWSER_CUSTOM_PRESETS;
   renderStages("amp", el.ampStages);
   renderStages("pd", el.pdStages);
-  renderStages("pitch", el.pitchStages);
-  renderPitchSource(current);
   renderPerformanceSettings();
   renderThemeMode();
   renderLaneView();
   renderDeveloperMode();
   drawCurves();
-  drawPitchCurve();
   updateExport();
 }
 
@@ -520,7 +413,6 @@ function renderThemeMode() {
     el.importLabLink.href = isLocalDev ? LOCAL_IMPORT_LAB_URL : HOSTED_IMPORT_LAB_URL;
   }
   drawCurves();
-  drawPitchCurve();
 }
 
 function renderLaneView() {
@@ -535,14 +427,6 @@ function renderLaneView() {
   el.pdStages.classList.toggle("is-hidden", ampActive);
   el.ampStages.setAttribute("aria-hidden", String(!ampActive));
   el.pdStages.setAttribute("aria-hidden", String(ampActive));
-}
-
-function renderPitchSource(current) {
-  if (!el.pitchSourceLabel) return;
-  const hasSource = Boolean(current.pitchSource?.dco1Pitch || current.pitchSource?.dco2Pitch);
-  el.pitchSourceLabel.textContent = hasSource
-    ? "CZ DCO1/DCO2 pitch source loaded"
-    : "No CZ pitch source loaded";
 }
 
 function renderDeveloperMode() {
@@ -664,25 +548,13 @@ function updateStage(lane, index, key, value) {
     if (!duplicateFactoryPreset()) return;
   }
 
-  const current = presets[selected];
-  const before = key === "time" ? samplesBeforeStage(current[lane], index) : 0;
-  const pitchMax = lane === "pitch" && key === "time"
-    ? Math.max(1, envelopeMaxSamples(current) - before)
-    : 192000;
-  const max = key === "level" ? MAX_LEVEL : pitchMax;
+  const max = key === "level" ? MAX_LEVEL : 192000;
   const min = key === "level" ? 0 : 1;
-  current[lane][index][key] = clampInt(value, min, max);
-  constrainPitchToEnvelope(current);
-  if (current.slot !== null) current.cardDirty = true;
+  presets[selected][lane][index][key] = clampInt(value, min, max);
+  if (presets[selected].slot !== null) presets[selected].cardDirty = true;
   savePresets();
   renderPresetList();
-  syncStageInputs(lane, index);
-  if (lane === "pitch") drawPitchCurve();
-  else {
-    drawCurves();
-    drawPitchCurve();
-    renderStages("pitch", el.pitchStages);
-  }
+  drawCurves();
   updateExport();
 }
 
@@ -694,7 +566,7 @@ function duplicateFactoryPreset() {
   }
 
   const source = presets[selected];
-  presets.push(preset(`${source.name} copy`, source.amp, source.pd, null, false, source.pitch, source.pitchSource));
+  presets.push(preset(`${source.name} copy`, source.amp, source.pd));
   selected = presets.length - 1;
   savePresets();
   render();
@@ -742,55 +614,6 @@ function drawCurves() {
   ctx.fillText(`${(totalSamples(presets[selected].amp) / SAMPLE_RATE).toFixed(2)}s / ${(viewSamples / SAMPLE_RATE).toFixed(0)}s`, w - 94, h - 16);
 }
 
-function drawPitchCurve() {
-  if (!el.pitchCanvas) return;
-  const ctx = el.pitchCanvas.getContext("2d");
-  const dpr = window.devicePixelRatio || 1;
-  const rect = el.pitchCanvas.getBoundingClientRect();
-  el.pitchCanvas.width = Math.max(640, Math.floor(rect.width * dpr));
-  el.pitchCanvas.height = Math.max(180, Math.floor(rect.height * dpr));
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-  const theme = getThemeColors();
-  const w = rect.width;
-  const h = rect.height;
-  const centerY = h / 2;
-  ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = theme.canvasBg;
-  ctx.fillRect(0, 0, w, h);
-
-  ctx.strokeStyle = theme.grid;
-  ctx.lineWidth = 1;
-  [0.25, 0.5, 0.75].forEach((ratio) => {
-    const y = h * ratio;
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(w, y);
-    ctx.stroke();
-  });
-
-  ctx.strokeStyle = theme.pitchCenter;
-  ctx.lineWidth = 2;
-  ctx.setLineDash([6, 6]);
-  ctx.beginPath();
-  ctx.moveTo(0, centerY);
-  ctx.lineTo(w, centerY);
-  ctx.stroke();
-  ctx.setLineDash([]);
-
-  const current = presets[selected];
-  const viewSamples = envelopeMaxSamples(current);
-  drawLane(ctx, current.pitch, theme.pitch, w, h, viewSamples);
-  drawHandles(ctx, current.pitch, theme.pitch, w, h, viewSamples, true, theme);
-
-  ctx.fillStyle = theme.pitch;
-  ctx.font = "12px system-ui";
-  ctx.fillText("Pitch", 14, 22);
-  ctx.fillStyle = theme.muted;
-  ctx.fillText("center = no pitch offset", 64, 22);
-  ctx.fillText(`${(totalSamples(current.pitch) / SAMPLE_RATE).toFixed(2)}s / max ${(viewSamples / SAMPLE_RATE).toFixed(2)}s`, w - 128, h - 16);
-}
-
 function drawHandles(ctx, stages, color, w, h, viewSamples, active, theme) {
   let x = 0;
   const points = [];
@@ -801,11 +624,7 @@ function drawHandles(ctx, stages, color, w, h, viewSamples, active, theme) {
   });
 
   points.forEach((point, index) => {
-    const pointColor = color === theme.amp
-      ? theme.ampPoint
-      : color === theme.pitch
-        ? theme.pitchPoint
-        : theme.pdPoint;
+    const pointColor = color === theme.amp ? theme.ampPoint : theme.pdPoint;
     ctx.fillStyle = pointColor;
     ctx.beginPath();
     ctx.arc(point.x, point.y, active ? 7 : 5, 0, Math.PI * 2);
@@ -834,11 +653,8 @@ function getThemeColors() {
     grid: styles.getPropertyValue("--line").trim() || "#242932",
     amp: styles.getPropertyValue("--graph-amp").trim() || styles.getPropertyValue("--amp").trim() || "#ffcc66",
     pd: styles.getPropertyValue("--graph-pd").trim() || styles.getPropertyValue("--pd").trim() || "#6ee7c8",
-    pitch: styles.getPropertyValue("--graph-pitch").trim() || "#b38cff",
     ampPoint: styles.getPropertyValue("--graph-amp-point").trim() || styles.getPropertyValue("--amp").trim() || "#ffcc66",
     pdPoint: styles.getPropertyValue("--graph-pd-point").trim() || styles.getPropertyValue("--pd").trim() || "#6ee7c8",
-    pitchPoint: styles.getPropertyValue("--graph-pitch-point").trim() || styles.getPropertyValue("--graph-pitch").trim() || "#d8c7ff",
-    pitchCenter: styles.getPropertyValue("--graph-pitch-center").trim() || styles.getPropertyValue("--muted").trim() || "#a5adba",
     muted: styles.getPropertyValue("--muted").trim() || "#a5adba",
     text: styles.getPropertyValue("--text").trim() || "#f4f0e8"
   };
@@ -875,8 +691,7 @@ function editorViewSamples() {
   const longest = Math.max(
     EDITOR_VIEW_SAMPLES,
     totalSamples(current.amp),
-    totalSamples(current.pd),
-    totalSamples(current.pitch));
+    totalSamples(current.pd));
   return Math.ceil(longest / SAMPLE_RATE) * SAMPLE_RATE;
 }
 
@@ -925,18 +740,16 @@ function playAudition(note, token) {
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
   const filter = audioCtx.createBiquadFilter();
-  const baseFrequency = midiToHz(note);
 
   osc.type = auditionOscType(el.waveSelect.value);
-  osc.frequency.value = baseFrequency;
+  osc.frequency.value = midiToHz(note);
   filter.type = "lowpass";
   filter.frequency.value = 220;
   gain.gain.value = 0;
 
-  const duration = scaledSamples(longestAuditionLane(current)) / SAMPLE_RATE;
+  const duration = scaledSamples(current.amp) / SAMPLE_RATE;
   scheduleEnvelope(gain.gain, current.amp, now, 0, 0.35);
   scheduleEnvelope(filter.frequency, current.pd, now, 220, 4200);
-  schedulePitchEnvelope(osc.frequency, current.pitch, now, baseFrequency);
 
   osc.connect(filter).connect(gain).connect(audioCtx.destination);
   osc.start(now);
@@ -969,18 +782,6 @@ function scheduleEnvelope(param, stages, startTime, base, depth) {
   });
 }
 
-function schedulePitchEnvelope(param, stages, startTime, baseFrequency) {
-  let t = startTime;
-  param.cancelScheduledValues(startTime);
-  param.setValueAtTime(baseFrequency, startTime);
-
-  stages.forEach((stage) => {
-    t += (stage.time * AUDITION_TIME_SCALE) / SAMPLE_RATE;
-    const semitoneOffset = ((stage.level - 2048) / 2047) * 24;
-    param.linearRampToValueAtTime(baseFrequency * Math.pow(2, semitoneOffset / 12), t);
-  });
-}
-
 function stopAudio() {
   auditionLoop = false;
   auditionToken++;
@@ -997,11 +798,6 @@ function stopAudio() {
 
 function scaledSamples(stages) {
   return totalSamples(stages) * AUDITION_TIME_SCALE;
-}
-
-function longestAuditionLane(current) {
-  return [current.amp, current.pd, current.pitch]
-    .sort((a, b) => totalSamples(b) - totalSamples(a))[0];
 }
 
 function midiToHz(note) {
@@ -1150,7 +946,7 @@ function renderDeveloperPorts() {
 
 function describeSettingsProtocol() {
   if (settingsProtocol === "stable") return "Stable firmware";
-  if (settingsProtocol === "extended") return "Extended firmware";
+  if (settingsProtocol === "experimental") return "Experimental firmware";
   return "Not detected yet";
 }
 
@@ -1356,7 +1152,7 @@ async function sendSysex(command = SYSEX_COMMAND_PREVIEW) {
   if (isFlash) {
     bindSelectedPresetToSlot(slot);
     if (envelopeReadSupported === true) {
-      window.setTimeout(() => requestCardEnvelopes("save", slot, expectedEnvelope), SAVE_VERIFY_DELAY_MS);
+      window.setTimeout(() => requestCardEnvelopes("save", slot, expectedEnvelope), 350);
     }
   }
   setStatus(`${status} ${frame.length} byte SysEx to ${output.name || "MIDI output"}.`);
@@ -1467,13 +1263,13 @@ async function deleteCustomSlot() {
     return;
   }
   if (envelopeReadSupported !== true) {
-    removeCardSlotDraft(slot);
+    markCardSlotLocal(slot);
     savePresets();
     render();
     setStatus(`Delete sent for card slot ${slot + 1}. Use Read Envelopes from Card to confirm it.`);
   } else {
     setStatus(`Delete sent for card slot ${slot + 1}; checking the card...`);
-    window.setTimeout(() => requestCardEnvelopes("delete", slot), DELETE_VERIFY_DELAY_MS);
+    window.setTimeout(() => requestCardEnvelopes("delete", slot), 350);
   }
 
   window.setTimeout(() => {
@@ -1493,16 +1289,14 @@ function buildSysex(command) {
   const slot = clampInt(el.customSlot.value, 0, CUSTOM_SLOT_COUNT - 1);
   const nameBytes = ensureArray(encodeName(presets[selected].name), "encodeName()");
   const payload = [slot & 0x7f, ...nameBytes];
-  constrainPitchToEnvelope(presets[selected]);
   appendStages(payload, presets[selected].amp);
   appendStages(payload, presets[selected].pd);
-  appendStages(payload, presets[selected].pitch);
   return [0xf0, SYSEX_MANUFACTURER, ...ensureArray(SYSEX_ID, "SYSEX_ID"), command, ...ensureArray(payload, "payload"), 0xf7];
 }
 
 function buildSettingsSysex(command) {
-  if (settingsProtocol === "extended") {
-    return buildExtendedSettingsSysex(command);
+  if (settingsProtocol === "experimental") {
+    return buildExperimentalSettingsSysex(command);
   }
 
   return buildStableSettingsSysex(command);
@@ -1519,7 +1313,7 @@ function buildStableSettingsSysex(command) {
   return [0xf0, SYSEX_MANUFACTURER, ...ensureArray(SYSEX_ID, "SYSEX_ID"), command, ...ensureArray(payload, "settings payload"), 0xf7];
 }
 
-function buildExtendedSettingsSysex(command) {
+function buildExperimentalSettingsSysex(command) {
   const payload = [];
   payload.push(...ensureArray(packUint14(performanceSettings.ring), "packUint14(ring)"));
   payload.push(...ensureArray(packUint14(performanceSettings.noise), "packUint14(noise)"));
@@ -1530,7 +1324,7 @@ function buildExtendedSettingsSysex(command) {
   payload.push(clampInt(performanceSettings.turingRange, 1, 8));
   payload.push(performanceSettings.turingMidiOut ? 1 : 0);
   payload.push(clampInt(performanceSettings.turingMidiChannel, 1, 16) - 1);
-  return [0xf0, SYSEX_MANUFACTURER, ...ensureArray(SYSEX_ID, "SYSEX_ID"), command, ...ensureArray(payload, "extended settings payload"), 0xf7];
+  return [0xf0, SYSEX_MANUFACTURER, ...ensureArray(SYSEX_ID, "SYSEX_ID"), command, ...ensureArray(payload, "experimental settings payload"), 0xf7];
 }
 
 function buildDeleteSlotSysex(slot) {
@@ -1547,10 +1341,6 @@ function buildRequestEnvelopeSlotsSysex() {
 
 function buildRequestEnvelopeSysex(slot) {
   return [0xf0, SYSEX_MANUFACTURER, ...SYSEX_ID, SYSEX_COMMAND_REQUEST_ENVELOPE, slot & 0x07, 0xf7];
-}
-
-function buildRequestPitchEnvelopeSysex(slot) {
-  return [0xf0, SYSEX_MANUFACTURER, ...SYSEX_ID, SYSEX_COMMAND_REQUEST_PITCH_ENVELOPE, slot & 0x07, 0xf7];
 }
 
 function canSendSelectedEnvelope() {
@@ -1621,9 +1411,7 @@ function stagesMatch(a, b) {
 }
 
 function envelopesMatch(a, b) {
-  return stagesMatch(a.amp, b.amp) &&
-    stagesMatch(a.pd, b.pd) &&
-    stagesMatch(normalizePitchStages(a.pitch), normalizePitchStages(b.pitch));
+  return stagesMatch(a.amp, b.amp) && stagesMatch(a.pd, b.pd);
 }
 
 function markCardSlotLocal(slot) {
@@ -1635,21 +1423,12 @@ function markCardSlotLocal(slot) {
   });
 }
 
-function removeCardSlotDraft(slot) {
-  const previousSelected = selected;
-  presets = presets.filter((item, index) =>
-    index < FACTORY_PRESET_COUNT || item.slot !== slot);
-  selected = Math.min(previousSelected, presets.length - 1);
-  if (selected < 0) selected = 0;
-}
-
 function reconcileCardEnvelopes(mask, cardEnvelopes) {
   let preservedChanges = 0;
   let skipped = 0;
-  let replacedLocal = 0;
 
   for (let slot = 0; slot < CUSTOM_SLOT_COUNT; slot++) {
-    if ((mask & (1 << slot)) === 0) removeCardSlotDraft(slot);
+    if ((mask & (1 << slot)) === 0) markCardSlotLocal(slot);
   }
 
   cardEnvelopes.forEach((cardEnvelope, slot) => {
@@ -1672,39 +1451,21 @@ function reconcileCardEnvelopes(mask, cardEnvelopes) {
       } else {
         existing.amp = normalizeStages(cardEnvelope.amp);
         existing.pd = normalizeStages(cardEnvelope.pd);
-        existing.pitch = normalizePitchStages(cardEnvelope.pitch);
-        constrainPitchToEnvelope(existing);
         existing.cardDirty = false;
         return;
       }
     }
 
-    const cardPreset = constrainPitchToEnvelope(preset(`Card Envelope ${slot + 1}`, cardEnvelope.amp, cardEnvelope.pd, slot, false, cardEnvelope.pitch));
     if (customPresetCount() >= MAX_BROWSER_CUSTOM_PRESETS) {
-      const replacementIndex = presets.findIndex((item, index) =>
-        index >= FACTORY_PRESET_COUNT && item.slot === null);
-      if (replacementIndex >= FACTORY_PRESET_COUNT) {
-        presets[replacementIndex] = cardPreset;
-        replacedLocal++;
-        return;
-      }
-
-      const fallbackIndex = presets.length - 1;
-      if (fallbackIndex >= FACTORY_PRESET_COUNT) {
-        presets[fallbackIndex] = cardPreset;
-        replacedLocal++;
-        return;
-      }
-
       skipped++;
       return;
     }
-    presets.push(cardPreset);
+    presets.push(preset(`Card Envelope ${slot + 1}`, cardEnvelope.amp, cardEnvelope.pd, slot, false));
   });
 
   savePresets();
   render();
-  return { preservedChanges, skipped, replacedLocal };
+  return { preservedChanges, skipped };
 }
 
 function clearEnvelopeReadTimer() {
@@ -1718,52 +1479,18 @@ function armEnvelopeReadTimeout() {
   clearEnvelopeReadTimer();
   envelopeReadTimer = window.setTimeout(() => {
     const session = envelopeReadSession;
-    const output = selectedMidiOutput();
-    if (session && output && session.retriesRemaining > 0) {
-      session.retriesRemaining--;
-      envelopeReadTimer = null;
-      try {
-        if (session.waitingForSlot !== null) {
-          output.send(buildRequestEnvelopeSysex(session.waitingForSlot));
-          setStatus(`Still waiting for card envelope slot ${session.waitingForSlot + 1}; retrying readback...`);
-        } else {
-          output.send(buildRequestEnvelopeSlotsSysex());
-          setStatus("Still waiting for the card envelope list; retrying readback...");
-        }
-        armEnvelopeReadTimeout();
-        return;
-      } catch (error) {
-        logDeveloper("Envelope read retry failed.", {
-          reason: session.reason,
-          waitingForSlot: session.waitingForSlot,
-          message: error?.message || "Unknown error",
-          stack: error?.stack || "No stack trace"
-        });
-      }
-    }
-
-    if (session?.waitingForSlot !== null && session?.waitingForSlot !== undefined) {
-      const skippedSlot = session.waitingForSlot;
-      logDeveloper("Envelope slot did not reply; skipping slot.", {
-        slot: skippedSlot + 1,
-        pendingSlots: session.pendingSlots.map((pendingSlot) => pendingSlot + 1)
-      });
-      completeEnvelopeSlotRead(skippedSlot);
-      return;
-    }
-
     envelopeReadSession = null;
     envelopeReadTimer = null;
     envelopeReadSupported = false;
     el.requestEnvelopes.disabled = false;
     renderDeveloperPorts();
     if (session?.reason === "delete") {
-      removeCardSlotDraft(session.slot);
+      markCardSlotLocal(session.slot);
       savePresets();
       render();
     }
     setStatus("The card did not reply to the envelope read request. This firmware may not support envelope readback.");
-  }, ENVELOPE_READ_TIMEOUT_MS);
+  }, 2500);
 }
 
 function sendNextEnvelopeRequest() {
@@ -1782,7 +1509,6 @@ function sendNextEnvelopeRequest() {
   }
   const slot = envelopeReadSession.pendingSlots[0];
   envelopeReadSession.waitingForSlot = slot;
-  envelopeReadSession.retriesRemaining = ENVELOPE_READ_RETRIES;
   try {
     output.send(buildRequestEnvelopeSysex(slot));
     armEnvelopeReadTimeout();
@@ -1809,15 +1535,6 @@ function finishEnvelopeRead() {
 
   const result = reconcileCardEnvelopes(session.mask, session.cardEnvelopes);
   const count = session.cardEnvelopes.size;
-  if (count > 0 && session.reason === "manual") {
-    const firstSlot = [...session.cardEnvelopes.keys()][0];
-    const loadedIndex = presets.findIndex((item, index) =>
-      index >= FACTORY_PRESET_COUNT && item.slot === firstSlot);
-    if (loadedIndex >= FACTORY_PRESET_COUNT) {
-      selected = loadedIndex;
-      render();
-    }
-  }
   if (session.reason === "save") {
     const cardEnvelope = session.cardEnvelopes.get(session.slot);
     const verified = cardEnvelope && session.expectedEnvelope &&
@@ -1837,7 +1554,6 @@ function finishEnvelopeRead() {
 
   const notes = [];
   if (result.preservedChanges) notes.push(`${result.preservedChanges} changed local draft${result.preservedChanges === 1 ? " was" : "s were"} preserved`);
-  if (result.replacedLocal) notes.push(`${result.replacedLocal} local draft${result.replacedLocal === 1 ? " was" : "s were"} replaced to show card data`);
   if (result.skipped) notes.push(`${result.skipped} card envelope${result.skipped === 1 ? " was" : "s were"} not added because the browser list is full`);
   setStatus(`Loaded ${count} envelope${count === 1 ? "" : "s"} from the card.${notes.length ? ` ${notes.join("; ")}.` : ""}`);
 }
@@ -1861,10 +1577,7 @@ async function requestCardEnvelopes(reason = "manual", slot = null, expectedEnve
     mask: 0,
     pendingSlots: [],
     waitingForSlot: null,
-    waitingForPitchSlot: null,
-    lastEnvelopeSlot: null,
-    cardEnvelopes: new Map(),
-    retriesRemaining: ENVELOPE_READ_RETRIES
+    cardEnvelopes: new Map()
   };
   el.requestEnvelopes.disabled = true;
   try {
@@ -1886,7 +1599,7 @@ async function requestCardEnvelopes(reason = "manual", slot = null, expectedEnve
 function handleEnvelopeSlotsResponse(data) {
   if (!envelopeReadSession || data.length !== 11) return;
   const version = data[7] & 0x7f;
-  if (version < 1 || version > ENVELOPE_PROTOCOL_VERSION) {
+  if (version !== ENVELOPE_PROTOCOL_VERSION) {
     clearEnvelopeReadTimer();
     envelopeReadSession = null;
     envelopeReadSupported = false;
@@ -1901,18 +1614,14 @@ function handleEnvelopeSlotsResponse(data) {
   envelopeReadSession.mask = unpackUint14(data, 8) & 0xff;
   envelopeReadSession.pendingSlots = Array.from({ length: CUSTOM_SLOT_COUNT }, (_, slot) => slot)
     .filter((slot) => (envelopeReadSession.mask & (1 << slot)) !== 0);
-  logDeveloper("Envelope slot list received.", {
-    mask: envelopeReadSession.mask,
-    pendingSlots: envelopeReadSession.pendingSlots.map((slot) => slot + 1)
-  });
   clearEnvelopeReadTimer();
   sendNextEnvelopeRequest();
 }
 
 function handleEnvelopeResponse(data) {
-  if (!envelopeReadSession || (data.length !== 89 && data.length !== 129)) return;
+  if (!envelopeReadSession || data.length !== 89) return;
   const slot = data[7] & 0x07;
-  if (!envelopeReadSession.pendingSlots.includes(slot)) return;
+  if (slot !== envelopeReadSession.waitingForSlot) return;
 
   let offset = 8;
   const readStages = () => Array.from({ length: STAGES }, () => {
@@ -1923,96 +1632,9 @@ function handleEnvelopeResponse(data) {
     offset += 5;
     return stage;
   });
-  const amp = readStages();
-  const pd = readStages();
-  const pitch = data.length === 129 ? readStages() : normalizePitchStages(null);
-  envelopeReadSession.cardEnvelopes.set(slot, { amp, pd, pitch });
+  envelopeReadSession.cardEnvelopes.set(slot, { amp: readStages(), pd: readStages() });
+  envelopeReadSession.pendingSlots.shift();
   envelopeReadSession.waitingForSlot = null;
-  envelopeReadSession.lastEnvelopeSlot = slot;
-
-  logDeveloper("Envelope slot response received.", {
-    slot: slot + 1,
-    length: data.length,
-    responseType: data.length === 129 ? "amp/pd/pitch" : "amp/pd standard; pitch may follow separately"
-  });
-  completeEnvelopeSlotRead(slot);
-}
-
-function requestPitchEnvelopeForSlot(slot) {
-  if (!envelopeReadSession) return;
-  const output = selectedMidiOutput();
-  if (!output) return;
-
-  envelopeReadSession.waitingForPitchSlot = slot;
-  try {
-    output.send(buildRequestPitchEnvelopeSysex(slot));
-  } catch (error) {
-    logDeveloper("Pitch envelope request failed.", {
-      slot: slot + 1,
-      message: error?.message || "Unknown error",
-      stack: error?.stack || "No stack trace"
-    });
-  }
-}
-
-function handlePitchEnvelopeResponse(data) {
-  if (data.length !== 49) return;
-  const slot = data[7] & 0x07;
-
-  let offset = 8;
-  const pitch = Array.from({ length: STAGES }, () => {
-    const stage = {
-      level: clampInt(unpackUint14(data, offset), 0, MAX_LEVEL),
-      time: clampInt(unpackUint21(data, offset + 2), 1, 192000)
-    };
-    offset += 5;
-    return stage;
-  });
-
-  if (!envelopeReadSession) {
-    applyLatePitchReadback(slot, pitch);
-    return;
-  }
-
-  if (slot !== envelopeReadSession.waitingForPitchSlot &&
-      slot !== envelopeReadSession.lastEnvelopeSlot) {
-    const existingSlot = envelopeReadSession.cardEnvelopes.get(slot);
-    if (existingSlot) existingSlot.pitch = pitch;
-    return;
-  }
-
-  const existing = envelopeReadSession.cardEnvelopes.get(slot);
-  if (existing) existing.pitch = pitch;
-  logDeveloper("Pitch envelope response received.", { slot: slot + 1 });
-  envelopeReadSession.waitingForPitchSlot = null;
-  envelopeReadSession.lastEnvelopeSlot = null;
-}
-
-function applyLatePitchReadback(slot, pitch) {
-  let updated = false;
-  presets.forEach((item, index) => {
-    if (index >= FACTORY_PRESET_COUNT && item.slot === slot) {
-      item.pitch = normalizePitchStages(pitch);
-      constrainPitchToEnvelope(item);
-      item.cardDirty = false;
-      updated = true;
-    }
-  });
-  if (!updated) return;
-
-  savePresets();
-  render();
-  logDeveloper("Applied late pitch envelope readback.", { slot: slot + 1 });
-}
-
-function completeEnvelopeSlotRead(slot) {
-  if (!envelopeReadSession) return;
-  if (slot === undefined) envelopeReadSession.pendingSlots.shift();
-  else envelopeReadSession.pendingSlots =
-    envelopeReadSession.pendingSlots.filter((pendingSlot) => pendingSlot !== slot);
-  envelopeReadSession.waitingForSlot = null;
-  envelopeReadSession.waitingForPitchSlot = null;
-  envelopeReadSession.lastEnvelopeSlot = null;
   clearEnvelopeReadTimer();
   sendNextEnvelopeRequest();
 }
@@ -2053,10 +1675,6 @@ function handleSysexResponse(data) {
     handleEnvelopeResponse(data);
     return;
   }
-  if (data[6] === SYSEX_COMMAND_PITCH_ENVELOPE_RESPONSE) {
-    handlePitchEnvelopeResponse(data);
-    return;
-  }
   if (data[6] !== SYSEX_COMMAND_SETTINGS_RESPONSE) return;
 
   if (!settingsRequestPending) {
@@ -2085,7 +1703,7 @@ function handleSysexResponse(data) {
       turingMidiChannel: clampInt((data[14] & 0x0f) + 1, 1, 16)
     };
   } else if (data.length === 22) {
-    settingsProtocol = "extended";
+    settingsProtocol = "experimental";
     performanceSettings = {
       ...performanceSettings,
       ring: clampInt(unpackUint14(data, 7), 0, MAX_LEVEL),
@@ -2151,16 +1769,6 @@ function canvasPoint(event) {
   };
 }
 
-function pitchCanvasPoint(event) {
-  const rect = el.pitchCanvas.getBoundingClientRect();
-  return {
-    x: Math.max(0, Math.min(rect.width, event.clientX - rect.left)),
-    y: Math.max(0, Math.min(rect.height, event.clientY - rect.top)),
-    width: rect.width,
-    height: rect.height
-  };
-}
-
 function findDragTarget(point) {
   const current = presets[selected];
   let best = null;
@@ -2176,24 +1784,6 @@ function findDragTarget(point) {
     const distance = Math.hypot(point.x - x, point.y - y);
     if (!best || distance < best.distance) {
       best = { lane, index, distance };
-    }
-  });
-
-  return best && best.distance <= 28 ? best : null;
-}
-
-function findPitchDragTarget(point) {
-  const current = presets[selected];
-  let best = null;
-  const viewSamples = editorViewSamples();
-  let x = 0;
-
-  current.pitch.forEach((stage, index) => {
-    x = Math.min(point.width, x + (stage.time / viewSamples) * point.width);
-    const y = levelY(stage.level, point.height);
-    const distance = Math.hypot(point.x - x, point.y - y);
-    if (!best || distance < best.distance) {
-      best = { lane: "pitch", index, distance };
     }
   });
 
@@ -2217,39 +1807,11 @@ function updateDraggedStage(event) {
 
   stage.level = clampInt(level, 0, MAX_LEVEL);
   stage.time = clampInt(targetEnd - before, 1, maxStageTime);
-  constrainPitchToEnvelope(presets[selected]);
   if (presets[selected].slot !== null) presets[selected].cardDirty = true;
   savePresets();
   renderPresetList();
   syncStageInputs(dragTarget.lane, dragTarget.index);
   drawCurves();
-  drawPitchCurve();
-  updateExport();
-}
-
-function updateDraggedPitchStage(event) {
-  if (!pitchDragTarget) return;
-  const point = pitchCanvasPoint(event);
-
-  if (selected < FACTORY_PRESET_COUNT) {
-    if (!duplicateFactoryPreset()) return;
-  }
-
-  const level = Math.round((1 - ((point.y - 18) / Math.max(1, point.height - 36))) * MAX_LEVEL);
-  const stages = presets[selected].pitch;
-  const stage = stages[pitchDragTarget.index];
-  const before = samplesBeforeStage(stages, pitchDragTarget.index);
-  const pitchMaxSamples = envelopeMaxSamples(presets[selected]);
-  const targetEnd = Math.round((point.x / Math.max(1, point.width)) * pitchMaxSamples);
-  const maxStageTime = Math.max(1, pitchMaxSamples - before);
-
-  stage.level = clampInt(level, 0, MAX_LEVEL);
-  stage.time = clampInt(targetEnd - before, 1, maxStageTime);
-  constrainPitchToEnvelope(presets[selected]);
-  savePresets();
-  renderPresetList();
-  syncStageInputs("pitch", pitchDragTarget.index);
-  drawPitchCurve();
   updateExport();
 }
 
@@ -2315,14 +1877,14 @@ function sendSettingsFrames(output, command, delayMs = 0) {
     else output.send(frame);
   };
 
-  if (settingsProtocol === "extended") {
-    sendAt(buildExtendedSettingsSysex(command));
+  if (settingsProtocol === "experimental") {
+    sendAt(buildExperimentalSettingsSysex(command));
   } else if (settingsProtocol === "stable") {
     sendAt(buildStableSettingsSysex(command));
   } else {
     sendAt(buildStableSettingsSysex(command));
     if (command === SYSEX_COMMAND_SETTINGS) {
-      sendAt(buildExtendedSettingsSysex(command), 40);
+      sendAt(buildExperimentalSettingsSysex(command), 40);
     }
   }
 }
@@ -2425,7 +1987,6 @@ el.clearDeveloperLog.addEventListener("click", () => {
   clearDeveloperLog();
   setStatus("Developer diagnostics cleared.");
 });
-el.resetBrowserState.addEventListener("click", resetBrowserState);
 el.copyCpp.addEventListener("click", async () => {
   await navigator.clipboard.writeText(el.exportText.value);
   setStatus("C++ preset copied.");
@@ -2456,7 +2017,6 @@ el.deleteSlot.addEventListener("click", deleteCustomSlot);
 el.requestEnvelopes.addEventListener("click", () => requestCardEnvelopes());
 el.requestSettings.addEventListener("click", requestPerformanceSettings);
 el.sendSettings.addEventListener("click", () => sendPerformanceSettings(SYSEX_COMMAND_SETTINGS));
-el.spreadPitchPoints.addEventListener("click", spreadPitchPoints);
 el.pdControl.addEventListener("input", () => updatePerformanceSetting("pd", el.pdControl.value));
 el.detuneControl.addEventListener("input", () => updatePerformanceSetting("detune", el.detuneControl.value));
 el.performanceWaveSelect.addEventListener("change", () => updatePerformanceSetting("waveform", el.performanceWaveSelect.value));
@@ -2481,25 +2041,7 @@ el.canvas.addEventListener("pointercancel", () => {
   dragTarget = null;
 });
 
-el.pitchCanvas.addEventListener("pointerdown", (event) => {
-  const target = findPitchDragTarget(pitchCanvasPoint(event));
-  if (!target) return;
-  pitchDragTarget = target;
-  el.pitchCanvas.setPointerCapture(event.pointerId);
-  updateDraggedPitchStage(event);
-});
-el.pitchCanvas.addEventListener("pointermove", updateDraggedPitchStage);
-el.pitchCanvas.addEventListener("pointerup", () => {
-  pitchDragTarget = null;
-});
-el.pitchCanvas.addEventListener("pointercancel", () => {
-  pitchDragTarget = null;
-});
-
-window.addEventListener("resize", () => {
-  drawCurves();
-  drawPitchCurve();
-});
+window.addEventListener("resize", drawCurves);
 renderDeveloperLog();
 consumeImportedDraft();
 render();

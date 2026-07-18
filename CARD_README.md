@@ -2,13 +2,15 @@
 
 C1ZZL3 is a phase-distortion synth card for the Music Thing Modular Workshop
 Computer. It combines a playable digital synth voice, a Turing machine, USB
-MIDI, and a browser editor for custom envelopes.
+MIDI, and a browser editor for custom amplitude, phase-distortion, and pitch
+envelopes.
 
 ## What It Does
 
 - Plays as a phase-distortion synth voice.
 - Responds to USB MIDI notes from a DAW or class-compliant controller.
-- Lets you design and save custom envelopes from a browser.
+- Lets you design and save custom amplitude, phase-distortion, and pitch
+  envelopes from a browser.
 - Runs a Turing machine mode with stepped CV, smoothed CV, two pulse outputs,
   and optional MIDI note output.
 - Keeps factory envelope presets safe; custom envelopes use separate slots.
@@ -96,11 +98,12 @@ Use Chrome or another browser with Web MIDI and SysEx support. Press `MIDI`,
 choose the C1ZZL3 output, then:
 
 1. Pick a preset on the left, or add a custom one.
-2. Choose `Amplitude` or `Phase Distortion` to focus on one lane at a time.
-3. Drag points on the graph to change both level and timing.
-4. Watch the point numbers. Matching numbers mean the stages are stacked at the same spot.
-5. Use the tables below the graph for exact values when you want precise edits.
-6. Use the action buttons on the right when you want to send, save, read, or export.
+2. Choose `Amplitude` or `Phase Distortion` to focus the main graph lane.
+3. Use the Pitch Envelope graph below it to adjust pitch movement.
+4. Drag points on the graphs to change both level and timing.
+5. Watch the point numbers. When stages stack, only the highest number is shown.
+6. Use the tables below the graphs for exact values when you want precise edits.
+7. Use the action buttons on the right when you want to send, save, read, or export.
 
 Button quick reference:
 

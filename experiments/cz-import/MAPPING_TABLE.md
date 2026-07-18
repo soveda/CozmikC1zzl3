@@ -73,7 +73,7 @@ The importer should tell the user when:
 
 ## Suggested Debug Output
 
-For the experimental version, show:
+In developer diagnostics, show:
 
 - raw decoded CZ parameter bytes
 - interpreted envelope points
@@ -81,5 +81,5 @@ For the experimental version, show:
 - chosen C1ZZL3 mapping values
 - unsupported feature list
 
-This should stay behind a developer or experimental toggle until the mapping is
-proven useful.
+This should stay behind the developer tools toggle so the main workflow stays
+clear.

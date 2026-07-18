@@ -1467,7 +1467,7 @@ async function deleteCustomSlot() {
     return;
   }
   if (envelopeReadSupported !== true) {
-    markCardSlotLocal(slot);
+    removeCardSlotDraft(slot);
     savePresets();
     render();
     setStatus(`Delete sent for card slot ${slot + 1}. Use Read Envelopes from Card to confirm it.`);
@@ -1635,13 +1635,21 @@ function markCardSlotLocal(slot) {
   });
 }
 
+function removeCardSlotDraft(slot) {
+  const previousSelected = selected;
+  presets = presets.filter((item, index) =>
+    index < FACTORY_PRESET_COUNT || item.slot !== slot);
+  selected = Math.min(previousSelected, presets.length - 1);
+  if (selected < 0) selected = 0;
+}
+
 function reconcileCardEnvelopes(mask, cardEnvelopes) {
   let preservedChanges = 0;
   let skipped = 0;
   let replacedLocal = 0;
 
   for (let slot = 0; slot < CUSTOM_SLOT_COUNT; slot++) {
-    if ((mask & (1 << slot)) === 0) markCardSlotLocal(slot);
+    if ((mask & (1 << slot)) === 0) removeCardSlotDraft(slot);
   }
 
   cardEnvelopes.forEach((cardEnvelope, slot) => {
@@ -1750,7 +1758,7 @@ function armEnvelopeReadTimeout() {
     el.requestEnvelopes.disabled = false;
     renderDeveloperPorts();
     if (session?.reason === "delete") {
-      markCardSlotLocal(session.slot);
+      removeCardSlotDraft(session.slot);
       savePresets();
       render();
     }
