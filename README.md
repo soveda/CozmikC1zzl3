@@ -177,6 +177,27 @@ Import Lab flow:
 4. Use `Open In Envelope Lab` to carry the draft into the main editor.
 5. In Envelope Lab, review the result, adjust if needed, and send or save it.
 
+## Beta Test: DCO Pitch Import
+
+Hosted beta:
+
+```text
+https://soveda.github.io/CozmikC1zzl3/experiments/dco-pitch-handling/import-lab/
+```
+
+This beta uses the current production firmware and does not require a different
+UF2. It is for comparing how decoded CZ DCO1 and DCO2 pitch envelopes should be
+mapped into the single C1ZZL3 pitch lane before any future firmware work on
+separate oscillator pitch envelopes.
+
+Beta pitch options:
+
+- `Merged DCO1 + DCO2 average`: recommended default and usually the most useful.
+- `DCO1 pitch only`: useful when oscillator 1 has the clearer contour.
+- `DCO2 pitch only`: useful when oscillator 2 has the clearer contour.
+- `Advanced: DCO1 / DCO2 difference emphasis`: can be interesting when the two
+  envelopes differ, but may lose character when they are too similar.
+
 ## How To Use The Editor
 
 1. Pick a preset on the left, or add a custom one.
