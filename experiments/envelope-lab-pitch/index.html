@@ -95,9 +95,12 @@
           <div class="pitch-editor-head">
             <div>
               <h2>Pitch Envelope</h2>
-              <p>Experimental lane. Visible and editable here; not sent to the current card firmware yet.</p>
+              <p>Experimental lane. Pitch points are capped to the amplitude/PD envelope length.</p>
             </div>
-            <span id="pitchSourceLabel">No CZ pitch source loaded</span>
+            <div class="pitch-tools">
+              <span id="pitchSourceLabel">No CZ pitch source loaded</span>
+              <button id="spreadPitchPoints" type="button">Spread Pitch Points</button>
+            </div>
           </div>
           <div class="curve-panel pitch-curve-panel">
             <canvas id="pitchCanvas" width="1200" height="260" aria-label="Pitch envelope preview"></canvas>
@@ -226,7 +229,10 @@
           <div class="developer-log-panel">
             <div class="developer-log-head">
               <h3>Event Log</h3>
-              <button id="clearDeveloperLog" type="button">Clear log</button>
+              <div class="developer-log-actions">
+                <button id="resetBrowserState" type="button">Reset browser state</button>
+                <button id="clearDeveloperLog" type="button">Clear log</button>
+              </div>
             </div>
             <pre id="developerLog" class="developer-log" aria-label="Developer diagnostics"></pre>
           </div>
@@ -236,6 +242,6 @@
     </section>
   </main>
 
-  <script src="app.js?v=20260717-pitch-1"></script>
+  <script src="app.js?v=20260718-render-fix"></script>
 </body>
 </html>

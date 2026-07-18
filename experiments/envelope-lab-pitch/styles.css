@@ -473,6 +473,23 @@ select {
   color: var(--graph-pitch);
 }
 
+.pitch-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.pitch-tools button {
+  border-color: color-mix(in srgb, var(--graph-pitch) 55%, var(--line));
+  color: var(--graph-pitch);
+  background:
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--graph-pitch) 18%, var(--panel)),
+      color-mix(in srgb, var(--panel) 88%, transparent));
+}
+
 .pitch-curve-panel {
   padding-bottom: 8px;
 }
@@ -662,6 +679,13 @@ textarea {
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.developer-log-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .developer-log {

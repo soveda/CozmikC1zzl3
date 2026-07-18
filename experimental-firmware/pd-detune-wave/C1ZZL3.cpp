@@ -20,7 +20,9 @@ static constexpr uint8_t WebMidiCommandRequestEnvelopeSlots = 0x08u;
 static constexpr uint8_t WebMidiCommandEnvelopeSlotsResponse = 0x09u;
 static constexpr uint8_t WebMidiCommandRequestEnvelope = 0x0Au;
 static constexpr uint8_t WebMidiCommandEnvelopeResponse = 0x0Bu;
-static constexpr uint8_t WebMidiEnvelopeProtocolVersion = 2u;
+static constexpr uint8_t WebMidiCommandRequestPitchEnvelope = 0x0Cu;
+static constexpr uint8_t WebMidiCommandPitchEnvelopeResponse = 0x0Du;
+static constexpr uint8_t WebMidiEnvelopeProtocolVersion = 1u;
 static constexpr uint32_t WebMidiSettingsPayloadLength = 14u;
 static constexpr uint32_t WebMidiStableSettingsPayloadLength = 8u;
 static constexpr uint32_t WebMidiRangeSettingsPayloadLength = 6u;
@@ -170,7 +172,7 @@ public:
 
         if (envelopeSelectMode)
         {
-            updateEnvelopeSelectMode(main, mode, previousMode);
+            updateEnvelopeSelectMode(main, x, y, mode, previousMode);
             lastMode = mode;
             return;
         }
@@ -184,6 +186,10 @@ public:
                 resetSaveGesture();
                 previousMode = mode;
                 lastMode = mode;
+            }
+            else
+            {
+                resetSavedSettingPickup(main, x, y);
             }
         }
 
@@ -358,6 +364,9 @@ private:
     static constexpr int32_t HighPitchSofteningStart = 28000000;
     static constexpr int32_t HighPitchSofteningRange = 42000000;
     static constexpr int32_t HighPitchSofteningMaxQ12 = 1200;
+    static constexpr uint32_t TriggerDeClickSamples = 384u;
+    static constexpr uint32_t LoopDeClickSamples = 384u;
+    static constexpr int32_t LoopDeClickFloorQ12 = 3584;
     static constexpr uint32_t SaveFlashOffset =
         (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE) &
         ~(FLASH_SECTOR_SIZE - 1u);
@@ -513,6 +522,7 @@ private:
         int32_t ampScale = envelopeAmpScale(envelopeLevel);
         ampScale = (ampScale * pdCompensationScale(pd)) >> 12;
         ampScale = (ampScale * updateSyncFade()) >> 12;
+        ampScale = (ampScale * updateLoopFade()) >> 12;
         osc1 = (osc1 * ampScale) >> 12;
         osc2 = (osc2 * ampScale) >> 12;
 
@@ -640,7 +650,8 @@ private:
             ampEnvelopeStartLevel,
             envelopeHeld,
             envelopeReleaseRequested,
-            loopEnabled);
+            loopEnabled,
+            true);
 
         bool pdDone = updateEnvelopeRunner(
             program.pd,
@@ -650,7 +661,8 @@ private:
             pdEnvelopeStartLevel,
             envelopeHeld,
             envelopeReleaseRequested,
-            loopEnabled);
+            loopEnabled,
+            false);
 
         bool pitchDone = updateEnvelopeRunner(
             program.pitch,
@@ -660,7 +672,8 @@ private:
             pitchEnvelopeStartLevel,
             envelopeHeld,
             envelopeReleaseRequested,
-            loopEnabled);
+            loopEnabled,
+            false);
 
         if (ampDone && pdDone && pitchDone)
         {
@@ -874,7 +887,13 @@ private:
         }
 
         if (command == WebMidiCommandRequestEnvelope)
+        {
             handleWebMidiRequestEnvelope();
+            return;
+        }
+
+        if (command == WebMidiCommandRequestPitchEnvelope)
+            handleWebMidiRequestPitchEnvelope();
     }
 
     bool webMidiHeaderMatches()
@@ -1010,7 +1029,7 @@ private:
         if (!customEnvelopeLoaded[slot])
             return;
 
-        uint8_t frame[129] = {
+        uint8_t frame[89] = {
             0xF0u,
             WebMidiManufacturer,
             WebMidiId[0],
@@ -1032,6 +1051,37 @@ private:
             appendWebMidiUint14(frame, offset, envelope.pd[i].level);
             appendWebMidiUint21(frame, offset, envelope.pd[i].time);
         }
+        frame[offset++] = 0xF7u;
+        tud_midi_stream_write(0, frame, offset);
+        sendWebMidiPitchEnvelopeResponse(slot);
+    }
+
+    void handleWebMidiRequestPitchEnvelope()
+    {
+        if (sysexLength != 7u)
+            return;
+
+        uint8_t slot = sysexBuffer[6] & 0x07u;
+        if (!customEnvelopeLoaded[slot])
+            return;
+
+        sendWebMidiPitchEnvelopeResponse(slot);
+    }
+
+    void sendWebMidiPitchEnvelopeResponse(uint8_t slot)
+    {
+        uint8_t frame[49] = {
+            0xF0u,
+            WebMidiManufacturer,
+            WebMidiId[0],
+            WebMidiId[1],
+            WebMidiId[2],
+            WebMidiId[3],
+            WebMidiCommandPitchEnvelopeResponse,
+            slot
+        };
+        uint32_t offset = 8;
+        const EnvelopeProgram& envelope = customEnvelopes[slot];
         for (uint32_t i = 0; i < 8u; ++i)
         {
             appendWebMidiUint14(frame, offset, envelope.pitch[i].level);
@@ -1310,13 +1360,18 @@ private:
         int32_t& startLevel,
         bool held,
         bool releaseRequested,
-        bool loopEnabled)
+        bool loopEnabled,
+        bool deClickOnLoop)
     {
         if (stage >= 8)
             return true;
 
         if (loopEnabled && stage > EnvelopeLoopEndStage && held && !releaseRequested)
+        {
             stage = EnvelopeLoopStartStage;
+            if (deClickOnLoop)
+                loopFadeSamples = LoopDeClickSamples;
+        }
 
         uint32_t time = stages[stage].time;
         if (time == 0)
@@ -1334,7 +1389,11 @@ private:
             startLevel = level;
 
             if (loopEnabled && stage > EnvelopeLoopEndStage && held && !releaseRequested)
+            {
                 stage = EnvelopeLoopStartStage;
+                if (deClickOnLoop)
+                    loopFadeSamples = LoopDeClickSamples;
+            }
         }
 
         return stage >= 8;
@@ -1552,7 +1611,12 @@ private:
         }
     }
 
-    void updateEnvelopeSelectMode(int32_t main, Switch mode, Switch previousMode)
+    void updateEnvelopeSelectMode(
+        int32_t main,
+        int32_t x,
+        int32_t y,
+        Switch mode,
+        Switch previousMode)
     {
         AudioOut1(0);
         AudioOut2(0);
@@ -1581,6 +1645,7 @@ private:
             if (envelopeSelectHoldActive)
             {
                 envelopeSelectMode = false;
+                resetSavedSettingPickup(main, x, y);
                 resetEnvelopeSelectHold();
             }
 
@@ -1894,6 +1959,17 @@ private:
         altYEntry = y;
     }
 
+    void resetSavedSettingPickup(int32_t main, int32_t x, int32_t y)
+    {
+        // Leave pitch live, but protect saved/browser settings until their
+        // physical controls deliberately catch the stored values.
+        synthXPickedUp = false;
+        synthYPickedUp = false;
+        synthXEntry = x;
+        synthYEntry = y;
+        resetAltPickup(main, x, y);
+    }
+
     bool pickupAltControl(int32_t knob, int32_t entry, int32_t target, bool& pickedUp)
     {
         int32_t moved = knob - entry;
@@ -2198,7 +2274,7 @@ private:
     {
         phase1 = 0;
         phase2 = 0;
-        syncFadeSamples = 96;
+        syncFadeSamples = TriggerDeClickSamples;
     }
 
     int32_t updateSyncFade()
@@ -2206,8 +2282,23 @@ private:
         if (syncFadeSamples == 0)
             return 4095;
 
+        int32_t scale =
+            4095 - ((syncFadeSamples * 4095) / TriggerDeClickSamples);
         syncFadeSamples--;
-        return 4095 - ((syncFadeSamples * 4095) / 96);
+        return scale;
+    }
+
+    int32_t updateLoopFade()
+    {
+        if (loopFadeSamples == 0)
+            return 4095;
+
+        int32_t scale =
+            4095 -
+            ((loopFadeSamples * (4095 - LoopDeClickFloorQ12)) /
+             LoopDeClickSamples);
+        loopFadeSamples--;
+        return scale;
     }
 
     uint8_t fastNoise()
@@ -2328,6 +2419,7 @@ private:
     uint32_t phase1 = 0;
     uint32_t phase2 = 0;
     uint32_t syncFadeSamples = 0;
+    uint32_t loopFadeSamples = 0;
     OutputFilterState outputFilterLeft = {};
     OutputFilterState outputFilterRight = {};
 
