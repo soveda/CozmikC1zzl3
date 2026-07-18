@@ -78,7 +78,9 @@ let settingsRequestTimer = null;
 let envelopeReadSession = null;
 let envelopeReadTimer = null;
 let envelopeReadSupported = null;
-const CZ_IMPORT_HANDOFF_KEY = "c1zzl3-cz-import-draft";
+const PRESET_STORAGE_KEY = "c1zzl3-dco-pitch-envelope-presets";
+const PERFORMANCE_STORAGE_KEY = "c1zzl3-dco-pitch-performance-settings";
+const CZ_IMPORT_HANDOFF_KEY = "c1zzl3-dco-pitch-import-draft";
 const HOSTED_EDITOR_URL = "https://soveda.github.io/CozmikC1zzl3/experiments/dco-pitch-handling/index.html";
 const HOSTED_IMPORT_LAB_URL = "https://soveda.github.io/CozmikC1zzl3/experiments/dco-pitch-handling/import-lab/";
 const LOCAL_IMPORT_LAB_URL = "import-lab/index.html";
@@ -241,7 +243,7 @@ function spreadPitchPoints() {
 
 function loadPresets() {
   try {
-    const saved = JSON.parse(localStorage.getItem("c1zzl3-envelope-presets"));
+    const saved = JSON.parse(localStorage.getItem(PRESET_STORAGE_KEY));
     if (Array.isArray(saved)) {
       const custom = saved
         .slice(FACTORY_PRESET_COUNT)
@@ -262,7 +264,7 @@ function loadPresets() {
 }
 
 function savePresets() {
-  localStorage.setItem("c1zzl3-envelope-presets", JSON.stringify({
+  localStorage.setItem(PRESET_STORAGE_KEY, JSON.stringify({
     customPresets: presets
       .slice(FACTORY_PRESET_COUNT, FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS)
       .map((item) => ({
@@ -279,7 +281,7 @@ function savePresets() {
 
 function loadPerformanceSettings() {
   try {
-    const saved = JSON.parse(localStorage.getItem("c1zzl3-performance-settings"));
+    const saved = JSON.parse(localStorage.getItem(PERFORMANCE_STORAGE_KEY));
     if (saved && typeof saved === "object") {
       return {
         pd: clampInt(saved.pd ?? 0, 0, MAX_LEVEL),
@@ -311,12 +313,12 @@ function loadPerformanceSettings() {
 }
 
 function savePerformanceSettings() {
-  localStorage.setItem("c1zzl3-performance-settings", JSON.stringify(performanceSettings));
+  localStorage.setItem(PERFORMANCE_STORAGE_KEY, JSON.stringify(performanceSettings));
 }
 
 function resetBrowserState() {
-  localStorage.removeItem("c1zzl3-envelope-presets");
-  localStorage.removeItem("c1zzl3-performance-settings");
+  localStorage.removeItem(PRESET_STORAGE_KEY);
+  localStorage.removeItem(PERFORMANCE_STORAGE_KEY);
   localStorage.removeItem(CZ_IMPORT_HANDOFF_KEY);
   setStatus("Browser state cleared. Reloading baseline editor...");
   window.setTimeout(() => window.location.reload(), 120);
@@ -2119,7 +2121,7 @@ function downloadJson() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "c1zzl3-envelope-presets.json";
+  link.download = "c1zzl3-dco-pitch-beta-presets.json";
   link.click();
   URL.revokeObjectURL(url);
 }
