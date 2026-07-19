@@ -82,10 +82,17 @@ let envelopeReadSupported = null;
 const PRESET_STORAGE_KEY = "c1zzl3-dual-pitch-envelope-presets";
 const PERFORMANCE_STORAGE_KEY = "c1zzl3-dual-pitch-performance-settings";
 const CZ_IMPORT_HANDOFF_KEY = "c1zzl3-dual-pitch-import-draft";
+const CZ_IMPORT_QUEUE_KEY = "c1zzl3-dual-pitch-import-queue";
+const ENVELOPE_LAB_HEARTBEAT_KEY = "c1zzl3-dual-pitch-envelope-lab-heartbeat";
+const HANDOFF_CHANNEL_NAME = "c1zzl3-dual-pitch-handoff";
 const HOSTED_EDITOR_URL = "https://soveda.github.io/CozmikC1zzl3/experiments/dual-pitch-envelopes/index.html";
 const HOSTED_IMPORT_LAB_URL = "https://soveda.github.io/CozmikC1zzl3/experiments/dual-pitch-envelopes/import-lab/";
 const LOCAL_IMPORT_LAB_URL = "import-lab/index.html";
 let messageImportedDraft = null;
+let lastConsumedHandoffId = null;
+const handoffChannel = typeof BroadcastChannel === "function"
+  ? new BroadcastChannel(HANDOFF_CHANNEL_NAME)
+  : null;
 const WAVE_FAMILIES = [
   "Saw",
   "Square",
@@ -99,11 +106,22 @@ const WAVE_FAMILIES = [
 
 window.addEventListener("message", (event) => {
   if (event.data?.type === "cz-import-handoff" && event.data?.payload) {
-    messageImportedDraft = event.data.payload;
-    if (consumeImportedDraft()) {
-      render();
-      setStatus("Imported CZ draft added without reloading the Envelope Lab.");
-    }
+    handleLiveImportedDraft(event.data.payload);
+  }
+});
+
+handoffChannel?.addEventListener("message", (event) => {
+  if (event.data?.type === "cz-import-handoff" && event.data?.payload) {
+    handleLiveImportedDraft(event.data.payload);
+  }
+});
+
+window.addEventListener("storage", (event) => {
+  if (event.key !== CZ_IMPORT_QUEUE_KEY || !event.newValue) return;
+  try {
+    handleLiveImportedDraft(JSON.parse(event.newValue));
+  } catch {
+    /* Ignore unrelated or partial storage writes. */
   }
 });
 
@@ -366,7 +384,16 @@ function saveThemeMode() {
 function clearImportedDraftSources() {
   messageImportedDraft = null;
   localStorage.removeItem(CZ_IMPORT_HANDOFF_KEY);
+  localStorage.removeItem(CZ_IMPORT_QUEUE_KEY);
   window.history.replaceState(null, "", window.location.pathname);
+}
+
+function markEnvelopeLabActive() {
+  try {
+    localStorage.setItem(ENVELOPE_LAB_HEARTBEAT_KEY, String(Date.now()));
+  } catch {
+    /* Heartbeat is only used to avoid reloading an already-open lab. */
+  }
 }
 
 function importedPitchStages(draft) {
@@ -407,8 +434,9 @@ function addImportedDraft(draft) {
   if (!draft || !Array.isArray(draft.amp) || !Array.isArray(draft.pd)) return false;
   const imported = makeImportedPreset(draft);
   if (customPresetCount() >= MAX_BROWSER_CUSTOM_PRESETS) {
-    presets[FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1] = imported;
-    selected = FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1;
+    clearImportedDraftSources();
+    setStatus(`Browser draft limit reached (${MAX_BROWSER_CUSTOM_PRESETS}). Delete an envelope draft before importing another CZ patch.`);
+    return false;
   } else {
     presets.push(imported);
     selected = presets.length - 1;
@@ -419,12 +447,28 @@ function addImportedDraft(draft) {
   return true;
 }
 
+function handleLiveImportedDraft(payload) {
+  const handoffId = payload?.id || payload?.createdAt || null;
+  if (!payload || handoffId === lastConsumedHandoffId) return false;
+  messageImportedDraft = payload;
+  if (!consumeImportedDraft()) return false;
+  lastConsumedHandoffId = handoffId;
+  render();
+  setStatus("Imported CZ draft added without reloading the Envelope Lab.");
+  return true;
+}
+
 function consumeImportedDraft() {
   try {
     if (messageImportedDraft) {
       const payload = messageImportedDraft;
+      const handoffId = payload?.id || payload?.createdAt || null;
+      if (handoffId && handoffId === lastConsumedHandoffId) return false;
       const draft = payload?.draft;
-      if (addImportedDraft(draft)) return true;
+      if (addImportedDraft(draft)) {
+        lastConsumedHandoffId = handoffId;
+        return true;
+      }
     }
 
     const params = new URLSearchParams(window.location.search);
@@ -443,18 +487,25 @@ function consumeImportedDraft() {
     }
 
     const raw = localStorage.getItem(CZ_IMPORT_HANDOFF_KEY);
-    if (!raw) return false;
+    const queueRaw = localStorage.getItem(CZ_IMPORT_QUEUE_KEY);
+    if (!raw && !queueRaw) return false;
 
-    const payload = JSON.parse(raw);
+    const payload = JSON.parse(raw || queueRaw);
+    const handoffId = payload?.id || payload?.createdAt || null;
+    if (handoffId && handoffId === lastConsumedHandoffId) return false;
     const draft = payload?.draft;
     if (!draft || !Array.isArray(draft.amp) || !Array.isArray(draft.pd)) {
       localStorage.removeItem(CZ_IMPORT_HANDOFF_KEY);
+      localStorage.removeItem(CZ_IMPORT_QUEUE_KEY);
       return false;
     }
 
-    return addImportedDraft(draft);
+    if (!addImportedDraft(draft)) return false;
+    lastConsumedHandoffId = handoffId;
+    return true;
   } catch {
     localStorage.removeItem(CZ_IMPORT_HANDOFF_KEY);
+    localStorage.removeItem(CZ_IMPORT_QUEUE_KEY);
     return false;
   }
 }
@@ -2551,6 +2602,8 @@ window.addEventListener("resize", () => {
   drawCurves();
   drawPitchCurve();
 });
+markEnvelopeLabActive();
+window.setInterval(markEnvelopeLabActive, 2000);
 renderDeveloperLog();
 consumeImportedDraft();
 render();

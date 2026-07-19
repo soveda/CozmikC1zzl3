@@ -34,10 +34,17 @@ let pdMappingMode = "merged";
 let pitchMappingMode = "dual";
 let themeMode = loadThemeMode();
 const HANDOFF_KEY = "c1zzl3-dual-pitch-import-draft";
+const HANDOFF_QUEUE_KEY = "c1zzl3-dual-pitch-import-queue";
+const ENVELOPE_LAB_HEARTBEAT_KEY = "c1zzl3-dual-pitch-envelope-lab-heartbeat";
+const HANDOFF_CHANNEL_NAME = "c1zzl3-dual-pitch-handoff";
 const THEME_KEY = "c1zzl3-theme-mode";
 const LOCAL_EDITOR_URL = "../index.html";
 const HOSTED_EDITOR_URL = "https://soveda.github.io/CozmikC1zzl3/experiments/dual-pitch-envelopes/index.html";
 const ENVELOPE_LAB_WINDOW_NAME = "c1zzl3-dual-pitch-envelope-lab";
+const HANDOFF_ACTIVE_WINDOW_MS = 5000;
+const handoffChannel = typeof BroadcastChannel === "function"
+  ? new BroadcastChannel(HANDOFF_CHANNEL_NAME)
+  : null;
 const PITCH_MAPPING_MODES = {
   dual: "DCO1 -> oscillator 1, DCO2 -> oscillator 2",
   merged: "Merged DCO1 + DCO2 average",
@@ -593,15 +600,23 @@ function renderDraft(draft) {
   el.pitchSelectedBox.textContent = formatStages(draft.sourceEnvelopes.pitch);
 }
 
+function createHandoffId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 function handoffDraft(draft) {
-  if (!draft) return false;
+  if (!draft) return null;
   const payload = {
+    id: createHandoffId(),
     source: "cz-import-lab",
     createdAt: new Date().toISOString(),
     draft
   };
   localStorage.setItem(HANDOFF_KEY, JSON.stringify(payload));
-  return true;
+  localStorage.setItem(HANDOFF_QUEUE_KEY, JSON.stringify(payload));
+  handoffChannel?.postMessage({ type: "cz-import-handoff", payload });
+  return payload;
 }
 
 function createEditorUrl() {
@@ -609,19 +624,19 @@ function createEditorUrl() {
   return editorUrl;
 }
 
-function createHandoffPayload() {
-  if (!currentDraft) return null;
-  return {
-    source: "cz-import-lab",
-    createdAt: new Date().toISOString(),
-    draft: currentDraft
-  };
+function envelopeLabLooksOpen() {
+  try {
+    const timestamp = Number(localStorage.getItem(ENVELOPE_LAB_HEARTBEAT_KEY) || 0);
+    return Number.isFinite(timestamp) && Date.now() - timestamp < HANDOFF_ACTIVE_WINDOW_MS;
+  } catch {
+    return false;
+  }
 }
 
-function openEditorTab() {
+function openEditorTab(payload) {
   const editorUrl = createEditorUrl();
-  const payload = createHandoffPayload();
   const canReuseTab = editorTab && !editorTab.closed;
+  if (!canReuseTab && envelopeLabLooksOpen()) return editorUrl;
   const tab = canReuseTab ? editorTab : window.open(editorUrl, ENVELOPE_LAB_WINDOW_NAME);
   if (!tab) return editorUrl;
 
@@ -782,9 +797,10 @@ el.dropzone.addEventListener("drop", (event) => {
   if (file) handleFile(file);
 });
 el.openDraft.addEventListener("click", () => {
-  if (handoffDraft(currentDraft)) {
+  const payload = handoffDraft(currentDraft);
+  if (payload) {
     setStatus("Draft handed off to Envelope Lab without adding it to the URL.", "ok");
-    openEditorTab();
+    openEditorTab(payload);
   } else {
     setStatus("Import a file first so there is a draft to open.", "warn");
   }

@@ -113,6 +113,48 @@ Before increasing clock speed further:
 - Prefer reducing per-sample work before pushing the clock beyond the already
   tested 192 MHz baseline.
 
+## Sound Slots: Envelope Plus Tone Settings
+
+Custom envelopes currently store envelope shape only. Future CZ-import and
+dual-oscillator work may need a higher-level save concept that stores the
+envelope together with the tone settings needed to recreate the chosen sound.
+
+Frame this as a future `Sound Slot` or `Patch Slot`, not a replacement for the
+current envelope-only custom slots.
+
+Candidate data to save with a sound slot:
+
+- amplitude envelope
+- phase-distortion envelope
+- pitch envelope, or pitch envelopes if dual-pitch remains useful
+- PD amount
+- oscillator 2 detune
+- wave family
+- ring modulation amount
+- noise/grit amount
+
+Data that probably should remain global card setup rather than sound design:
+
+- MIDI input channel
+- Turing MIDI output enable
+- Turing MIDI output channel
+- Turing CV octave range, unless a future sound explicitly needs it
+
+Possible UI labels:
+
+- `Save Envelope`: stores shape only.
+- `Save Sound`: stores envelope plus tone settings.
+- `Load Sound`: loads both envelope and tone settings.
+
+Implementation notes:
+
+- This needs a firmware storage/protocol change.
+- Keep envelope-only save for users who want to reuse a shape with different
+  performance settings.
+- Make volatility clear: loading a sound should be temporary until explicitly
+  saved, just like the current envelope/settings workflow.
+- Avoid silently changing global MIDI/Turing setup when importing a CZ patch.
+
 ## Code Cleanup
 
 The code has grown through hardware-led iteration. If future work becomes
