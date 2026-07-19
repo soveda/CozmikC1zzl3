@@ -1634,7 +1634,8 @@ private:
 
     bool envelopeLoopEnabled(const EnvelopeProgram& program)
     {
-        return laneHasLoopBody(program.amp) || laneHasLoopBody(program.pd);
+        (void)program;
+        return false;
     }
 
     bool laneHasLoopBody(const EnvelopeStage* stages)

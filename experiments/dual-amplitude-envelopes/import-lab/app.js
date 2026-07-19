@@ -407,37 +407,46 @@ function parseCzEnvelope(bytes, endOffset, envelopeOffset, rateMapper, levelMapp
 }
 
 function mergeCzEnvelopes(a, b) {
-  return a.stages.map((stage, index) => {
+  const merged = a.stages.map((stage, index) => {
     const other = b.stages[index] ?? stage;
     return {
       rate: Math.round((stage.rate + other.rate) / 2),
       level: Math.round((stage.level + other.level) / 2),
       sustain: stage.sustain || other.sustain,
       down: stage.down || other.down,
+      inactive: index >= Math.max(a.endStep || 8, b.endStep || 8)
     };
   });
+  merged.endStep = Math.max(a.endStep || 8, b.endStep || 8);
+  return merged;
 }
 
 function cloneCzEnvelopeStages(envelope) {
-  return envelope.stages.map((stage) => ({
+  const cloned = envelope.stages.map((stage, index) => ({
     rate: stage.rate,
     level: stage.level,
     sustain: stage.sustain,
-    down: stage.down
+    down: stage.down,
+    inactive: index >= (envelope.endStep || 8)
   }));
+  cloned.endStep = envelope.endStep || 8;
+  return cloned;
 }
 
 function differenceCzPitchStages(a, b) {
-  return a.stages.map((stage, index) => {
+  const difference = a.stages.map((stage, index) => {
     const other = b.stages[index] ?? stage;
     const difference = stage.level - other.level;
     return {
       rate: Math.round((stage.rate + other.rate) / 2),
       level: clamp(Math.round(49.5 + difference / 2), 0, 99),
       sustain: stage.sustain || other.sustain,
-      down: stage.down || other.down
+      down: stage.down || other.down,
+      inactive: index >= Math.max(a.endStep || 8, b.endStep || 8)
     };
   });
+  difference.endStep = Math.max(a.endStep || 8, b.endStep || 8);
+  return difference;
 }
 
 function selectPitchStages(czPatch, mode) {
@@ -477,10 +486,10 @@ function selectAmpEnvelopePair(czPatch, mode) {
   return { amp1: selected, amp2: cloneCzEnvelopeStages(selected) };
 }
 
-function czEnvelopeToC1Stages(stages, timeMin = 240, timeMax = 48000) {
+function czEnvelopeToC1Stages(stages, timeMin = 240, timeMax = 48000, neutralLevel = 0) {
   return stages.map((stage) => roundStage(
-    (stage.level / 99) * 4095,
-    czRateToTime(stage.rate, timeMin, timeMax)
+    stage.inactive ? neutralLevel : (stage.level / 99) * 4095,
+    stage.inactive ? 1 : czRateToTime(stage.rate, timeMin, timeMax)
   ));
 }
 
@@ -549,15 +558,15 @@ function buildDraftPreset(
   const dcwEnvelope = czEnvelopeToC1Stages(pdPair.pd1, 120, 30000);
   const dcw2Envelope = czEnvelopeToC1Stages(pdPair.pd2, 120, 30000);
   const pitchStages = selectPitchStages(czPatch, pitchMode);
-  const pitchEnvelope = czEnvelopeToC1Stages(pitchStages, 240, 48000);
-  const dco1PitchEnvelope = czEnvelopeToC1Stages(cloneCzEnvelopeStages(czPatch.dco1Pitch), 240, 48000);
-  const dco2PitchEnvelope = czEnvelopeToC1Stages(cloneCzEnvelopeStages(czPatch.dco2Pitch), 240, 48000);
+  const pitchEnvelope = czEnvelopeToC1Stages(pitchStages, 240, 48000, 2048);
+  const dco1PitchEnvelope = czEnvelopeToC1Stages(cloneCzEnvelopeStages(czPatch.dco1Pitch), 240, 48000, 2048);
+  const dco2PitchEnvelope = czEnvelopeToC1Stages(cloneCzEnvelopeStages(czPatch.dco2Pitch), 240, 48000, 2048);
   const pitch2Envelope = pitchMode === "dual" ? dco2PitchEnvelope : pitchEnvelope;
   const pitchAlternatives = {
-    merged: czEnvelopeToC1Stages(mergeCzEnvelopes(czPatch.dco1Pitch, czPatch.dco2Pitch), 240, 48000),
+    merged: czEnvelopeToC1Stages(mergeCzEnvelopes(czPatch.dco1Pitch, czPatch.dco2Pitch), 240, 48000, 2048),
     dco1: dco1PitchEnvelope,
     dco2: dco2PitchEnvelope,
-    difference: czEnvelopeToC1Stages(differenceCzPitchStages(czPatch.dco1Pitch, czPatch.dco2Pitch), 240, 48000)
+    difference: czEnvelopeToC1Stages(differenceCzPitchStages(czPatch.dco1Pitch, czPatch.dco2Pitch), 240, 48000, 2048)
   };
   const detune = clamp(Math.round((decodedBytes[48] ?? 128) / 255 * 4095), 0, 4095);
   const ring = clamp(Math.round((decodedBytes[49] ?? 0) / 255 * 1200), 0, 4095);
@@ -602,7 +611,10 @@ function buildDraftPreset(
 }
 
 function formatStages(stages) {
-  return stages.map((stage, index) => `${index + 1}. ${stage.level}, ${stage.time}`).join("\n");
+  return stages.map((stage, index) => {
+    const sourceEnded = stage.time <= 1 && (stage.level === 0 || stage.level === 2048);
+    return `${index + 1}. ${stage.level}, ${stage.time}${sourceEnded ? " (after CZ END)" : ""}`;
+  }).join("\n");
 }
 
 function formatCzEnvelope(envelope) {
