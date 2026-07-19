@@ -94,20 +94,24 @@
         <section class="pitch-editor" aria-label="Pitch envelope editor">
           <div class="pitch-editor-head">
             <div>
-              <h2>Pitch Envelope</h2>
-              <p>Pitch points are capped to the amplitude/PD envelope length. Imported CZ drafts send DCO1 to oscillator 1 and DCO2 to oscillator 2 with the dual-pitch test firmware.</p>
+              <h2>Pitch Envelopes</h2>
+              <p>Pitch points are capped to the amplitude/PD envelope length. Pitch 1 drives oscillator 1 and Pitch 2 drives oscillator 2 with the dual-pitch test firmware.</p>
             </div>
             <div class="pitch-tools">
               <span id="pitchSourceLabel">No CZ pitch source loaded</span>
               <button id="spreadPitchPoints" type="button">Spread Pitch Points</button>
             </div>
           </div>
+          <div class="pitch-lane-switcher" role="tablist" aria-label="Pitch envelope lane">
+            <button id="pitch1View" type="button" class="is-active" role="tab" aria-selected="true">Pitch 1 / Osc 1</button>
+            <button id="pitch2View" type="button" role="tab" aria-selected="false">Pitch 2 / Osc 2</button>
+          </div>
           <div class="curve-panel pitch-curve-panel">
             <canvas id="pitchCanvas" width="1200" height="260" aria-label="Pitch envelope preview"></canvas>
           </div>
           <div class="stage-panel pitch-stage-panel" aria-label="Pitch envelope stages">
             <div class="lane-title">
-              <h2>Pitch</h2>
+              <h2 id="pitchStageTitle">Pitch 1 / Oscillator 1</h2>
               <span>Offset / samples</span>
             </div>
             <div class="stage-head">
@@ -242,6 +246,6 @@
     </section>
   </main>
 
-  <script src="app.js?v=20260719-dual-pitch"></script>
+  <script src="app.js?v=20260719-dual-pitch-ui"></script>
 </body>
 </html>

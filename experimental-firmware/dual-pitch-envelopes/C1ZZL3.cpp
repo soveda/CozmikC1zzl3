@@ -31,7 +31,7 @@ static constexpr uint32_t WebMidiLegacyEnvelopePayloadLength = 97u;
 static constexpr uint32_t WebMidiEnvelopePayloadLength = 137u;
 static constexpr uint32_t WebMidiDualPitchEnvelopePayloadLength = 177u;
 static constexpr uint32_t WebMidiDeleteEnvelopePayloadLength = 1u;
-static constexpr uint32_t WebMidiMaxSysexLength = 150u;
+static constexpr uint32_t WebMidiMaxSysexLength = 196u;
 
 class C1ZZL3 : public ComputerCard
 {

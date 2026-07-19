@@ -19,9 +19,11 @@
   --graph-amp: #ff5bd1;
   --graph-pd: #34f5ff;
   --graph-pitch: #9b7cff;
+  --graph-pitch-2: #43ff8f;
   --graph-amp-point: #ffb3ec;
   --graph-pd-point: #b5fcff;
   --graph-pitch-point: #e2d7ff;
+  --graph-pitch-2-point: #c4ffd8;
   --graph-pitch-center: rgba(180, 195, 255, 0.72);
   --accent: #ff49c7;
   --blue: #72a6ff;
@@ -59,9 +61,11 @@ body.theme-light {
   --graph-amp: #c46a00;
   --graph-pd: #007d6f;
   --graph-pitch: #5b4fc4;
+  --graph-pitch-2: #167a42;
   --graph-amp-point: #ffcf7a;
   --graph-pd-point: #78dacc;
   --graph-pitch-point: #d7d1ff;
+  --graph-pitch-2-point: #8fdbaa;
   --graph-pitch-center: rgba(74, 60, 142, 0.48);
   --accent: #d24f2e;
   --blue: #3a63c9;
@@ -488,6 +492,31 @@ select {
     linear-gradient(135deg,
       color-mix(in srgb, var(--graph-pitch) 18%, var(--panel)),
       color-mix(in srgb, var(--panel) 88%, transparent));
+}
+
+.pitch-lane-switcher {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--legend-bg) 88%, var(--panel));
+}
+
+.pitch-lane-switcher button {
+  border-color: color-mix(in srgb, var(--graph-pitch) 45%, var(--line));
+  color: var(--muted);
+  background: color-mix(in srgb, var(--panel) 85%, transparent);
+}
+
+.pitch-lane-switcher button.is-active {
+  color: var(--text);
+  border-color: var(--graph-pitch);
+  background:
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--graph-pitch) 24%, var(--panel)),
+      color-mix(in srgb, var(--graph-pitch-2, var(--graph-pd)) 18%, var(--panel)));
+  box-shadow: 0 0 18px color-mix(in srgb, var(--graph-pitch) 22%, transparent);
 }
 
 .pitch-curve-panel {

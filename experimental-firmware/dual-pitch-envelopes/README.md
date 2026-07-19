@@ -17,6 +17,8 @@ experiment.
 - Older single-pitch envelope payloads are still accepted and copied to both
   oscillators.
 - Legacy no-pitch payloads are still accepted and use a neutral pitch envelope.
+- SysEx receive buffering is larger than production because protocol v3 envelope
+  payloads carry amplitude, PD, pitch 1, and pitch 2 lanes in one RAM/save frame.
 - Custom envelope flash storage is versioned separately from production, so
   saved production custom envelopes are not reused by this experiment.
 

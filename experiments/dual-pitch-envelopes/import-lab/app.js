@@ -28,6 +28,7 @@ const el = {
 let currentDraft = null;
 let lastImportBuffer = null;
 let lastImportFileName = "";
+let editorTab = null;
 let ampMappingMode = "merged";
 let pdMappingMode = "merged";
 let pitchMappingMode = "dual";
@@ -620,8 +621,19 @@ function createHandoffPayload() {
 function openEditorTab() {
   const editorUrl = createEditorUrl();
   const payload = createHandoffPayload();
-  const tab = window.open(editorUrl, ENVELOPE_LAB_WINDOW_NAME);
-  if (tab && payload) {
+  const canReuseTab = editorTab && !editorTab.closed;
+  const tab = canReuseTab ? editorTab : window.open(editorUrl, ENVELOPE_LAB_WINDOW_NAME);
+  if (!tab) return editorUrl;
+
+  editorTab = tab;
+  if (canReuseTab) {
+    try {
+      if (payload) tab.postMessage({ type: "cz-import-handoff", payload }, "*");
+      tab.focus();
+    } catch {
+      /* If messaging fails, the next opened editor load can still use local storage. */
+    }
+  } else if (payload) {
     setTimeout(() => {
       try {
         tab.postMessage({ type: "cz-import-handoff", payload }, "*");

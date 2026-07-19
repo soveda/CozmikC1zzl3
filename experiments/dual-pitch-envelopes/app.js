@@ -69,6 +69,7 @@ let dragTarget = null;
 let pitchDragTarget = null;
 let performanceSettings = loadPerformanceSettings();
 let activeLaneView = "amp";
+let activePitchLane = "pitch";
 let developerMode = false;
 let themeMode = loadThemeMode();
 let developerLogLines = [];
@@ -99,6 +100,10 @@ const WAVE_FAMILIES = [
 window.addEventListener("message", (event) => {
   if (event.data?.type === "cz-import-handoff" && event.data?.payload) {
     messageImportedDraft = event.data.payload;
+    if (consumeImportedDraft()) {
+      render();
+      setStatus("Imported CZ draft added without reloading the Envelope Lab.");
+    }
   }
 });
 
@@ -113,6 +118,9 @@ const el = {
   pitchCanvas: document.querySelector("#pitchCanvas"),
   pitchSourceLabel: document.querySelector("#pitchSourceLabel"),
   spreadPitchPoints: document.querySelector("#spreadPitchPoints"),
+  pitch1View: document.querySelector("#pitch1View"),
+  pitch2View: document.querySelector("#pitch2View"),
+  pitchStageTitle: document.querySelector("#pitchStageTitle"),
   themeToggle: document.querySelector("#themeToggle"),
   onlineEditorLink: document.querySelector("#onlineEditorLink"),
   importLabLink: document.querySelector("#importLabLink"),
@@ -226,6 +234,14 @@ function constrainPitchLaneToSamples(stages, maxSamples) {
   });
 }
 
+function pitchLaneLabel(lane = activePitchLane) {
+  return lane === "pitch2" ? "Pitch 2 / Oscillator 2" : "Pitch 1 / Oscillator 1";
+}
+
+function activePitchStages(current = presets[selected]) {
+  return current[activePitchLane] || current.pitch;
+}
+
 function spreadPitchPoints() {
   if (selected < FACTORY_PRESET_COUNT) {
     if (!duplicateFactoryPreset()) return;
@@ -236,7 +252,8 @@ function spreadPitchPoints() {
   const baseTime = Math.max(1, Math.floor(maxSamples / STAGES));
   let remainder = Math.max(0, maxSamples - (baseTime * STAGES));
 
-  current.pitch = normalizePitchStages(current.pitch).map((stage) => {
+  const lane = activePitchLane;
+  current[lane] = normalizePitchStages(current[lane] || current.pitch).map((stage) => {
     const extra = remainder > 0 ? 1 : 0;
     if (remainder > 0) remainder--;
     return { level: stage.level, time: baseTime + extra };
@@ -245,7 +262,7 @@ function spreadPitchPoints() {
   if (current.slot !== null) current.cardDirty = true;
   savePresets();
   render();
-  setStatus("Pitch points spread across the current amplitude/PD envelope length.");
+  setStatus(`${pitchLaneLabel(lane)} points spread across the current amplitude/PD envelope length.`);
 }
 
 function loadPresets() {
@@ -352,18 +369,6 @@ function clearImportedDraftSources() {
   window.history.replaceState(null, "", window.location.pathname);
 }
 
-function applyImportedPerformance(draft) {
-  if (!draft || typeof draft !== "object") return;
-
-  performanceSettings = {
-    ...performanceSettings,
-    detune: clampInt(draft.performance?.detune ?? performanceSettings.detune, 0, MAX_LEVEL),
-    ring: clampInt(draft.performance?.ring ?? performanceSettings.ring, 0, MAX_LEVEL),
-    noise: clampInt(draft.performance?.noise ?? performanceSettings.noise, 0, MAX_LEVEL),
-    waveform: clampInt(draft.wave?.value ?? performanceSettings.waveform, 0, 7)
-  };
-}
-
 function importedPitchStages(draft) {
   const directPitch = draft?.pitch || draft?.sourceEnvelopes?.pitch;
   return Array.isArray(directPitch) ? directPitch : null;
@@ -398,28 +403,28 @@ function makeImportedPreset(draft) {
   );
 }
 
+function addImportedDraft(draft) {
+  if (!draft || !Array.isArray(draft.amp) || !Array.isArray(draft.pd)) return false;
+  const imported = makeImportedPreset(draft);
+  if (customPresetCount() >= MAX_BROWSER_CUSTOM_PRESETS) {
+    presets[FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1] = imported;
+    selected = FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1;
+  } else {
+    presets.push(imported);
+    selected = presets.length - 1;
+  }
+
+  savePresets();
+  clearImportedDraftSources();
+  return true;
+}
+
 function consumeImportedDraft() {
   try {
     if (messageImportedDraft) {
       const payload = messageImportedDraft;
       const draft = payload?.draft;
-      if (draft && Array.isArray(draft.amp) && Array.isArray(draft.pd)) {
-        const imported = makeImportedPreset(draft);
-        if (customPresetCount() >= MAX_BROWSER_CUSTOM_PRESETS) {
-          presets[FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1] = imported;
-          selected = FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1;
-        } else {
-          presets.push(imported);
-          selected = presets.length - 1;
-        }
-
-        applyImportedPerformance(draft);
-
-        savePresets();
-        savePerformanceSettings();
-        clearImportedDraftSources();
-        return true;
-      }
+      if (addImportedDraft(draft)) return true;
     }
 
     const params = new URLSearchParams(window.location.search);
@@ -427,46 +432,14 @@ function consumeImportedDraft() {
     if (queryPayload) {
       const payload = JSON.parse(decodeURIComponent(queryPayload));
       const draft = payload?.draft;
-      if (draft && Array.isArray(draft.amp) && Array.isArray(draft.pd)) {
-        const imported = makeImportedPreset(draft);
-        if (customPresetCount() >= MAX_BROWSER_CUSTOM_PRESETS) {
-          presets[FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1] = imported;
-          selected = FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1;
-        } else {
-          presets.push(imported);
-          selected = presets.length - 1;
-        }
-
-        applyImportedPerformance(draft);
-
-        savePresets();
-        savePerformanceSettings();
-        clearImportedDraftSources();
-        return true;
-      }
+      if (addImportedDraft(draft)) return true;
     }
 
     const hashMatch = window.location.hash.match(/(?:^|&)cz-import=([^&]+)/);
     if (hashMatch) {
       const payload = JSON.parse(decodeURIComponent(hashMatch[1]));
       const draft = payload?.draft;
-      if (draft && Array.isArray(draft.amp) && Array.isArray(draft.pd)) {
-        const imported = makeImportedPreset(draft);
-        if (customPresetCount() >= MAX_BROWSER_CUSTOM_PRESETS) {
-          presets[FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1] = imported;
-          selected = FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1;
-        } else {
-          presets.push(imported);
-          selected = presets.length - 1;
-        }
-
-        applyImportedPerformance(draft);
-
-        savePresets();
-        savePerformanceSettings();
-        clearImportedDraftSources();
-        return true;
-      }
+      if (addImportedDraft(draft)) return true;
     }
 
     const raw = localStorage.getItem(CZ_IMPORT_HANDOFF_KEY);
@@ -479,21 +452,7 @@ function consumeImportedDraft() {
       return false;
     }
 
-    const imported = makeImportedPreset(draft);
-    if (customPresetCount() >= MAX_BROWSER_CUSTOM_PRESETS) {
-      presets[FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1] = imported;
-      selected = FACTORY_PRESET_COUNT + MAX_BROWSER_CUSTOM_PRESETS - 1;
-    } else {
-      presets.push(imported);
-      selected = presets.length - 1;
-    }
-
-    applyImportedPerformance(draft);
-
-    savePresets();
-    savePerformanceSettings();
-    clearImportedDraftSources();
-    return true;
+    return addImportedDraft(draft);
   } catch {
     localStorage.removeItem(CZ_IMPORT_HANDOFF_KEY);
     return false;
@@ -511,11 +470,12 @@ function render() {
   el.addPreset.disabled = customPresetCount() >= MAX_BROWSER_CUSTOM_PRESETS;
   renderStages("amp", el.ampStages);
   renderStages("pd", el.pdStages);
-  renderStages("pitch", el.pitchStages);
+  renderStages(activePitchLane, el.pitchStages);
   renderPitchSource(current);
   renderPerformanceSettings();
   renderThemeMode();
   renderLaneView();
+  renderPitchLaneView();
   renderDeveloperMode();
   drawCurves();
   drawPitchCurve();
@@ -553,6 +513,15 @@ function renderLaneView() {
   el.pdStages.classList.toggle("is-hidden", ampActive);
   el.ampStages.setAttribute("aria-hidden", String(!ampActive));
   el.pdStages.setAttribute("aria-hidden", String(ampActive));
+}
+
+function renderPitchLaneView() {
+  const pitch1Active = activePitchLane === "pitch";
+  el.pitch1View.classList.toggle("is-active", pitch1Active);
+  el.pitch1View.setAttribute("aria-selected", String(pitch1Active));
+  el.pitch2View.classList.toggle("is-active", !pitch1Active);
+  el.pitch2View.setAttribute("aria-selected", String(!pitch1Active));
+  el.pitchStageTitle.textContent = pitchLaneLabel(activePitchLane);
 }
 
 function renderPitchSource(current) {
@@ -685,7 +654,8 @@ function updateStage(lane, index, key, value) {
 
   const current = presets[selected];
   const before = key === "time" ? samplesBeforeStage(current[lane], index) : 0;
-  const pitchMax = lane === "pitch" && key === "time"
+  const isPitchLane = lane === "pitch" || lane === "pitch2";
+  const pitchMax = isPitchLane && key === "time"
     ? Math.max(1, envelopeMaxSamples(current) - before)
     : 192000;
   const max = key === "level" ? MAX_LEVEL : pitchMax;
@@ -696,11 +666,11 @@ function updateStage(lane, index, key, value) {
   savePresets();
   renderPresetList();
   syncStageInputs(lane, index);
-  if (lane === "pitch") drawPitchCurve();
+  if (isPitchLane) drawPitchCurve();
   else {
     drawCurves();
     drawPitchCurve();
-    renderStages("pitch", el.pitchStages);
+    renderStages(activePitchLane, el.pitchStages);
   }
   updateExport();
 }
@@ -799,15 +769,20 @@ function drawPitchCurve() {
 
   const current = presets[selected];
   const viewSamples = envelopeMaxSamples(current);
+  const pitch2Color = theme.pitch2 || theme.pd;
+  drawLane(ctx, current.pitch2 || current.pitch, pitch2Color, w, h, viewSamples);
   drawLane(ctx, current.pitch, theme.pitch, w, h, viewSamples);
-  drawHandles(ctx, current.pitch, theme.pitch, w, h, viewSamples, true, theme);
+  drawHandles(ctx, current.pitch2 || current.pitch, pitch2Color, w, h, viewSamples, activePitchLane === "pitch2", theme);
+  drawHandles(ctx, current.pitch, theme.pitch, w, h, viewSamples, activePitchLane === "pitch", theme);
 
   ctx.fillStyle = theme.pitch;
   ctx.font = "12px system-ui";
-  ctx.fillText("Pitch", 14, 22);
+  ctx.fillText("Pitch 1", 14, 22);
+  ctx.fillStyle = pitch2Color;
+  ctx.fillText("Pitch 2", 74, 22);
   ctx.fillStyle = theme.muted;
-  ctx.fillText("center = no pitch offset", 64, 22);
-  ctx.fillText(`${(totalSamples(current.pitch) / SAMPLE_RATE).toFixed(2)}s / max ${(viewSamples / SAMPLE_RATE).toFixed(2)}s`, w - 128, h - 16);
+  ctx.fillText("center = no pitch offset", 136, 22);
+  ctx.fillText(`${pitchLaneLabel(activePitchLane)} ${(totalSamples(activePitchStages(current)) / SAMPLE_RATE).toFixed(2)}s / max ${(viewSamples / SAMPLE_RATE).toFixed(2)}s`, w - 238, h - 16);
 }
 
 function drawHandles(ctx, stages, color, w, h, viewSamples, active, theme) {
@@ -824,6 +799,8 @@ function drawHandles(ctx, stages, color, w, h, viewSamples, active, theme) {
       ? theme.ampPoint
       : color === theme.pitch
         ? theme.pitchPoint
+        : color === theme.pitch2
+          ? theme.pitch2Point
         : theme.pdPoint;
     ctx.fillStyle = pointColor;
     ctx.beginPath();
@@ -854,9 +831,11 @@ function getThemeColors() {
     amp: styles.getPropertyValue("--graph-amp").trim() || styles.getPropertyValue("--amp").trim() || "#ffcc66",
     pd: styles.getPropertyValue("--graph-pd").trim() || styles.getPropertyValue("--pd").trim() || "#6ee7c8",
     pitch: styles.getPropertyValue("--graph-pitch").trim() || "#b38cff",
+    pitch2: styles.getPropertyValue("--graph-pitch-2").trim() || styles.getPropertyValue("--graph-pd").trim() || "#49d7ff",
     ampPoint: styles.getPropertyValue("--graph-amp-point").trim() || styles.getPropertyValue("--amp").trim() || "#ffcc66",
     pdPoint: styles.getPropertyValue("--graph-pd-point").trim() || styles.getPropertyValue("--pd").trim() || "#6ee7c8",
     pitchPoint: styles.getPropertyValue("--graph-pitch-point").trim() || styles.getPropertyValue("--graph-pitch").trim() || "#d8c7ff",
+    pitch2Point: styles.getPropertyValue("--graph-pitch-2-point").trim() || styles.getPropertyValue("--graph-pitch-2").trim() || "#b7efff",
     pitchCenter: styles.getPropertyValue("--graph-pitch-center").trim() || styles.getPropertyValue("--muted").trim() || "#a5adba",
     muted: styles.getPropertyValue("--muted").trim() || "#a5adba",
     text: styles.getPropertyValue("--text").trim() || "#f4f0e8"
@@ -895,7 +874,8 @@ function editorViewSamples() {
     EDITOR_VIEW_SAMPLES,
     totalSamples(current.amp),
     totalSamples(current.pd),
-    totalSamples(current.pitch));
+    totalSamples(current.pitch),
+    totalSamples(current.pitch2 || current.pitch));
   return Math.ceil(longest / SAMPLE_RATE) * SAMPLE_RATE;
 }
 
@@ -1019,7 +999,7 @@ function scaledSamples(stages) {
 }
 
 function longestAuditionLane(current) {
-  return [current.amp, current.pd, current.pitch]
+  return [current.amp, current.pd, current.pitch, current.pitch2 || current.pitch]
     .sort((a, b) => totalSamples(b) - totalSamples(a))[0];
 }
 
@@ -1749,7 +1729,10 @@ function armEnvelopeReadTimeout() {
       session.retriesRemaining--;
       envelopeReadTimer = null;
       try {
-        if (session.waitingForSlot !== null) {
+        if (session.waitingForPitchSlot !== null) {
+          output.send(buildRequestPitchEnvelopeSysex(session.waitingForPitchSlot));
+          setStatus(`Still waiting for card pitch envelope slot ${session.waitingForPitchSlot + 1}; retrying readback...`);
+        } else if (session.waitingForSlot !== null) {
           output.send(buildRequestEnvelopeSysex(session.waitingForSlot));
           setStatus(`Still waiting for card envelope slot ${session.waitingForSlot + 1}; retrying readback...`);
         } else {
@@ -1968,6 +1951,11 @@ function handleEnvelopeResponse(data) {
     length: data.length,
     responseType: data.length === 129 ? "amp/pd/pitch" : "amp/pd standard; pitch may follow separately"
   });
+  if (data.length === 89) {
+    requestPitchEnvelopeForSlot(slot);
+    armEnvelopeReadTimeout();
+    return;
+  }
   completeEnvelopeSlotRead(slot);
 }
 
@@ -2031,6 +2019,7 @@ function handlePitchEnvelopeResponse(data) {
   });
   envelopeReadSession.waitingForPitchSlot = null;
   envelopeReadSession.lastEnvelopeSlot = null;
+  completeEnvelopeSlotRead(slot);
 }
 
 function applyLatePitchReadback(slot, pitch, pitch2 = pitch) {
@@ -2231,15 +2220,17 @@ function findDragTarget(point) {
 function findPitchDragTarget(point) {
   const current = presets[selected];
   let best = null;
-  const viewSamples = editorViewSamples();
+  const viewSamples = envelopeMaxSamples(current);
   let x = 0;
+  const lane = activePitchLane;
+  const stages = current[lane] || current.pitch;
 
-  current.pitch.forEach((stage, index) => {
+  stages.forEach((stage, index) => {
     x = Math.min(point.width, x + (stage.time / viewSamples) * point.width);
     const y = levelY(stage.level, point.height);
     const distance = Math.hypot(point.x - x, point.y - y);
     if (!best || distance < best.distance) {
-      best = { lane: "pitch", index, distance };
+      best = { lane, index, distance };
     }
   });
 
@@ -2282,7 +2273,7 @@ function updateDraggedPitchStage(event) {
   }
 
   const level = Math.round((1 - ((point.y - 18) / Math.max(1, point.height - 36))) * MAX_LEVEL);
-  const stages = presets[selected].pitch;
+  const stages = presets[selected][pitchDragTarget.lane] || presets[selected].pitch;
   const stage = stages[pitchDragTarget.index];
   const before = samplesBeforeStage(stages, pitchDragTarget.index);
   const pitchMaxSamples = envelopeMaxSamples(presets[selected]);
@@ -2292,15 +2283,17 @@ function updateDraggedPitchStage(event) {
   stage.level = clampInt(level, 0, MAX_LEVEL);
   stage.time = clampInt(targetEnd - before, 1, maxStageTime);
   constrainPitchToEnvelope(presets[selected]);
+  if (presets[selected].slot !== null) presets[selected].cardDirty = true;
   savePresets();
   renderPresetList();
-  syncStageInputs("pitch", pitchDragTarget.index);
+  syncStageInputs(pitchDragTarget.lane, pitchDragTarget.index);
   drawPitchCurve();
   updateExport();
 }
 
 function syncStageInputs(lane, index) {
-  const row = el[`${lane}Stages`].querySelector(`[data-lane="${lane}"][data-index="${index}"]`);
+  const container = lane === "pitch2" ? el.pitchStages : el[`${lane}Stages`];
+  const row = container.querySelector(`[data-lane="${lane}"][data-index="${index}"]`);
   if (!row) return;
   const [levelInput, timeInput] = row.querySelectorAll("input");
   const stage = presets[selected][lane][index];
@@ -2461,6 +2454,18 @@ el.pdView.addEventListener("click", () => {
   activeLaneView = "pd";
   renderLaneView();
   drawCurves();
+});
+el.pitch1View.addEventListener("click", () => {
+  activePitchLane = "pitch";
+  renderPitchLaneView();
+  renderStages(activePitchLane, el.pitchStages);
+  drawPitchCurve();
+});
+el.pitch2View.addEventListener("click", () => {
+  activePitchLane = "pitch2";
+  renderPitchLaneView();
+  renderStages(activePitchLane, el.pitchStages);
+  drawPitchCurve();
 });
 el.developerToggle.addEventListener("click", () => {
   developerMode = !developerMode;
