@@ -15,7 +15,9 @@ const el = {
   waveBox: document.querySelector("#waveBox"),
   perfBox: document.querySelector("#perfBox"),
   ampDraftBox: document.querySelector("#ampDraftBox"),
+  amp2DraftBox: document.querySelector("#amp2DraftBox"),
   pdDraftBox: document.querySelector("#pdDraftBox"),
+  pd2DraftBox: document.querySelector("#pd2DraftBox"),
   ampMode: document.querySelector("#ampMode"),
   pdMode: document.querySelector("#pdMode"),
   pitchMode: document.querySelector("#pitchMode"),
@@ -29,7 +31,7 @@ let currentDraft = null;
 let lastImportBuffer = null;
 let lastImportFileName = "";
 let editorTab = null;
-let ampMappingMode = "merged";
+let ampMappingMode = "dual";
 let pdMappingMode = "dual";
 let pitchMappingMode = "dual";
 let themeMode = loadThemeMode();
@@ -53,9 +55,10 @@ const PITCH_MAPPING_MODES = {
   difference: "DCO1 / DCO2 difference emphasis"
 };
 const AMP_MAPPING_MODES = {
-  merged: "Merged DCA1 + DCA2 average",
-  line1: "DCA1 amplitude only",
-  line2: "DCA2 amplitude only"
+  dual: "DCA1 -> Amp1, DCA2 -> Amp2",
+  merged: "Merged DCA1 + DCA2 copied to both amps",
+  line1: "DCA1 copied to both amps",
+  line2: "DCA2 copied to both amps"
 };
 const PD_MAPPING_MODES = {
   dual: "DCW1 -> PD1, DCW2 -> PD2",
@@ -462,6 +465,18 @@ function selectPdEnvelopePair(czPatch, mode) {
   return { pd1: selected, pd2: cloneCzEnvelopeStages(selected) };
 }
 
+function selectAmpEnvelopePair(czPatch, mode) {
+  if (mode === "dual") {
+    return {
+      amp1: cloneCzEnvelopeStages(czPatch.dca1),
+      amp2: cloneCzEnvelopeStages(czPatch.dca2)
+    };
+  }
+
+  const selected = selectLineEnvelopeStages(czPatch.dca1, czPatch.dca2, mode);
+  return { amp1: selected, amp2: cloneCzEnvelopeStages(selected) };
+}
+
 function czEnvelopeToC1Stages(stages, timeMin = 240, timeMax = 48000) {
   return stages.map((stage) => roundStage(
     (stage.level / 99) * 4095,
@@ -526,13 +541,11 @@ function buildDraftPreset(
 
   const wave = classifyWave(decodedBytes);
   const czPatch = parseCzPatch(decodedBytes);
-  const ampStages = selectLineEnvelopeStages(czPatch.dca1, czPatch.dca2, ampMode);
-  const amp1Stages = cloneCzEnvelopeStages(czPatch.dca1);
-  const amp2Stages = cloneCzEnvelopeStages(czPatch.dca2);
+  const ampPair = selectAmpEnvelopePair(czPatch, ampMode);
   const pdPair = selectPdEnvelopePair(czPatch, pdMode);
-  const ampEnvelope = czEnvelopeToC1Stages(ampStages, 140, 24000);
-  const amp1Envelope = czEnvelopeToC1Stages(amp1Stages, 140, 24000);
-  const amp2Envelope = czEnvelopeToC1Stages(amp2Stages, 140, 24000);
+  const ampMergedEnvelope = czEnvelopeToC1Stages(mergeCzEnvelopes(czPatch.dca1, czPatch.dca2), 140, 24000);
+  const amp1Envelope = czEnvelopeToC1Stages(ampPair.amp1, 140, 24000);
+  const amp2Envelope = czEnvelopeToC1Stages(ampPair.amp2, 140, 24000);
   const dcwEnvelope = czEnvelopeToC1Stages(pdPair.pd1, 120, 30000);
   const dcw2Envelope = czEnvelopeToC1Stages(pdPair.pd2, 120, 30000);
   const pitchStages = selectPitchStages(czPatch, pitchMode);
@@ -580,7 +593,7 @@ function buildDraftPreset(
       pd2: dcw2Envelope,
       amp: amp1Envelope,
       amp2: amp2Envelope,
-      ampMerged: ampEnvelope,
+      ampMerged: ampMergedEnvelope,
       cz: czPatch
     },
     performance: { pd, detune, waveform: wave.value, ring, noise },
@@ -615,7 +628,9 @@ function renderDraft(draft) {
     el.waveBox.textContent = "No draft yet.";
     el.perfBox.textContent = "No draft yet.";
     el.ampDraftBox.textContent = "No draft yet.";
+    el.amp2DraftBox.textContent = "No draft yet.";
     el.pdDraftBox.textContent = "No draft yet.";
+    el.pd2DraftBox.textContent = "No draft yet.";
     el.pitchDco1Box.textContent = "No draft yet.";
     el.pitchDco2Box.textContent = "No draft yet.";
     el.pitchSelectedBox.textContent = "No draft yet.";
@@ -630,7 +645,9 @@ function renderDraft(draft) {
   el.waveBox.textContent = `${draft.wave.label} -> ${draft.wave.hint}`;
   el.perfBox.textContent = `PD ${draft.performance.pd}, wave family ${draft.wave.label}, detune ${draft.performance.detune}, ring ${draft.performance.ring}, noise ${draft.performance.noise}`;
   el.ampDraftBox.textContent = formatStages(draft.amp);
+  el.amp2DraftBox.textContent = formatStages(draft.amp2 || draft.sourceEnvelopes.amp2 || draft.amp);
   el.pdDraftBox.textContent = formatStages(draft.pd);
+  el.pd2DraftBox.textContent = formatStages(draft.pd2 || draft.sourceEnvelopes.pd2 || draft.pd);
   el.pitchDco1Box.textContent = formatCzEnvelope(draft.sourceEnvelopes.cz.dco1Pitch);
   el.pitchDco2Box.textContent = formatCzEnvelope(draft.sourceEnvelopes.cz.dco2Pitch);
   el.pitchSelectedBox.textContent = formatStages(draft.sourceEnvelopes.pitch);

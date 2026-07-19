@@ -99,9 +99,10 @@
           <div class="field">
             <label for="ampMode">Amplitude mapping</label>
             <select id="ampMode">
-              <option value="merged">Merged DCA1 + DCA2 average</option>
-              <option value="line1">DCA1 amplitude only</option>
-              <option value="line2">DCA2 amplitude only</option>
+              <option value="dual">DCA1 -> Amp1, DCA2 -> Amp2</option>
+              <option value="merged">Merged DCA1 + DCA2 copied to both amps</option>
+              <option value="line1">DCA1 copied to both amps</option>
+              <option value="line2">DCA2 copied to both amps</option>
             </select>
           </div>
           <div class="field">
@@ -170,12 +171,22 @@
           </div>
           <div class="grid-2">
             <div class="field">
-              <label>Amplitude envelope</label>
+              <label>Amp1 / DCA1 envelope</label>
               <pre id="ampDraftBox">No draft yet.</pre>
             </div>
             <div class="field">
-              <label>Phase distortion envelope</label>
+              <label>Amp2 / DCA2 envelope</label>
+              <pre id="amp2DraftBox">No draft yet.</pre>
+            </div>
+          </div>
+          <div class="grid-2">
+            <div class="field">
+              <label>PD1 / DCW1 envelope</label>
               <pre id="pdDraftBox">No draft yet.</pre>
+            </div>
+            <div class="field">
+              <label>PD2 / DCW2 envelope</label>
+              <pre id="pd2DraftBox">No draft yet.</pre>
             </div>
           </div>
           <div class="grid-2">
