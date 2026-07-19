@@ -58,6 +58,16 @@ const factoryPresets = [
 
 const FACTORY_PRESET_COUNT = factoryPresets.length;
 
+const PRESET_STORAGE_KEY = "c1zzl3-dual-oscillator-lanes-envelope-presets";
+const PERFORMANCE_STORAGE_KEY = "c1zzl3-dual-oscillator-lanes-performance-settings";
+const CZ_IMPORT_HANDOFF_KEY = "c1zzl3-dual-oscillator-lanes-import-draft";
+const CZ_IMPORT_QUEUE_KEY = "c1zzl3-dual-oscillator-lanes-import-queue";
+const ENVELOPE_LAB_HEARTBEAT_KEY = "c1zzl3-dual-oscillator-lanes-envelope-lab-heartbeat";
+const HANDOFF_CHANNEL_NAME = "c1zzl3-dual-oscillator-lanes-handoff";
+const HOSTED_EDITOR_URL = "https://soveda.github.io/CozmikC1zzl3/experiments/dual-oscillator-lanes/index.html";
+const HOSTED_IMPORT_LAB_URL = "https://soveda.github.io/CozmikC1zzl3/experiments/dual-oscillator-lanes/import-lab/";
+const LOCAL_IMPORT_LAB_URL = "import-lab/index.html";
+
 let presets = loadPresets();
 let selected = 3;
 let audioCtx;
@@ -80,15 +90,6 @@ let settingsRequestTimer = null;
 let envelopeReadSession = null;
 let envelopeReadTimer = null;
 let envelopeReadSupported = null;
-const PRESET_STORAGE_KEY = "c1zzl3-dual-oscillator-lanes-envelope-presets";
-const PERFORMANCE_STORAGE_KEY = "c1zzl3-dual-oscillator-lanes-performance-settings";
-const CZ_IMPORT_HANDOFF_KEY = "c1zzl3-dual-oscillator-lanes-import-draft";
-const CZ_IMPORT_QUEUE_KEY = "c1zzl3-dual-oscillator-lanes-import-queue";
-const ENVELOPE_LAB_HEARTBEAT_KEY = "c1zzl3-dual-oscillator-lanes-envelope-lab-heartbeat";
-const HANDOFF_CHANNEL_NAME = "c1zzl3-dual-oscillator-lanes-handoff";
-const HOSTED_EDITOR_URL = "https://soveda.github.io/CozmikC1zzl3/experiments/dual-oscillator-lanes/index.html";
-const HOSTED_IMPORT_LAB_URL = "https://soveda.github.io/CozmikC1zzl3/experiments/dual-oscillator-lanes/import-lab/";
-const LOCAL_IMPORT_LAB_URL = "import-lab/index.html";
 let messageImportedDraft = null;
 let lastConsumedHandoffId = null;
 const handoffChannel = typeof BroadcastChannel === "function"
