@@ -26,12 +26,16 @@ Do not move or overwrite that reference while developing this experiment.
 - Factory envelopes and legacy payloads fall back to shared PD behaviour.
 - Pitch 1 and pitch 2 behaviour is inherited from the stable dual-pitch build.
 - Amplitude, wave family, ring modulation, noise/grit, and detune remain shared.
-- Saved envelope readback now uses protocol v4 behaviour: the main envelope
-  response returns amplitude, PD lane 1, and PD lane 2; the separate pitch
-  response returns pitch 1 and pitch 2.
+- Saved envelope readback now uses protocol v4 behaviour with small chained
+  responses: the main envelope response returns amplitude and PD lane 1, a
+  separate PD2 response returns PD lane 2, and the separate pitch response
+  returns pitch 1 and pitch 2.
 - Saved envelope flash storage now stores all five lanes: amp, PD lane 1,
-  pitch 1, pitch 2, and PD lane 2. Older saved custom-envelope data is treated
-  as incompatible and should be re-saved from the web UI.
+  pitch 1, pitch 2, and PD lane 2.
+- Older protocol v3 saved custom-envelope data is migrated at startup by
+  preserving amp, PD lane 1, pitch 1, and pitch 2, with PD lane 2 inferred from
+  PD lane 1. Re-saving from the protocol v4 web UI writes the full five-lane
+  format.
 
 ## Build
 

@@ -26,6 +26,7 @@ const SYSEX_COMMAND_REQUEST_ENVELOPE = 0x0a;
 const SYSEX_COMMAND_ENVELOPE_RESPONSE = 0x0b;
 const SYSEX_COMMAND_REQUEST_PITCH_ENVELOPE = 0x0c;
 const SYSEX_COMMAND_PITCH_ENVELOPE_RESPONSE = 0x0d;
+const SYSEX_COMMAND_PD2_ENVELOPE_RESPONSE = 0x0e;
 const ENVELOPE_PROTOCOL_VERSION = 4;
 const MAX_READABLE_ENVELOPE_PROTOCOL_VERSION = 4;
 
@@ -2146,6 +2147,42 @@ function requestPitchEnvelopeForSlot(slot) {
   }
 }
 
+function handlePd2EnvelopeResponse(data) {
+  if (data.length !== 49) return;
+  const slot = data[7] & 0x07;
+
+  let offset = 8;
+  const pd2 = Array.from({ length: STAGES }, () => {
+    const stage = {
+      level: clampInt(unpackUint14(data, offset), 0, MAX_LEVEL),
+      time: clampInt(unpackUint21(data, offset + 2), 1, 192000)
+    };
+    offset += 5;
+    return stage;
+  });
+
+  if (!envelopeReadSession) {
+    const existingIndex = presets.findIndex((item, index) =>
+      index >= FACTORY_PRESET_COUNT && item.slot === slot);
+    if (existingIndex >= FACTORY_PRESET_COUNT) {
+      presets[existingIndex].pd2 = normalizeStages(pd2);
+      presets[existingIndex].cardDirty = false;
+      savePresets();
+      render();
+    }
+    return;
+  }
+
+  const existing = envelopeReadSession.cardEnvelopes.get(slot);
+  if (existing) existing.pd2 = pd2;
+
+  logDeveloper("PD2 envelope response received.", {
+    slot: slot + 1,
+    length: data.length,
+    responseType: "pd2"
+  });
+}
+
 function handlePitchEnvelopeResponse(data) {
   if (data.length !== 49 && data.length !== 89) return;
   const slot = data[7] & 0x07;
@@ -2273,6 +2310,10 @@ function handleSysexResponse(data) {
   }
   if (data[6] === SYSEX_COMMAND_PITCH_ENVELOPE_RESPONSE) {
     handlePitchEnvelopeResponse(data);
+    return;
+  }
+  if (data[6] === SYSEX_COMMAND_PD2_ENVELOPE_RESPONSE) {
+    handlePd2EnvelopeResponse(data);
     return;
   }
   if (data[6] !== SYSEX_COMMAND_SETTINGS_RESPONSE) {

@@ -34,9 +34,10 @@ Do not move or overwrite that reference while developing this experiment.
 
 ## Save / Readback Behaviour
 
-The protocol v4 firmware saves and reads back separate PD1/PD2 lanes. The main
-envelope readback frame returns amplitude, PD1, and PD2; pitch1 and pitch2 are
-returned by the separate pitch-envelope readback frame.
+The protocol v4 firmware saves and reads back separate PD1/PD2 lanes using
+small chained responses. The main envelope readback frame returns amplitude and
+PD1; a separate PD2 response returns PD2; pitch1 and pitch2 are returned by the
+separate pitch-envelope readback frame.
 
 Older protocol v3 dual-pitch cards still read back as a single PD lane; the UI
 copies PD1 to PD2 for display in that case.

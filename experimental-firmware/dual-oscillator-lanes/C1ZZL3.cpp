@@ -22,6 +22,7 @@ static constexpr uint8_t WebMidiCommandRequestEnvelope = 0x0Au;
 static constexpr uint8_t WebMidiCommandEnvelopeResponse = 0x0Bu;
 static constexpr uint8_t WebMidiCommandRequestPitchEnvelope = 0x0Cu;
 static constexpr uint8_t WebMidiCommandPitchEnvelopeResponse = 0x0Du;
+static constexpr uint8_t WebMidiCommandPd2EnvelopeResponse = 0x0Eu;
 static constexpr uint8_t WebMidiEnvelopeProtocolVersion = 4u;
 static constexpr uint32_t WebMidiSettingsPayloadLength = 14u;
 static constexpr uint32_t WebMidiStableSettingsPayloadLength = 8u;
@@ -328,6 +329,14 @@ private:
         EnvelopeStage pd2[8];
     };
 
+    struct SavedEnvelopeProgramV3
+    {
+        EnvelopeStage amp[8];
+        EnvelopeStage pd[8];
+        EnvelopeStage pitch[8];
+        EnvelopeStage pitch2[8];
+    };
+
     static constexpr uint8_t DefaultTuringCvOctaveRange = 2;
     static constexpr uint8_t MinTuringCvOctaveRange = 1;
     static constexpr uint8_t MaxTuringCvOctaveRange = 8;
@@ -385,6 +394,7 @@ private:
         (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE) &
         ~(FLASH_SECTOR_SIZE - 1u);
     static constexpr uint32_t CustomEnvelopeMagic = 0x4331454Eu; // C1EN
+    static constexpr uint16_t LegacyCustomEnvelopeSaveVersion = 3;
     static constexpr uint16_t CustomEnvelopeSaveVersion = 4;
     static constexpr uint32_t CustomEnvelopeFlashOffset =
         SaveFlashOffset - FLASH_SECTOR_SIZE;
@@ -415,6 +425,17 @@ private:
         uint8_t loadedMask;
         uint8_t reserved[7];
         SavedEnvelopeProgram slots[CustomEnvelopeSlotCount];
+        uint32_t checksum;
+    };
+
+    struct SavedCustomEnvelopeStateV3
+    {
+        uint32_t magic;
+        uint16_t version;
+        uint16_t size;
+        uint8_t loadedMask;
+        uint8_t reserved[7];
+        SavedEnvelopeProgramV3 slots[CustomEnvelopeSlotCount];
         uint32_t checksum;
     };
 
@@ -1092,7 +1113,7 @@ private:
         if (!customEnvelopeLoaded[slot])
             return;
 
-        uint8_t frame[129] = {
+        uint8_t frame[89] = {
             0xF0u,
             WebMidiManufacturer,
             WebMidiId[0],
@@ -1114,14 +1135,8 @@ private:
             appendWebMidiUint14(frame, offset, envelope.pd[i].level);
             appendWebMidiUint21(frame, offset, envelope.pd[i].time);
         }
-        for (uint32_t i = 0; i < 8u; ++i)
-        {
-            appendWebMidiUint14(frame, offset, envelope.pd2[i].level);
-            appendWebMidiUint21(frame, offset, envelope.pd2[i].time);
-        }
         frame[offset++] = 0xF7u;
         tud_midi_stream_write(0, frame, offset);
-        sendWebMidiPitchEnvelopeResponse(slot);
     }
 
     void handleWebMidiRequestPitchEnvelope()
@@ -1133,7 +1148,31 @@ private:
         if (!customEnvelopeLoaded[slot])
             return;
 
+        sendWebMidiPd2EnvelopeResponse(slot);
         sendWebMidiPitchEnvelopeResponse(slot);
+    }
+
+    void sendWebMidiPd2EnvelopeResponse(uint8_t slot)
+    {
+        uint8_t frame[49] = {
+            0xF0u,
+            WebMidiManufacturer,
+            WebMidiId[0],
+            WebMidiId[1],
+            WebMidiId[2],
+            WebMidiId[3],
+            WebMidiCommandPd2EnvelopeResponse,
+            slot
+        };
+        uint32_t offset = 8;
+        const EnvelopeProgram& envelope = customEnvelopes[slot];
+        for (uint32_t i = 0; i < 8u; ++i)
+        {
+            appendWebMidiUint14(frame, offset, envelope.pd2[i].level);
+            appendWebMidiUint21(frame, offset, envelope.pd2[i].time);
+        }
+        frame[offset++] = 0xF7u;
+        tud_midi_stream_write(0, frame, offset);
     }
 
     void sendWebMidiPitchEnvelopeResponse(uint8_t slot)
@@ -2194,6 +2233,21 @@ private:
         return runtime;
     }
 
+    EnvelopeProgram runtimeEnvelopeFromSavedV3(const SavedEnvelopeProgramV3& saved)
+    {
+        EnvelopeProgram runtime = {};
+        for (uint32_t i = 0; i < 8u; ++i)
+        {
+            runtime.amp[i] = saved.amp[i];
+            runtime.pd[i] = saved.pd[i];
+            runtime.pitch[i] = saved.pitch[i];
+            runtime.pitch2[i] = saved.pitch2[i];
+            runtime.pd2[i] = saved.pd[i];
+        }
+
+        return runtime;
+    }
+
     uint8_t customEnvelopeMask()
     {
         uint8_t mask = 0;
@@ -2220,6 +2274,20 @@ private:
         return checksum;
     }
 
+    uint32_t checksumCustomEnvelopeStateV3(const SavedCustomEnvelopeStateV3& state)
+    {
+        const uint8_t* bytes = reinterpret_cast<const uint8_t*>(&state);
+        uint32_t checksum = 2166136261u;
+
+        for (uint32_t i = 0; i < sizeof(SavedCustomEnvelopeStateV3) - sizeof(uint32_t); ++i)
+        {
+            checksum ^= bytes[i];
+            checksum *= 16777619u;
+        }
+
+        return checksum;
+    }
+
     const SavedPerformanceState& flashPerformanceState()
     {
         return *reinterpret_cast<const SavedPerformanceState*>(
@@ -2229,6 +2297,12 @@ private:
     const SavedCustomEnvelopeState& flashCustomEnvelopeState()
     {
         return *reinterpret_cast<const SavedCustomEnvelopeState*>(
+            XIP_BASE + CustomEnvelopeFlashOffset);
+    }
+
+    const SavedCustomEnvelopeStateV3& flashCustomEnvelopeStateV3()
+    {
+        return *reinterpret_cast<const SavedCustomEnvelopeStateV3*>(
             XIP_BASE + CustomEnvelopeFlashOffset);
     }
 
@@ -2248,6 +2322,15 @@ private:
             state.version == CustomEnvelopeSaveVersion &&
             state.size == sizeof(SavedCustomEnvelopeState) &&
             state.checksum == checksumCustomEnvelopeState(state);
+    }
+
+    bool isValidCustomEnvelopeStateV3(const SavedCustomEnvelopeStateV3& state)
+    {
+        return
+            state.magic == CustomEnvelopeMagic &&
+            state.version == LegacyCustomEnvelopeSaveVersion &&
+            state.size == sizeof(SavedCustomEnvelopeStateV3) &&
+            state.checksum == checksumCustomEnvelopeStateV3(state);
     }
 
     bool customEnvelopeStateMatches(
@@ -2316,13 +2399,25 @@ private:
     void loadCustomEnvelopeState()
     {
         const SavedCustomEnvelopeState& state = flashCustomEnvelopeState();
-        if (!isValidCustomEnvelopeState(state))
+        if (isValidCustomEnvelopeState(state))
+        {
+            for (uint32_t i = 0; i < CustomEnvelopeSlotCount; ++i)
+            {
+                customEnvelopes[i] = runtimeEnvelopeFromSaved(state.slots[i]);
+                customEnvelopeLoaded[i] = (state.loadedMask & (1u << i)) != 0;
+            }
+
+            return;
+        }
+
+        const SavedCustomEnvelopeStateV3& legacyState = flashCustomEnvelopeStateV3();
+        if (!isValidCustomEnvelopeStateV3(legacyState))
             return;
 
         for (uint32_t i = 0; i < CustomEnvelopeSlotCount; ++i)
         {
-            customEnvelopes[i] = runtimeEnvelopeFromSaved(state.slots[i]);
-            customEnvelopeLoaded[i] = (state.loadedMask & (1u << i)) != 0;
+            customEnvelopes[i] = runtimeEnvelopeFromSavedV3(legacyState.slots[i]);
+            customEnvelopeLoaded[i] = (legacyState.loadedMask & (1u << i)) != 0;
         }
     }
 
