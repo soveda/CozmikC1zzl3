@@ -797,6 +797,8 @@ private:
             envelopeHeld = false;
             envelopeReleaseRequested = false;
             pulse2EnvelopeHolding = false;
+            ampEnvelopeLevel = 0;
+            amp2EnvelopeLevel = 0;
             pitchEnvelopeLevel = PitchEnvelopeCenter;
             pitch2EnvelopeLevel = PitchEnvelopeCenter;
             if (midiNoteReleased)
