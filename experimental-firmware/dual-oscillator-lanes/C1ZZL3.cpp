@@ -319,6 +319,14 @@ private:
         EnvelopeStage pd2[8];
     };
 
+    struct SavedEnvelopeProgram
+    {
+        EnvelopeStage amp[8];
+        EnvelopeStage pd[8];
+        EnvelopeStage pitch[8];
+        EnvelopeStage pitch2[8];
+    };
+
     static constexpr uint8_t DefaultTuringCvOctaveRange = 2;
     static constexpr uint8_t MinTuringCvOctaveRange = 1;
     static constexpr uint8_t MaxTuringCvOctaveRange = 8;
@@ -376,7 +384,7 @@ private:
         (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE) &
         ~(FLASH_SECTOR_SIZE - 1u);
     static constexpr uint32_t CustomEnvelopeMagic = 0x4331454Eu; // C1EN
-    static constexpr uint16_t CustomEnvelopeSaveVersion = 4;
+    static constexpr uint16_t CustomEnvelopeSaveVersion = 3;
     static constexpr uint32_t CustomEnvelopeFlashOffset =
         SaveFlashOffset - FLASH_SECTOR_SIZE;
     static constexpr uint32_t SaveHoldSamples = 384000u;
@@ -405,7 +413,7 @@ private:
         uint16_t size;
         uint8_t loadedMask;
         uint8_t reserved[7];
-        EnvelopeProgram slots[CustomEnvelopeSlotCount];
+        SavedEnvelopeProgram slots[CustomEnvelopeSlotCount];
         uint32_t checksum;
     };
 
@@ -2143,11 +2151,40 @@ private:
         state.loadedMask = customEnvelopeMask();
 
         for (uint32_t i = 0; i < CustomEnvelopeSlotCount; ++i)
-            state.slots[i] = customEnvelopes[i];
+            state.slots[i] = savedEnvelopeFromRuntime(customEnvelopes[i]);
 
         state.checksum = 0;
         state.checksum = checksumCustomEnvelopeState(state);
         return state;
+    }
+
+    SavedEnvelopeProgram savedEnvelopeFromRuntime(const EnvelopeProgram& runtime)
+    {
+        SavedEnvelopeProgram saved = {};
+        for (uint32_t i = 0; i < 8u; ++i)
+        {
+            saved.amp[i] = runtime.amp[i];
+            saved.pd[i] = runtime.pd[i];
+            saved.pitch[i] = runtime.pitch[i];
+            saved.pitch2[i] = runtime.pitch2[i];
+        }
+
+        return saved;
+    }
+
+    EnvelopeProgram runtimeEnvelopeFromSaved(const SavedEnvelopeProgram& saved)
+    {
+        EnvelopeProgram runtime = {};
+        for (uint32_t i = 0; i < 8u; ++i)
+        {
+            runtime.amp[i] = saved.amp[i];
+            runtime.pd[i] = saved.pd[i];
+            runtime.pitch[i] = saved.pitch[i];
+            runtime.pitch2[i] = saved.pitch2[i];
+            runtime.pd2[i] = saved.pd[i];
+        }
+
+        return runtime;
     }
 
     uint8_t customEnvelopeMask()
@@ -2277,7 +2314,7 @@ private:
 
         for (uint32_t i = 0; i < CustomEnvelopeSlotCount; ++i)
         {
-            customEnvelopes[i] = state.slots[i];
+            customEnvelopes[i] = runtimeEnvelopeFromSaved(state.slots[i]);
             customEnvelopeLoaded[i] = (state.loadedMask & (1u << i)) != 0;
         }
     }

@@ -26,6 +26,7 @@ const SYSEX_COMMAND_ENVELOPE_RESPONSE = 0x0b;
 const SYSEX_COMMAND_REQUEST_PITCH_ENVELOPE = 0x0c;
 const SYSEX_COMMAND_PITCH_ENVELOPE_RESPONSE = 0x0d;
 const ENVELOPE_PROTOCOL_VERSION = 3;
+const MAX_READABLE_ENVELOPE_PROTOCOL_VERSION = 4;
 
 const factoryPresets = [
   preset("Off", fill(0, 1), fill(0, 1)),
@@ -1971,7 +1972,7 @@ async function requestCardEnvelopes(reason = "manual", slot = null, expectedEnve
 function handleEnvelopeSlotsResponse(data) {
   if (!envelopeReadSession || data.length !== 11) return;
   const version = data[7] & 0x7f;
-  if (version < 1 || version > ENVELOPE_PROTOCOL_VERSION) {
+  if (version < 1 || version > MAX_READABLE_ENVELOPE_PROTOCOL_VERSION) {
     clearEnvelopeReadTimer();
     envelopeReadSession = null;
     envelopeReadSupported = false;
