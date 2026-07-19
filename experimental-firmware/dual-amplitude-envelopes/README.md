@@ -35,10 +35,10 @@ experimental-firmware/rollback-dual-pd-protocol-v4
   the slot. The Pitch response also carries sustain markers.
 - When a CZ sustain marker is present before or at END, that lane holds while
   gate or MIDI note is held.
-- Gate low or MIDI note off stops the held envelope immediately, matching the
-  observed CZ emulator behaviour.
-- Envelopes without an active sustain marker run to END naturally, even if the
-  gate or MIDI note remains held.
+- If all lanes reach END while the gate or MIDI note is still held, the final
+  END state is held.
+- Gate low or MIDI note off is treated as the envelope end condition and stops
+  the held envelope immediately.
 
 ## Build
 
@@ -70,8 +70,8 @@ the main Envelope Lab unless this experiment passes hardware testing.
 - Protocol v6 Save Envelope and Read Envelopes from Card, including sustain
   marker readback.
 - Held gate / held MIDI note sustains at CZ sustain stage when present.
-- Gate low / MIDI note off stops the held sustain cleanly.
-- No-sustain envelopes finish naturally instead of holding at END.
+- Held gate / held MIDI note holds the final END state after all lanes finish.
+- Gate low / MIDI note off stops the held envelope cleanly.
 - CZ Import Lab DCA1/DCA2 mapping into Amp1/Amp2.
 - Rapid retrigger click test.
 - Audio balance with intentionally different oscillator amplitude envelopes.

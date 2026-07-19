@@ -825,6 +825,9 @@ private:
 
         if (ampDone && amp2Done && pdDone && pd2Done && pitchDone && pitch2Done)
         {
+            if (envelopeHeld && !envelopeReleaseRequested)
+                return clamp12(ampEnvelopeLevel);
+
             finishEnvelopeNow();
         }
 

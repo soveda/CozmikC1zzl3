@@ -29,10 +29,10 @@ firmware experiment passes hardware testing.
 - Older imported or locally saved drafts without Amp2 copy Amp1 to Amp2.
 - When a CZ envelope has a sustain point before or at END, the card holds that
   lane while the gate or MIDI note is held.
-- Gate low or MIDI note off stops the held sustain immediately, matching the
-  observed CZ emulator behaviour.
-- If a lane has no active sustain point, it runs to END naturally even while
-  the note is held.
+- If all lanes reach END while the gate or MIDI note is still held, the final
+  END state is held.
+- Gate low or MIDI note off is treated as the envelope end condition and stops
+  the held envelope immediately.
 
 ## Save / Readback Behaviour
 
