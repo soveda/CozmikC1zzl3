@@ -2128,9 +2128,18 @@ function handleEnvelopeResponse(data) {
   const pd = readStages();
   const thirdLane = data.length === 129 ? readStages() : null;
   const pd2 = protocolVersion >= 4 && thirdLane ? thirdLane : pd;
-  const amp2 = protocolVersion >= 5 ? amp : amp;
+  const amp2 = amp;
   const pitch = protocolVersion >= 4 ? normalizePitchStages(null) : (thirdLane || normalizePitchStages(null));
-  envelopeReadSession.cardEnvelopes.set(slot, { amp, amp2, pd, pd2, pitch });
+  envelopeReadSession.cardEnvelopes.set(slot, {
+    amp,
+    amp2,
+    pd,
+    pd2,
+    pitch,
+    amp2Read: protocolVersion < 5,
+    pd2Read: protocolVersion < 4 || Boolean(thirdLane),
+    pitchRead: protocolVersion < 4
+  });
   envelopeReadSession.waitingForSlot = null;
   envelopeReadSession.lastEnvelopeSlot = slot;
 
@@ -2202,13 +2211,17 @@ function handlePd2EnvelopeResponse(data) {
   }
 
   const existing = envelopeReadSession.cardEnvelopes.get(slot);
-  if (existing) existing.pd2 = pd2;
+  if (existing) {
+    existing.pd2 = pd2;
+    existing.pd2Read = true;
+  }
 
   logDeveloper("PD2 envelope response received.", {
     slot: slot + 1,
     length: data.length,
     responseType: "pd2"
   });
+  maybeCompleteProtocol5SlotRead(slot);
 }
 
 function handleAmp2EnvelopeResponse(data) {
@@ -2238,13 +2251,17 @@ function handleAmp2EnvelopeResponse(data) {
   }
 
   const existing = envelopeReadSession.cardEnvelopes.get(slot);
-  if (existing) existing.amp2 = amp2;
+  if (existing) {
+    existing.amp2 = amp2;
+    existing.amp2Read = true;
+  }
 
   logDeveloper("Amp2 envelope response received.", {
     slot: slot + 1,
     length: data.length,
     responseType: "amp2"
   });
+  maybeCompleteProtocol5SlotRead(slot);
 }
 
 function handlePitchEnvelopeResponse(data) {
@@ -2282,6 +2299,7 @@ function handlePitchEnvelopeResponse(data) {
   if (existing) {
     existing.pitch = pitch;
     existing.pitch2 = pitch2;
+    existing.pitchRead = true;
   }
   logDeveloper("Pitch envelope response received.", {
     slot: slot + 1,
@@ -2290,6 +2308,21 @@ function handlePitchEnvelopeResponse(data) {
   });
   envelopeReadSession.waitingForPitchSlot = null;
   envelopeReadSession.lastEnvelopeSlot = null;
+  completeEnvelopeSlotRead(slot);
+}
+
+function maybeCompleteProtocol5SlotRead(slot) {
+  if (!envelopeReadSession || (envelopeReadSession.protocolVersion || 1) < 5) return;
+  if (slot !== envelopeReadSession.waitingForPitchSlot &&
+      slot !== envelopeReadSession.lastEnvelopeSlot) return;
+
+  const existing = envelopeReadSession.cardEnvelopes.get(slot);
+  if (!existing?.amp2Read || !existing?.pd2Read) return;
+
+  logDeveloper("Protocol v5 envelope readback completed from Amp2/PD2 responses; pitch may apply later.", {
+    slot: slot + 1,
+    pitchRead: Boolean(existing.pitchRead)
+  });
   completeEnvelopeSlotRead(slot);
 }
 
