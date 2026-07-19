@@ -26,14 +26,12 @@ Do not move or overwrite that reference while developing this experiment.
 - Factory envelopes and legacy payloads fall back to shared PD behaviour.
 - Pitch 1 and pitch 2 behaviour is inherited from the stable dual-pitch build.
 - Amplitude, wave family, ring modulation, noise/grit, and detune remain shared.
-- Saved envelope readback intentionally stays compatible with the stable
-  dual-pitch web app: the main envelope response returns amplitude and PD lane 1,
-  then the separate pitch response returns pitch 1 and pitch 2. PD lane 2
-  readback should be added with the matching protocol v4 web UI.
-- Saved envelope flash storage also remains four-lane compatible for this pass:
-  amp, PD lane 1, pitch 1, and pitch 2. PD lane 2 is reconstructed from PD lane
-  1 when a saved slot is loaded, until the protocol v4 web UI and storage tests
-  are added.
+- Saved envelope readback now uses protocol v4 behaviour: the main envelope
+  response returns amplitude, PD lane 1, and PD lane 2; the separate pitch
+  response returns pitch 1 and pitch 2.
+- Saved envelope flash storage now stores all five lanes: amp, PD lane 1,
+  pitch 1, pitch 2, and PD lane 2. Older saved custom-envelope data is treated
+  as incompatible and should be re-saved from the web UI.
 
 ## Build
 
@@ -55,10 +53,9 @@ experimental-firmware/dual-oscillator-lanes/C1ZZL3_DUAL_OSCILLATOR_LANES.uf2
 
 ## Intended Sequence After This Pass
 
-1. Add matching web UI support for two PD lanes.
-2. Test v3 dual-pitch payload compatibility.
-3. Test v4 two-PD-lane send/readback.
-4. Only after two-lane PD passes, consider fuller oscillator separation.
+1. Test v3 dual-pitch payload compatibility.
+2. Test v4 two-PD-lane send/save/readback.
+3. Only after two-lane PD passes, consider fuller oscillator separation.
 
 ## Later Full Two-Lane Behaviour
 

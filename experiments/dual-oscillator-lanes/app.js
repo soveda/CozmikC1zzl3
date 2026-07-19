@@ -2025,6 +2025,7 @@ async function requestCardEnvelopes(reason = "manual", slot = null, expectedEnve
     waitingForSlot: null,
     waitingForPitchSlot: null,
     lastEnvelopeSlot: null,
+    protocolVersion: null,
     cardEnvelopes: new Map(),
     retriesRemaining: ENVELOPE_READ_RETRIES
   };
@@ -2068,6 +2069,7 @@ function handleEnvelopeSlotsResponse(data) {
 
   envelopeReadSupported = true;
   renderDeveloperPorts();
+  envelopeReadSession.protocolVersion = version;
   envelopeReadSession.mask = unpackUint14(data, 8) & 0xff;
   envelopeReadSession.pendingSlots = Array.from({ length: CUSTOM_SLOT_COUNT }, (_, slot) => slot)
     .filter((slot) => (envelopeReadSession.mask & (1 << slot)) !== 0);
@@ -2083,6 +2085,7 @@ function handleEnvelopeResponse(data) {
   if (!envelopeReadSession || (data.length !== 89 && data.length !== 129)) return;
   const slot = data[7] & 0x07;
   if (!envelopeReadSession.pendingSlots.includes(slot)) return;
+  const protocolVersion = envelopeReadSession.protocolVersion || 1;
 
   let offset = 8;
   const readStages = () => Array.from({ length: STAGES }, () => {
@@ -2095,17 +2098,24 @@ function handleEnvelopeResponse(data) {
   });
   const amp = readStages();
   const pd = readStages();
-  const pitch = data.length === 129 ? readStages() : normalizePitchStages(null);
-  envelopeReadSession.cardEnvelopes.set(slot, { amp, pd, pitch });
+  const thirdLane = data.length === 129 ? readStages() : null;
+  const pd2 = protocolVersion >= 4 && thirdLane ? thirdLane : pd;
+  const pitch = protocolVersion >= 4 ? normalizePitchStages(null) : (thirdLane || normalizePitchStages(null));
+  envelopeReadSession.cardEnvelopes.set(slot, { amp, pd, pd2, pitch });
   envelopeReadSession.waitingForSlot = null;
   envelopeReadSession.lastEnvelopeSlot = slot;
 
   logDeveloper("Envelope slot response received.", {
     slot: slot + 1,
     length: data.length,
-    responseType: data.length === 129 ? "amp/pd/pitch" : "amp/pd standard; pitch may follow separately"
+    protocolVersion,
+    responseType: data.length === 129 && protocolVersion >= 4
+      ? "amp/pd1/pd2; pitch follows separately"
+      : data.length === 129
+        ? "amp/pd/pitch"
+        : "amp/pd standard; pitch may follow separately"
   });
-  if (data.length === 89) {
+  if (data.length === 89 || protocolVersion >= 4) {
     requestPitchEnvelopeForSlot(slot);
     armEnvelopeReadTimeout();
     return;

@@ -32,15 +32,14 @@ Do not move or overwrite that reference while developing this experiment.
   - DCW2 -> PD2
 - Other DCW modes still copy the selected/merged PD shape to both lanes.
 
-## Important Limitation
+## Save / Readback Behaviour
 
-The current protocol v4 firmware can load separate PD1/PD2 lanes into RAM.
-Saved card slots currently read back as PD1 shared to both PD lanes until the
-firmware save/readback path is expanded for persistent PD2 storage.
+The protocol v4 firmware saves and reads back separate PD1/PD2 lanes. The main
+envelope readback frame returns amplitude, PD1, and PD2; pitch1 and pitch2 are
+returned by the separate pitch-envelope readback frame.
 
-For true PD1/PD2 listening tests, use `Load RAM` or `Load Envelope + Settings`.
-Use `Save Envelope` only when you are intentionally testing the current
-fallback behaviour.
+Older protocol v3 dual-pitch cards still read back as a single PD lane; the UI
+copies PD1 to PD2 for display in that case.
 
 ## Local Test
 

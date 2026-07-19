@@ -273,9 +273,8 @@ version 4 with an optional second phase-distortion envelope lane:
   lane 2.
 - Pitch 1 and pitch 2 behaviour is inherited from the stable dual-pitch build.
 - The matching web UI lives in `experiments/dual-oscillator-lanes/` and sends
-  PD1, pitch1, pitch2, and PD2 to the card for RAM testing.
-- Saved card slots currently read back as PD1 shared to both PD lanes until
-  protocol v4 save/readback is expanded.
+  PD1, pitch1, pitch2, and PD2 to the card for RAM and save testing.
+- Protocol v4 saved card slots preserve and read back PD1 and PD2 separately.
 
 ## How To Use The Editor
 
