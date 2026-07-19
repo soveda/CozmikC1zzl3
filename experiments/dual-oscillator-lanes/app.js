@@ -6,6 +6,7 @@ const MAX_BROWSER_CUSTOM_PRESETS = 32;
 const AUDITION_TIME_SCALE = 4;
 const EDITOR_VIEW_SAMPLES = SAMPLE_RATE * 4;
 const MIN_SEND_SAMPLES = 960;
+const SETTINGS_READ_TIMEOUT_MS = 3000;
 const ENVELOPE_READ_TIMEOUT_MS = 7000;
 const ENVELOPE_READ_RETRIES = 2;
 const SAVE_VERIFY_DELAY_MS = 2500;
@@ -90,6 +91,7 @@ let settingsRequestTimer = null;
 let envelopeReadSession = null;
 let envelopeReadTimer = null;
 let envelopeReadSupported = null;
+let lastLoggedSysexAt = 0;
 let messageImportedDraft = null;
 let lastConsumedHandoffId = null;
 const handoffChannel = typeof BroadcastChannel === "function"
@@ -348,7 +350,7 @@ function loadPerformanceSettings() {
         noise: clampInt(saved.noise, 0, MAX_LEVEL),
         midiInChannel: clampInt(saved.midiInChannel, 1, 16),
         turingRange: clampInt(saved.turingRange ?? 2, 1, 8),
-        turingMidiOut: saved.turingMidiOut !== false,
+        turingMidiOut: saved.turingMidiOut === true,
         turingMidiChannel: clampInt(saved.turingMidiChannel ?? 1, 1, 16)
       };
     }
@@ -364,7 +366,7 @@ function loadPerformanceSettings() {
     noise: 0,
     midiInChannel: 1,
     turingRange: 2,
-    turingMidiOut: true,
+    turingMidiOut: false,
     turingMidiChannel: 1
   };
 }
@@ -1323,7 +1325,7 @@ async function connectMidi() {
 
   try {
     midiAccess = await navigator.requestMIDIAccess({ sysex: true });
-    refreshMidiPorts();
+    await prepareMidiPorts();
     midiAccess.onstatechange = refreshMidiPorts;
     el.midiToggle.classList.add("is-active");
     pulseButton(el.midiToggle, "On");
@@ -1338,6 +1340,30 @@ async function connectMidi() {
     });
     setStatus(`MIDI access denied or unavailable: ${error.message}`);
   }
+}
+
+async function openMidiPort(port, kind) {
+  if (!port || typeof port.open !== "function" || port.connection === "open") return;
+  try {
+    await port.open();
+  } catch (error) {
+    logDeveloper(`Could not explicitly open MIDI ${kind}.`, {
+      port: port.name || port.id || "Unnamed port",
+      message: error?.message || "Unknown error"
+    });
+  }
+}
+
+async function prepareMidiPorts() {
+  if (!midiAccess) return;
+  refreshMidiPorts();
+  const inputs = collectMidiPorts(midiAccess.inputs);
+  const outputs = collectMidiPorts(midiAccess.outputs);
+  await Promise.allSettled([
+    ...inputs.map((input) => openMidiPort(input, "input")),
+    ...outputs.map((output) => openMidiPort(output, "output"))
+  ]);
+  refreshMidiPorts();
 }
 
 function refreshMidiPorts() {
@@ -1906,7 +1932,13 @@ function sendNextEnvelopeRequest() {
   envelopeReadSession.waitingForSlot = slot;
   envelopeReadSession.retriesRemaining = ENVELOPE_READ_RETRIES;
   try {
-    output.send(buildRequestEnvelopeSysex(slot));
+    const request = buildRequestEnvelopeSysex(slot);
+    output.send(request);
+    logDeveloper("Envelope slot request sent.", {
+      slot: slot + 1,
+      output: output.name || output.id || "Unknown output",
+      bytes: request
+    });
     armEnvelopeReadTimeout();
   } catch (error) {
     envelopeReadSession = null;
@@ -1977,6 +2009,7 @@ async function requestCardEnvelopes(reason = "manual", slot = null, expectedEnve
     return;
   }
   if (!midiAccess) await connectMidi();
+  await prepareMidiPorts();
   const output = selectedMidiOutput();
   if (!output) {
     setStatus("No MIDI output found for envelope readback.");
@@ -1997,7 +2030,12 @@ async function requestCardEnvelopes(reason = "manual", slot = null, expectedEnve
   };
   el.requestEnvelopes.disabled = true;
   try {
-    output.send(buildRequestEnvelopeSlotsSysex());
+    const request = buildRequestEnvelopeSlotsSysex();
+    output.send(request);
+    logDeveloper("Envelope slot list request sent.", {
+      output: output.name || output.id || "Unknown output",
+      bytes: request
+    });
     armEnvelopeReadTimeout();
     if (reason === "manual") {
       pulseButton(el.requestEnvelopes, "Read");
@@ -2082,7 +2120,13 @@ function requestPitchEnvelopeForSlot(slot) {
 
   envelopeReadSession.waitingForPitchSlot = slot;
   try {
-    output.send(buildRequestPitchEnvelopeSysex(slot));
+    const request = buildRequestPitchEnvelopeSysex(slot);
+    output.send(request);
+    logDeveloper("Pitch envelope request sent.", {
+      slot: slot + 1,
+      output: output.name || output.id || "Unknown output",
+      bytes: request
+    });
   } catch (error) {
     logDeveloper("Pitch envelope request failed.", {
       slot: slot + 1,
@@ -2170,6 +2214,15 @@ function completeEnvelopeSlotRead(slot) {
 
 function handleMidi(event) {
   if (event.data[0] === 0xf0) {
+    const now = Date.now();
+    if (now - lastLoggedSysexAt > 50) {
+      logDeveloper("Incoming SysEx received.", {
+        length: event.data.length,
+        command: event.data.length > 6 ? event.data[6] : "n/a",
+        bytes: Array.from(event.data).slice(0, 16)
+      });
+      lastLoggedSysexAt = now;
+    }
     handleSysexResponse(event.data);
     return;
   }
@@ -2193,6 +2246,10 @@ function handleSysexResponse(data) {
       data[4] !== SYSEX_ID[2] ||
       data[5] !== SYSEX_ID[3] ||
       data[data.length - 1] !== 0xf7) {
+    logDeveloper("Ignored non-C1ZZL3 SysEx frame.", {
+      length: data.length,
+      bytes: Array.from(data).slice(0, 16)
+    });
     return;
   }
 
@@ -2208,7 +2265,14 @@ function handleSysexResponse(data) {
     handlePitchEnvelopeResponse(data);
     return;
   }
-  if (data[6] !== SYSEX_COMMAND_SETTINGS_RESPONSE) return;
+  if (data[6] !== SYSEX_COMMAND_SETTINGS_RESPONSE) {
+    logDeveloper("Ignored unhandled C1ZZL3 SysEx command.", {
+      command: data[6],
+      length: data.length,
+      bytes: Array.from(data).slice(0, 16)
+    });
+    return;
+  }
 
   if (!settingsRequestPending) {
     logDeveloper("Ignored unsolicited settings response.", {
@@ -2499,6 +2563,7 @@ async function requestPerformanceSettings(isProbe = false) {
   if (!midiAccess) {
     await connectMidi();
   }
+  await prepareMidiPorts();
 
   const output = selectedMidiOutput();
   if (!output) {
@@ -2513,8 +2578,13 @@ async function requestPerformanceSettings(isProbe = false) {
       settingsRequestPending = false;
       settingsRequestTimer = null;
       setStatus("The card did not reply to Read Settings from Card.");
-    }, 1500);
-    output.send(buildRequestSettingsSysex());
+    }, SETTINGS_READ_TIMEOUT_MS);
+    const request = buildRequestSettingsSysex();
+    output.send(request);
+    logDeveloper("Settings request sent.", {
+      output: output.name || output.id || "Unknown output",
+      bytes: request
+    });
   } catch (error) {
     settingsRequestPending = false;
     if (settingsRequestTimer !== null) {
