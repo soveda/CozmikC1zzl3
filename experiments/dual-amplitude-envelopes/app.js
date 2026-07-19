@@ -28,8 +28,8 @@ const SYSEX_COMMAND_REQUEST_PITCH_ENVELOPE = 0x0c;
 const SYSEX_COMMAND_PITCH_ENVELOPE_RESPONSE = 0x0d;
 const SYSEX_COMMAND_PD2_ENVELOPE_RESPONSE = 0x0e;
 const SYSEX_COMMAND_AMP2_ENVELOPE_RESPONSE = 0x0f;
-const ENVELOPE_PROTOCOL_VERSION = 5;
-const MAX_READABLE_ENVELOPE_PROTOCOL_VERSION = 5;
+const ENVELOPE_PROTOCOL_VERSION = 6;
+const MAX_READABLE_ENVELOPE_PROTOCOL_VERSION = 6;
 
 const factoryPresets = [
   preset("Off", fill(0, 1), fill(0, 1)),
@@ -195,7 +195,7 @@ const el = {
   turingMidiChannel: document.querySelector("#turingMidiChannel")
 };
 
-function preset(name, amp, pd, slot = null, cardDirty = false, pitch = null, pitchSource = null, pitch2 = null, pd2 = null, amp2 = null) {
+function preset(name, amp, pd, slot = null, cardDirty = false, pitch = null, pitchSource = null, pitch2 = null, pd2 = null, amp2 = null, sustain = null) {
   const pitchLane = normalizePitchStages(pitch);
   const ampLane = normalizeStages(amp);
   const pdLane = normalizeStages(pd);
@@ -207,6 +207,7 @@ function preset(name, amp, pd, slot = null, cardDirty = false, pitch = null, pit
     pd2: normalizeStages(pd2 || pdLane),
     pitch: pitchLane,
     pitch2: normalizePitchStages(pitch2 || pitchLane),
+    sustain: normalizeSustainStages(sustain),
     pitchSource: pitchSource || null,
     slot: Number.isInteger(slot) ? clampInt(slot, 0, CUSTOM_SLOT_COUNT - 1) : null,
     cardDirty: Boolean(cardDirty)
@@ -235,6 +236,14 @@ function normalizePitchStages(stages) {
     level: clampInt(stages?.[i]?.level ?? stages?.[i]?.[0] ?? 2048, 0, MAX_LEVEL),
     time: clampInt(stages?.[i]?.time ?? stages?.[i]?.[1] ?? 1, 1, 192000)
   }));
+}
+
+function normalizeSustainStages(sustain) {
+  return Array.from({ length: 6 }, (_, index) => {
+    const value = Array.isArray(sustain) ? sustain[index] : undefined;
+    const stage = Number(value);
+    return Number.isInteger(stage) && stage >= 0 && stage < STAGES ? stage : 0x7f;
+  });
 }
 
 function envelopeMaxSamples(presetItem) {
@@ -312,13 +321,13 @@ function loadPresets() {
     if (Array.isArray(saved)) {
       const custom = saved
         .slice(FACTORY_PRESET_COUNT)
-        .map((item) => constrainPitchToEnvelope(preset(item.name || "Custom preset", item.amp, item.pd, item.slot, item.cardDirty, item.pitch, item.pitchSource, item.pitch2, item.pd2, item.amp2)))
+        .map((item) => constrainPitchToEnvelope(preset(item.name || "Custom preset", item.amp, item.pd, item.slot, item.cardDirty, item.pitch, item.pitchSource, item.pitch2, item.pd2, item.amp2, item.sustain)))
         .slice(0, MAX_BROWSER_CUSTOM_PRESETS);
       return [...structuredClone(factoryPresets), ...custom];
     }
     if (Array.isArray(saved?.customPresets)) {
       const custom = saved.customPresets
-        .map((item) => constrainPitchToEnvelope(preset(item.name || "Custom preset", item.amp, item.pd, item.slot, item.cardDirty, item.pitch, item.pitchSource, item.pitch2, item.pd2, item.amp2)))
+        .map((item) => constrainPitchToEnvelope(preset(item.name || "Custom preset", item.amp, item.pd, item.slot, item.cardDirty, item.pitch, item.pitchSource, item.pitch2, item.pd2, item.amp2, item.sustain)))
         .slice(0, MAX_BROWSER_CUSTOM_PRESETS);
       return [...structuredClone(factoryPresets), ...custom];
     }
@@ -340,6 +349,7 @@ function savePresets() {
         pd2: item.pd2 || item.pd,
         pitch: item.pitch,
         pitch2: item.pitch2,
+        sustain: normalizeSustainStages(item.sustain),
         pitchSource: item.pitchSource || null,
         slot: Number.isInteger(item.slot) ? item.slot : null,
         cardDirty: Boolean(item.cardDirty)
@@ -458,7 +468,8 @@ function makeImportedPreset(draft) {
     importedPitchSource(draft),
     importedPitch2Stages(draft),
     importedPd2Stages(draft),
-    draft.amp2 || draft.sourceEnvelopes?.amp2 || draft.amp
+    draft.amp2 || draft.sourceEnvelopes?.amp2 || draft.amp,
+    draft.sustain || draft.sourceEnvelopes?.sustain
   );
 }
 
@@ -797,7 +808,7 @@ function duplicateFactoryPreset() {
   }
 
   const source = presets[selected];
-  presets.push(preset(`${source.name} copy`, source.amp, source.pd, null, false, source.pitch, source.pitchSource, source.pitch2, source.pd2, source.amp2));
+  presets.push(preset(`${source.name} copy`, source.amp, source.pd, null, false, source.pitch, source.pitchSource, source.pitch2, source.pd2, source.amp2, source.sustain));
   selected = presets.length - 1;
   savePresets();
   render();
@@ -1660,6 +1671,7 @@ function buildSysex(command) {
   appendStages(payload, presets[selected].pitch2 || presets[selected].pitch);
   appendStages(payload, presets[selected].pd2 || presets[selected].pd);
   appendStages(payload, presets[selected].amp2 || presets[selected].amp);
+  payload.push(...normalizeSustainStages(presets[selected].sustain));
   return [0xf0, SYSEX_MANUFACTURER, ...ensureArray(SYSEX_ID, "SYSEX_ID"), command, ...ensureArray(payload, "payload"), 0xf7];
 }
 
@@ -1789,7 +1801,8 @@ function envelopesMatch(a, b) {
     stagesMatch(a.pd, b.pd) &&
     stagesMatch(normalizeStages(a.pd2 || a.pd), normalizeStages(b.pd2 || b.pd)) &&
     stagesMatch(normalizePitchStages(a.pitch), normalizePitchStages(b.pitch)) &&
-    stagesMatch(normalizePitchStages(a.pitch2 || a.pitch), normalizePitchStages(b.pitch2 || b.pitch));
+    stagesMatch(normalizePitchStages(a.pitch2 || a.pitch), normalizePitchStages(b.pitch2 || b.pitch)) &&
+    normalizeSustainStages(a.sustain).every((stage, index) => stage === normalizeSustainStages(b.sustain)[index]);
 }
 
 function markCardSlotLocal(slot) {
@@ -1846,13 +1859,14 @@ function reconcileCardEnvelopes(mask, cardEnvelopes) {
         existing.pd2 = normalizeStages(cardEnvelope.pd2 || cardEnvelope.pd);
         existing.pitch = normalizePitchStages(cardEnvelope.pitch);
         existing.pitch2 = normalizePitchStages(cardEnvelope.pitch2 || cardEnvelope.pitch);
+        existing.sustain = normalizeSustainStages(cardEnvelope.sustain);
         constrainPitchToEnvelope(existing);
         existing.cardDirty = false;
         return;
       }
     }
 
-    const cardPreset = constrainPitchToEnvelope(preset(`Card Envelope ${slot + 1}`, cardEnvelope.amp, cardEnvelope.pd, slot, false, cardEnvelope.pitch, null, cardEnvelope.pitch2, cardEnvelope.pd2 || cardEnvelope.pd, cardEnvelope.amp2 || cardEnvelope.amp));
+    const cardPreset = constrainPitchToEnvelope(preset(`Card Envelope ${slot + 1}`, cardEnvelope.amp, cardEnvelope.pd, slot, false, cardEnvelope.pitch, null, cardEnvelope.pitch2, cardEnvelope.pd2 || cardEnvelope.pd, cardEnvelope.amp2 || cardEnvelope.amp, cardEnvelope.sustain));
     if (customPresetCount() >= MAX_BROWSER_CUSTOM_PRESETS) {
       const replacementIndex = presets.findIndex((item, index) =>
         index >= FACTORY_PRESET_COUNT && item.slot === null);
@@ -2265,7 +2279,7 @@ function handleAmp2EnvelopeResponse(data) {
 }
 
 function handlePitchEnvelopeResponse(data) {
-  if (data.length !== 49 && data.length !== 89) return;
+  if (data.length !== 49 && data.length !== 89 && data.length !== 95) return;
   const slot = data[7] & 0x07;
 
   let offset = 8;
@@ -2278,10 +2292,13 @@ function handlePitchEnvelopeResponse(data) {
     return stage;
   });
   const pitch = readPitchStages();
-  const pitch2 = data.length === 89 ? readPitchStages() : pitch;
+  const pitch2 = data.length === 89 || data.length === 95 ? readPitchStages() : pitch;
+  const sustain = data.length === 95
+    ? Array.from({ length: 6 }, () => clampInt(data[offset++] & 0x7f, 0, 0x7f))
+    : null;
 
   if (!envelopeReadSession) {
-    applyLatePitchReadback(slot, pitch, pitch2);
+    applyLatePitchReadback(slot, pitch, pitch2, sustain);
     return;
   }
 
@@ -2291,6 +2308,7 @@ function handlePitchEnvelopeResponse(data) {
     if (existingSlot) {
       existingSlot.pitch = pitch;
       existingSlot.pitch2 = pitch2;
+      if (sustain) existingSlot.sustain = normalizeSustainStages(sustain);
     }
     return;
   }
@@ -2299,12 +2317,13 @@ function handlePitchEnvelopeResponse(data) {
   if (existing) {
     existing.pitch = pitch;
     existing.pitch2 = pitch2;
+    if (sustain) existing.sustain = normalizeSustainStages(sustain);
     existing.pitchRead = true;
   }
   logDeveloper("Pitch envelope response received.", {
     slot: slot + 1,
     length: data.length,
-    responseType: data.length === 89 ? "pitch osc1/osc2" : "single pitch"
+    responseType: data.length === 95 ? "pitch osc1/osc2 + sustain" : data.length === 89 ? "pitch osc1/osc2" : "single pitch"
   });
   envelopeReadSession.waitingForPitchSlot = null;
   envelopeReadSession.lastEnvelopeSlot = null;
@@ -2319,19 +2338,20 @@ function maybeCompleteProtocol5SlotRead(slot) {
   const existing = envelopeReadSession.cardEnvelopes.get(slot);
   if (!existing?.amp2Read || !existing?.pd2Read) return;
 
-  logDeveloper("Protocol v5 envelope readback completed from Amp2/PD2 responses; pitch may apply later.", {
+  logDeveloper("Dual-amplitude envelope readback completed from Amp2/PD2 responses; pitch and sustain may apply later.", {
     slot: slot + 1,
     pitchRead: Boolean(existing.pitchRead)
   });
   completeEnvelopeSlotRead(slot);
 }
 
-function applyLatePitchReadback(slot, pitch, pitch2 = pitch) {
+function applyLatePitchReadback(slot, pitch, pitch2 = pitch, sustain = null) {
   let updated = false;
   presets.forEach((item, index) => {
     if (index >= FACTORY_PRESET_COUNT && item.slot === slot) {
       item.pitch = normalizePitchStages(pitch);
       item.pitch2 = normalizePitchStages(pitch2);
+      if (sustain) item.sustain = normalizeSustainStages(sustain);
       constrainPitchToEnvelope(item);
       item.cardDirty = false;
       updated = true;

@@ -14,9 +14,9 @@ Envelope Lab.
 - `dual-oscillator-lanes/`: protocol v4 experiment for two-lane PD envelopes
   plus the existing two pitch lanes. Use it with the matching dual-oscillator
   experimental UF2.
-- `dual-amplitude-envelopes/`: protocol v5 experiment for separate Amp1/Amp2
-  envelopes plus PD1/PD2 and Pitch1/Pitch2. Use it only with the matching
-  dual-amplitude experimental UF2.
+- `dual-amplitude-envelopes/`: protocol v6 experiment for separate Amp1/Amp2
+  envelopes plus PD1/PD2, Pitch1/Pitch2, and CZ-style sustain markers. Use it
+  only with the matching dual-amplitude experimental UF2.
 
 ## Archived Web Experiments
 

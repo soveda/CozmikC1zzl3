@@ -14,6 +14,7 @@ const el = {
   draftNameBox: document.querySelector("#draftNameBox"),
   waveBox: document.querySelector("#waveBox"),
   perfBox: document.querySelector("#perfBox"),
+  czEnvelopeSummaryBox: document.querySelector("#czEnvelopeSummaryBox"),
   ampDraftBox: document.querySelector("#ampDraftBox"),
   amp2DraftBox: document.querySelector("#amp2DraftBox"),
   pdDraftBox: document.querySelector("#pdDraftBox"),
@@ -493,6 +494,11 @@ function czEnvelopeToC1Stages(stages, timeMin = 240, timeMax = 48000, neutralLev
   ));
 }
 
+function czSustainStage(stages) {
+  const index = stages.findIndex((stage) => stage.sustain && !stage.inactive);
+  return index >= 0 ? index : 0x7f;
+}
+
 function parseCzPatch(decodedBytes) {
   const dca1 = parseCzEnvelope(decodedBytes, CZ_SECTIONS.dca1End, CZ_SECTIONS.dca1, dcaRate, dcaLevel);
   const dca2 = parseCzEnvelope(decodedBytes, CZ_SECTIONS.dca2End, CZ_SECTIONS.dca2, dcaRate, dcaLevel);
@@ -562,6 +568,14 @@ function buildDraftPreset(
   const dco1PitchEnvelope = czEnvelopeToC1Stages(cloneCzEnvelopeStages(czPatch.dco1Pitch), 240, 48000, 2048);
   const dco2PitchEnvelope = czEnvelopeToC1Stages(cloneCzEnvelopeStages(czPatch.dco2Pitch), 240, 48000, 2048);
   const pitch2Envelope = pitchMode === "dual" ? dco2PitchEnvelope : pitchEnvelope;
+  const sustain = [
+    czSustainStage(ampPair.amp1),
+    czSustainStage(pdPair.pd1),
+    czSustainStage(pitchMode === "dual" ? cloneCzEnvelopeStages(czPatch.dco1Pitch) : pitchStages),
+    czSustainStage(pitchMode === "dual" ? cloneCzEnvelopeStages(czPatch.dco2Pitch) : pitchStages),
+    czSustainStage(pdPair.pd2),
+    czSustainStage(ampPair.amp2)
+  ];
   const pitchAlternatives = {
     merged: czEnvelopeToC1Stages(mergeCzEnvelopes(czPatch.dco1Pitch, czPatch.dco2Pitch), 240, 48000, 2048),
     dco1: dco1PitchEnvelope,
@@ -582,6 +596,7 @@ function buildDraftPreset(
     pd2: dcw2Envelope,
     pitch: pitchMode === "dual" ? dco1PitchEnvelope : pitchEnvelope,
     pitch2: pitch2Envelope,
+    sustain,
     sourceEnvelopes: {
       pitch: pitchMode === "dual" ? dco1PitchEnvelope : pitchEnvelope,
       pitch2: pitch2Envelope,
@@ -603,6 +618,7 @@ function buildDraftPreset(
       amp: amp1Envelope,
       amp2: amp2Envelope,
       ampMerged: ampMergedEnvelope,
+      sustain,
       cz: czPatch
     },
     performance: { pd, detune, waveform: wave.value, ring, noise },
@@ -630,6 +646,28 @@ function formatCzEnvelope(envelope) {
   ].join("\n");
 }
 
+function formatCzEnvelopeSummary(cz) {
+  const rows = [
+    ["DCA1 / Amp1", cz.dca1],
+    ["DCA2 / Amp2", cz.dca2],
+    ["DCW1 / PD1", cz.dcw1],
+    ["DCW2 / PD2", cz.dcw2],
+    ["DCO1 / Pitch1", cz.dco1Pitch],
+    ["DCO2 / Pitch2", cz.dco2Pitch],
+  ];
+
+  return rows.map(([label, envelope]) => {
+    const sustainSteps = envelope.stages
+      .map((stage, index) => stage.sustain ? index + 1 : null)
+      .filter(Boolean);
+    const activeSustains = sustainSteps.filter((step) => step <= envelope.endStep);
+    const ignoredSustains = sustainSteps.filter((step) => step > envelope.endStep);
+    const activeText = activeSustains.length ? activeSustains.join(", ") : "-";
+    const ignoredText = ignoredSustains.length ? `; ignored after END: ${ignoredSustains.join(", ")}` : "";
+    return `${label}: END ${envelope.endStep}, sustain ${activeText}${ignoredText}`;
+  }).join("\n");
+}
+
 function renderDraft(draft) {
   if (!draft) {
     el.decodedPatchBox.textContent = "No decoded patch yet.";
@@ -639,6 +677,7 @@ function renderDraft(draft) {
     el.draftNameBox.textContent = "No draft created yet.";
     el.waveBox.textContent = "No draft yet.";
     el.perfBox.textContent = "No draft yet.";
+    el.czEnvelopeSummaryBox.textContent = "No draft yet.";
     el.ampDraftBox.textContent = "No draft yet.";
     el.amp2DraftBox.textContent = "No draft yet.";
     el.pdDraftBox.textContent = "No draft yet.";
@@ -656,6 +695,7 @@ function renderDraft(draft) {
   el.draftNameBox.textContent = `${draft.name} (${draft.confidence} confidence)`;
   el.waveBox.textContent = `${draft.wave.label} -> ${draft.wave.hint}`;
   el.perfBox.textContent = `PD ${draft.performance.pd}, wave family ${draft.wave.label}, detune ${draft.performance.detune}, ring ${draft.performance.ring}, noise ${draft.performance.noise}`;
+  el.czEnvelopeSummaryBox.textContent = formatCzEnvelopeSummary(draft.sourceEnvelopes.cz);
   el.ampDraftBox.textContent = formatStages(draft.amp);
   el.amp2DraftBox.textContent = formatStages(draft.amp2 || draft.sourceEnvelopes.amp2 || draft.amp);
   el.pdDraftBox.textContent = formatStages(draft.pd);
