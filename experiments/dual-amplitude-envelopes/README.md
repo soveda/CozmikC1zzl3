@@ -26,6 +26,8 @@ firmware experiment passes hardware testing.
   - Amp 2
   - six sustain-marker bytes in the same lane order
 - CZ Import Lab sends DCA1 to Amp1 and DCA2 to Amp2.
+- CZ Import Lab treats each CZ envelope END step as that lane's hold point
+  when no earlier CZ sustain marker exists.
 - Older imported or locally saved drafts without Amp2 copy Amp1 to Amp2.
 - When a CZ envelope has a sustain point before or at END, the card holds that
   lane while the gate or MIDI note is held.

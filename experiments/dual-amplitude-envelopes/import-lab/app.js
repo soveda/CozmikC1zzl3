@@ -495,8 +495,12 @@ function czEnvelopeToC1Stages(stages, timeMin = 240, timeMax = 48000, neutralLev
 }
 
 function czSustainStage(stages) {
-  const index = stages.findIndex((stage) => stage.sustain && !stage.inactive);
-  return index >= 0 ? index : 0x7f;
+  const endStep = Number.isFinite(stages.endStep) ? stages.endStep : 8;
+  const index = stages.findIndex((stage, stageIndex) => (
+    stageIndex < endStep && stage.sustain && !stage.inactive
+  ));
+  if (index >= 0) return index;
+  return clamp(Math.round(endStep) - 1, 0, STAGES - 1);
 }
 
 function parseCzPatch(decodedBytes) {
@@ -664,7 +668,8 @@ function formatCzEnvelopeSummary(cz) {
     const ignoredSustains = sustainSteps.filter((step) => step > envelope.endStep);
     const activeText = activeSustains.length ? activeSustains.join(", ") : "-";
     const ignoredText = ignoredSustains.length ? `; ignored after END: ${ignoredSustains.join(", ")}` : "";
-    return `${label}: END ${envelope.endStep}, sustain ${activeText}${ignoredText}`;
+    const stagesWithEnd = Object.assign([...envelope.stages], { endStep: envelope.endStep });
+    return `${label}: END ${envelope.endStep}, sustain ${activeText}, C1ZZL3 hold ${czSustainStage(stagesWithEnd) + 1}${ignoredText}`;
   }).join("\n");
 }
 
