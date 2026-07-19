@@ -1110,7 +1110,7 @@ private:
             return;
 
         uint8_t slot = sysexBuffer[6] & 0x07u;
-        if (!customEnvelopeLoaded[slot])
+        if (!customEnvelopePersist[slot])
             return;
 
         uint8_t frame[89] = {
@@ -1124,7 +1124,7 @@ private:
             slot
         };
         uint32_t offset = 8;
-        const EnvelopeProgram& envelope = customEnvelopes[slot];
+        const EnvelopeProgram& envelope = customEnvelopeSaved[slot];
         for (uint32_t i = 0; i < 8u; ++i)
         {
             appendWebMidiUint14(frame, offset, envelope.amp[i].level);
@@ -1145,7 +1145,7 @@ private:
             return;
 
         uint8_t slot = sysexBuffer[6] & 0x07u;
-        if (!customEnvelopeLoaded[slot])
+        if (!customEnvelopePersist[slot])
             return;
 
         sendWebMidiPd2EnvelopeResponse(slot);
@@ -1165,7 +1165,7 @@ private:
             slot
         };
         uint32_t offset = 8;
-        const EnvelopeProgram& envelope = customEnvelopes[slot];
+        const EnvelopeProgram& envelope = customEnvelopeSaved[slot];
         for (uint32_t i = 0; i < 8u; ++i)
         {
             appendWebMidiUint14(frame, offset, envelope.pd2[i].level);
@@ -1188,7 +1188,7 @@ private:
             slot
         };
         uint32_t offset = 8;
-        const EnvelopeProgram& envelope = customEnvelopes[slot];
+        const EnvelopeProgram& envelope = customEnvelopeSaved[slot];
         for (uint32_t i = 0; i < 8u; ++i)
         {
             appendWebMidiUint14(frame, offset, envelope.pitch[i].level);
@@ -1286,6 +1286,11 @@ private:
 
         customEnvelopes[slot] = next;
         customEnvelopeLoaded[slot] = true;
+        if (persist)
+        {
+            customEnvelopeSaved[slot] = next;
+            customEnvelopePersist[slot] = true;
+        }
         envelopePreset = CustomEnvelopePreset + slot;
         envelopeActive = false;
 
@@ -1300,7 +1305,9 @@ private:
 
         uint8_t slot = sysexBuffer[6] & 0x07u;
         customEnvelopes[slot] = {};
+        customEnvelopeSaved[slot] = {};
         customEnvelopeLoaded[slot] = false;
+        customEnvelopePersist[slot] = false;
 
         if (envelopePreset == CustomEnvelopePreset + slot)
         {
@@ -1844,7 +1851,7 @@ private:
         uint8_t count = 0;
         for (uint32_t i = 0; i < CustomEnvelopeSlotCount; ++i)
         {
-            if (customEnvelopeLoaded[i])
+            if (customEnvelopePersist[i])
                 count++;
         }
 
@@ -1866,7 +1873,7 @@ private:
         uint8_t customIndex = selected - EnvelopePresetCount;
         for (uint32_t slot = 0; slot < CustomEnvelopeSlotCount; ++slot)
         {
-            if (!customEnvelopeLoaded[slot])
+            if (!customEnvelopePersist[slot])
                 continue;
 
             if (customIndex == 0)
@@ -2196,7 +2203,7 @@ private:
         state.loadedMask = customEnvelopeMask();
 
         for (uint32_t i = 0; i < CustomEnvelopeSlotCount; ++i)
-            state.slots[i] = savedEnvelopeFromRuntime(customEnvelopes[i]);
+            state.slots[i] = savedEnvelopeFromRuntime(customEnvelopeSaved[i]);
 
         state.checksum = 0;
         state.checksum = checksumCustomEnvelopeState(state);
@@ -2253,7 +2260,7 @@ private:
         uint8_t mask = 0;
         for (uint32_t i = 0; i < CustomEnvelopeSlotCount; ++i)
         {
-            if (customEnvelopeLoaded[i])
+            if (customEnvelopePersist[i])
                 mask |= 1u << i;
         }
 
@@ -2403,8 +2410,10 @@ private:
         {
             for (uint32_t i = 0; i < CustomEnvelopeSlotCount; ++i)
             {
-                customEnvelopes[i] = runtimeEnvelopeFromSaved(state.slots[i]);
+                customEnvelopeSaved[i] = runtimeEnvelopeFromSaved(state.slots[i]);
+                customEnvelopes[i] = customEnvelopeSaved[i];
                 customEnvelopeLoaded[i] = (state.loadedMask & (1u << i)) != 0;
+                customEnvelopePersist[i] = customEnvelopeLoaded[i];
             }
 
             return;
@@ -2416,8 +2425,10 @@ private:
 
         for (uint32_t i = 0; i < CustomEnvelopeSlotCount; ++i)
         {
-            customEnvelopes[i] = runtimeEnvelopeFromSavedV3(legacyState.slots[i]);
+            customEnvelopeSaved[i] = runtimeEnvelopeFromSavedV3(legacyState.slots[i]);
+            customEnvelopes[i] = customEnvelopeSaved[i];
             customEnvelopeLoaded[i] = (legacyState.loadedMask & (1u << i)) != 0;
+            customEnvelopePersist[i] = customEnvelopeLoaded[i];
         }
     }
 
@@ -2768,7 +2779,9 @@ private:
     volatile bool midiResetAltXPickup = false;
     volatile bool midiResetAltYPickup = false;
     EnvelopeProgram customEnvelopes[CustomEnvelopeSlotCount] = {};
+    EnvelopeProgram customEnvelopeSaved[CustomEnvelopeSlotCount] = {};
     bool customEnvelopeLoaded[CustomEnvelopeSlotCount] = {};
+    bool customEnvelopePersist[CustomEnvelopeSlotCount] = {};
     uint8_t sysexBuffer[WebMidiMaxSysexLength] = {};
     uint32_t sysexLength = 0;
     bool sysexReceiving = false;
