@@ -1,9 +1,14 @@
-# C1ZZL3 Dual Pitch Envelope Lab Experiment
+# C1ZZL3 Stable Dual Pitch Envelope Lab
 
-This folder contains the matching web UI for the dual-pitch envelope firmware
-experiment. It is separate from the production Envelope Lab.
+This folder contains the passing dual-pitch Envelope Lab and CZ Import Lab. It
+is separate from the production Envelope Lab, but should now be treated as the
+stable dual-pitch reference for future experiments.
 
-## What It Tests
+Do not use this folder for the next dual-oscillator experiment. Start that work
+in `experiments/dual-oscillator-lanes` so this known-good dual-pitch behaviour
+remains available for comparison.
+
+## Passing Behaviour
 
 - CZ Import Lab decodes separate DCO1 and DCO2 pitch envelopes.
 - CZ Import Lab lets the user choose merged, line 1, or line 2 mapping for CZ
@@ -16,6 +21,14 @@ experiment. It is separate from the production Envelope Lab.
   and pitch 2 lanes.
 - Envelope readback accepts dual-pitch pitch responses from the experimental
   firmware.
+- Import handoff does not reload an already-open Envelope Lab tab.
+- Imported envelopes are not duplicated during handoff.
+- Imported performance settings update the Envelope Lab Settings controls:
+  - PD amount
+  - detune
+  - wave family
+  - ring modulation
+  - noise/grit
 
 ## Local Test
 
@@ -41,7 +54,7 @@ experimental-firmware/dual-pitch-envelopes/C1ZZL3_DUAL_PITCH.uf2
 
 ## Current Limitation
 
-This first UI pass sends and reads two pitch lanes, but direct graph editing is
-still focused on the main pitch lane. Imported DCO2 pitch is preserved as the
-second pitch lane so the firmware behaviour can be tested before expanding the
-editor controls.
+This stable dual-pitch reference sends, reads, and displays two pitch lanes.
+The next experiment should not add more behaviour here; it should begin with
+two-lane PD envelopes in `experiments/dual-oscillator-lanes`, then progress
+toward full two-lane oscillator behaviour.

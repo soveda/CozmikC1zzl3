@@ -66,6 +66,18 @@ build rather than replace it. If the protocol v3 test passes, the next deeper
 experiment is not simply "more pitch lanes" but a fuller split of the two
 oscillator paths.
 
+Current decision:
+
+- Keep `experiments/dual-pitch-envelopes` and
+  `experimental-firmware/dual-pitch-envelopes` as the stable dual-pitch
+  reference.
+- Start the next dual-oscillator experiment separately.
+- First experimental step: add two-lane PD envelopes.
+- Second experimental step: expand from dual pitch plus dual PD toward full
+  two-lane oscillator behaviour.
+- Do not replace production/main with this later experiment unless it passes
+  explicit web app and hardware testing.
+
 Areas to inspect before changing firmware:
 
 - Whether oscillator 1 and oscillator 2 should each have independent pitch

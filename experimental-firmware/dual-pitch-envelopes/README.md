@@ -1,8 +1,13 @@
-# C1ZZL3 Dual Pitch Envelope Firmware Experiment
+# C1ZZL3 Stable Dual Pitch Envelope Firmware
 
-This folder is an experimental firmware build for testing separate pitch envelopes
-on the two C1ZZL3 oscillators. The production firmware is not changed by this
-experiment.
+This folder is the passing dual-pitch firmware build for separate pitch
+envelopes on the two C1ZZL3 oscillators. The production firmware is not changed
+by this build, but this folder should now be treated as the stable dual-pitch
+reference for future experiments.
+
+Do not use this folder for the next dual-oscillator experiment. Start that work
+in `experimental-firmware/dual-oscillator-lanes` so this known-good dual-pitch
+firmware remains available as a rollback and comparison point.
 
 ## What Changes
 
@@ -46,9 +51,9 @@ Use it with:
 experiments/dual-pitch-envelopes/
 ```
 
-## Current Scope
+## Stable Dual Pitch Scope
 
-This is the first dual-pitch test pass. The firmware applies two independent
-pitch lanes, and the matching import lab can send DCO1/DCO2 separately. The
-Envelope Lab currently exposes the main pitch lane for direct editing; imported
-DCO2 pitch is preserved, sent, and read back as oscillator 2 pitch.
+The firmware applies two independent pitch lanes, and the matching import lab
+can send DCO1/DCO2 separately. The Envelope Lab sends, reads, and displays both
+pitch lanes. This version is the reference point before testing two-lane PD or
+full two-lane oscillator behaviour.

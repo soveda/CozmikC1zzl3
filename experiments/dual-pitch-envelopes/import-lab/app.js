@@ -519,6 +519,7 @@ function buildDraftPreset(
   const detune = clamp(Math.round((decodedBytes[48] ?? 128) / 255 * 4095), 0, 4095);
   const ring = clamp(Math.round((decodedBytes[49] ?? 0) / 255 * 1200), 0, 4095);
   const noise = clamp(Math.round((decodedBytes[50] ?? 0) / 255 * 700), 0, 4095);
+  const pd = clamp(Math.max(...dcwEnvelope.map((stage) => stage.level)), 0, 4095);
 
   return {
     name: `${baseName} draft`,
@@ -547,7 +548,7 @@ function buildDraftPreset(
       amp: ampEnvelope,
       cz: czPatch
     },
-    performance: { detune, ring, noise },
+    performance: { pd, detune, waveform: wave.value, ring, noise },
     confidence: "medium"
   };
 }
@@ -592,7 +593,7 @@ function renderDraft(draft) {
   el.supportedOutputBox.textContent = "Envelope Lab draft handoff";
   el.draftNameBox.textContent = `${draft.name} (${draft.confidence} confidence)`;
   el.waveBox.textContent = `${draft.wave.label} -> ${draft.wave.hint}`;
-  el.perfBox.textContent = `Wave family ${draft.wave.label}, detune ${draft.performance.detune}, ring ${draft.performance.ring}, noise ${draft.performance.noise}`;
+  el.perfBox.textContent = `PD ${draft.performance.pd}, wave family ${draft.wave.label}, detune ${draft.performance.detune}, ring ${draft.performance.ring}, noise ${draft.performance.noise}`;
   el.ampDraftBox.textContent = formatStages(draft.amp);
   el.pdDraftBox.textContent = formatStages(draft.pd);
   el.pitchDco1Box.textContent = formatCzEnvelope(draft.sourceEnvelopes.cz.dco1Pitch);

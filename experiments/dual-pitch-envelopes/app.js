@@ -430,6 +430,23 @@ function makeImportedPreset(draft) {
   );
 }
 
+function applyImportedPerformanceSettings(draft) {
+  const performance = draft?.performance;
+  if (!performance || typeof performance !== "object") return false;
+
+  const nextSettings = { ...performanceSettings };
+  if (performance.pd != null) nextSettings.pd = clampInt(performance.pd, 0, MAX_LEVEL);
+  if (performance.detune != null) nextSettings.detune = clampInt(performance.detune, 0, MAX_LEVEL);
+  if (performance.waveform != null) nextSettings.waveform = clampInt(performance.waveform, 0, 7);
+  else if (draft?.wave?.value != null) nextSettings.waveform = clampInt(draft.wave.value, 0, 7);
+  if (performance.ring != null) nextSettings.ring = clampInt(performance.ring, 0, MAX_LEVEL);
+  if (performance.noise != null) nextSettings.noise = clampInt(performance.noise, 0, MAX_LEVEL);
+
+  performanceSettings = nextSettings;
+  savePerformanceSettings();
+  return true;
+}
+
 function addImportedDraft(draft) {
   if (!draft || !Array.isArray(draft.amp) || !Array.isArray(draft.pd)) return false;
   const imported = makeImportedPreset(draft);
@@ -442,6 +459,7 @@ function addImportedDraft(draft) {
     selected = presets.length - 1;
   }
 
+  applyImportedPerformanceSettings(draft);
   savePresets();
   clearImportedDraftSources();
   return true;
