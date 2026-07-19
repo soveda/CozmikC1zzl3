@@ -831,16 +831,16 @@ function drawCurves() {
   }
 
   const viewSamples = editorViewSamples();
-  drawLane(ctx, presets[selected].amp, theme.amp, w, h, viewSamples);
   drawLane(ctx, presets[selected].amp2 || presets[selected].amp, theme.amp2, w, h, viewSamples);
-  drawLane(ctx, presets[selected].pd, theme.pd, w, h, viewSamples);
   drawLane(ctx, presets[selected].pd2 || presets[selected].pd, theme.pd2, w, h, viewSamples);
-  drawHandles(ctx, presets[selected].amp, theme.amp, w, h, viewSamples, activeLaneView === "amp", theme);
+  drawLane(ctx, presets[selected].amp, theme.amp, w, h, viewSamples);
+  drawLane(ctx, presets[selected].pd, theme.pd, w, h, viewSamples);
   drawHandles(ctx, presets[selected].amp2 || presets[selected].amp, theme.amp2, w, h, viewSamples, activeLaneView === "amp2", theme);
-  drawHandles(ctx, presets[selected].pd, theme.pd, w, h, viewSamples, activeLaneView === "pd", theme);
   drawHandles(ctx, presets[selected].pd2 || presets[selected].pd, theme.pd2, w, h, viewSamples, activeLaneView === "pd2", theme);
+  drawHandles(ctx, presets[selected].amp, theme.amp, w, h, viewSamples, activeLaneView === "amp", theme);
+  drawHandles(ctx, presets[selected].pd, theme.pd, w, h, viewSamples, activeLaneView === "pd", theme);
 
-  ctx.fillStyle = theme.muted;
+  ctx.fillStyle = theme.amp;
   ctx.font = "12px system-ui";
   ctx.fillText(`Amp1`, 14, 22);
   ctx.fillStyle = theme.amp2;
