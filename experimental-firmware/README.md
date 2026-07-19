@@ -14,9 +14,11 @@ Current active choices:
 
 | UF2 | Use when |
 | --- | --- |
+| `C1ZZL3_WORKSHOP_RELEASE_84_V1.3.uf2` | You want the Workshop Computer release 84 / version 1.3 exactly as published. |
 | `C1ZZL3_PRODUCTION_1.4.uf2` | You want the current stable production build, mirrored here for convenience. |
 | `C1ZZL3_STABLE_DUAL_PITCH_PROTOCOL_V3.uf2` | You are testing the stable dual-pitch Envelope Lab with separate oscillator pitch lanes. |
 | `C1ZZL3_EXPERIMENT_DUAL_OSCILLATOR_LANES_PROTOCOL_V4.uf2` | You are testing the new two-lane PD / dual-oscillator-lanes firmware experiment. |
+| `C1ZZL3_ROLLBACK_DUAL_PD_PROTOCOL_V4.uf2` | You want the fully tested dual-PD protocol v4 rollback experimental before trying later experiments. |
 
 Production remains authoritative at:
 
@@ -31,6 +33,10 @@ one place.
 
 - `dual-pitch-envelopes/`: stable dual-pitch reference, protocol v3.
 - `dual-oscillator-lanes/`: current experiment, protocol v4 with optional PD2.
+- `rollback-dual-pd-protocol-v4/`: preserved tested rollback experimental for
+  dual-PD / dual-pitch protocol v4.
+- `workshop-release-84-v1.3/`: preserved public Workshop Computer release 84
+  / version 1.3.
 
 ## Archived Firmware Experiments
 
