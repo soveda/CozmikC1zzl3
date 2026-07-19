@@ -19,6 +19,7 @@ Current active choices:
 | `C1ZZL3_STABLE_DUAL_PITCH_PROTOCOL_V3.uf2` | You are testing the stable dual-pitch Envelope Lab with separate oscillator pitch lanes. |
 | `C1ZZL3_EXPERIMENT_DUAL_OSCILLATOR_LANES_PROTOCOL_V4.uf2` | You are testing the new two-lane PD / dual-oscillator-lanes firmware experiment. |
 | `C1ZZL3_ROLLBACK_DUAL_PD_PROTOCOL_V4.uf2` | You want the fully tested dual-PD protocol v4 rollback experimental before trying later experiments. |
+| `C1ZZL3_EXPERIMENT_DUAL_AMPLITUDE_ENVELOPES_PROTOCOL_V5.uf2` | You are testing separate Amp1/Amp2 envelopes alongside PD1/PD2 and Pitch1/Pitch2. |
 
 Production remains authoritative at:
 
@@ -35,6 +36,8 @@ one place.
 - `dual-oscillator-lanes/`: current experiment, protocol v4 with optional PD2.
 - `rollback-dual-pd-protocol-v4/`: preserved tested rollback experimental for
   dual-PD / dual-pitch protocol v4.
+- `dual-amplitude-envelopes/`: first draft protocol v5 experiment with
+  separate oscillator amplitude lanes.
 - `workshop-release-84-v1.3/`: preserved public Workshop Computer release 84
   / version 1.3.
 

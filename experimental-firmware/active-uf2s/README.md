@@ -9,8 +9,9 @@ This folder collects the UF2s most likely to be useful during current testing.
 | `C1ZZL3_WORKSHOP_RELEASE_84_V1.3.uf2` | Public Workshop Computer release 84 / version 1.3, kept as an always-available option. | Workshop release web editor |
 | `C1ZZL3_PRODUCTION_1.4.uf2` | Current production firmware. | `web-midi/editor/` and `experiments/cz-import/` |
 | `C1ZZL3_STABLE_DUAL_PITCH_PROTOCOL_V3.uf2` | Stable dual-pitch firmware with separate oscillator pitch envelopes. | `experiments/dual-pitch-envelopes/` |
-| `C1ZZL3_EXPERIMENT_DUAL_OSCILLATOR_LANES_PROTOCOL_V4.uf2` | Current dual-oscillator-lanes test with optional second PD envelope lane. | Matching web UI still needs to be implemented in `experiments/dual-oscillator-lanes/` |
+| `C1ZZL3_EXPERIMENT_DUAL_OSCILLATOR_LANES_PROTOCOL_V4.uf2` | Current dual-oscillator-lanes test with optional second PD envelope lane. | `experiments/dual-oscillator-lanes/` |
 | `C1ZZL3_ROLLBACK_DUAL_PD_PROTOCOL_V4.uf2` | Tested rollback experimental for dual-PD / dual-pitch protocol v4. | `experiments/dual-oscillator-lanes/` |
+| `C1ZZL3_EXPERIMENT_DUAL_AMPLITUDE_ENVELOPES_PROTOCOL_V5.uf2` | First draft dual-amplitude test with Amp1/Amp2, PD1/PD2, and Pitch1/Pitch2. | `experiments/dual-amplitude-envelopes/` |
 
 ## Notes
 
@@ -22,5 +23,5 @@ This folder collects the UF2s most likely to be useful during current testing.
   protocol v4.
 - Rollback dual PD preserves the fully tested protocol v4 alternate before the
   next dual-amplitude experiment starts.
-- Protocol v4 firmware should not replace stable or production unless it passes
-  explicit hardware and web app tests.
+- Protocol v5 firmware should not replace stable, production, or the v4
+  rollback unless it passes explicit hardware and web app tests.
