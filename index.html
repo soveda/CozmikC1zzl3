@@ -64,7 +64,7 @@
       display: grid;
       gap: 16px;
       padding: 20px 28px 28px;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     }
     a.card {
       display: block;
@@ -133,6 +133,11 @@
         <h2>Beta Test: DCO Pitch Import</h2>
         <p>Try merged, DCO1-only, or DCO2-only CZ pitch-envelope mapping with the current firmware.</p>
         <span class="cta">Open beta test</span>
+      </a>
+      <a class="card" href="experiments/dual-pitch-envelopes/import-lab/index.html">
+        <h2>Experiment: Dual Pitch Firmware</h2>
+        <p>Test separate CZ DCO1/DCO2 pitch envelopes with the matching protocol v3 firmware.</p>
+        <span class="cta">Open experiment</span>
       </a>
     </section>
     <div class="footer">

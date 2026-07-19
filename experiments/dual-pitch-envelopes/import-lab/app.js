@@ -16,6 +16,8 @@ const el = {
   perfBox: document.querySelector("#perfBox"),
   ampDraftBox: document.querySelector("#ampDraftBox"),
   pdDraftBox: document.querySelector("#pdDraftBox"),
+  ampMode: document.querySelector("#ampMode"),
+  pdMode: document.querySelector("#pdMode"),
   pitchMode: document.querySelector("#pitchMode"),
   pitchDco1Box: document.querySelector("#pitchDco1Box"),
   pitchDco2Box: document.querySelector("#pitchDco2Box"),
@@ -26,18 +28,31 @@ const el = {
 let currentDraft = null;
 let lastImportBuffer = null;
 let lastImportFileName = "";
-let pitchMappingMode = "merged";
+let ampMappingMode = "merged";
+let pdMappingMode = "merged";
+let pitchMappingMode = "dual";
 let themeMode = loadThemeMode();
-const HANDOFF_KEY = "c1zzl3-dco-pitch-import-draft";
+const HANDOFF_KEY = "c1zzl3-dual-pitch-import-draft";
 const THEME_KEY = "c1zzl3-theme-mode";
 const LOCAL_EDITOR_URL = "../index.html";
-const HOSTED_EDITOR_URL = "https://soveda.github.io/CozmikC1zzl3/experiments/dco-pitch-handling/index.html";
-const ENVELOPE_LAB_WINDOW_NAME = "c1zzl3-dco-pitch-envelope-lab";
+const HOSTED_EDITOR_URL = "https://soveda.github.io/CozmikC1zzl3/experiments/dual-pitch-envelopes/index.html";
+const ENVELOPE_LAB_WINDOW_NAME = "c1zzl3-dual-pitch-envelope-lab";
 const PITCH_MAPPING_MODES = {
+  dual: "DCO1 -> oscillator 1, DCO2 -> oscillator 2",
   merged: "Merged DCO1 + DCO2 average",
   dco1: "DCO1 pitch only",
   dco2: "DCO2 pitch only",
   difference: "DCO1 / DCO2 difference emphasis"
+};
+const AMP_MAPPING_MODES = {
+  merged: "Merged DCA1 + DCA2 average",
+  line1: "DCA1 amplitude only",
+  line2: "DCA2 amplitude only"
+};
+const PD_MAPPING_MODES = {
+  merged: "Merged DCW1 + DCW2 average",
+  line1: "DCW1 phase distortion only",
+  line2: "DCW2 phase distortion only"
 };
 const WAVE_FAMILIES = [
   { label: "Saw", value: 0, hint: "lower CC23 range" },
@@ -96,8 +111,8 @@ function renderThemeMode() {
 
 function getEditorUrl() {
   const path = window.location.pathname;
-  const isDcoPitchImportLab = path.includes("/experiments/dco-pitch-handling/import-lab/");
-  if (isDcoPitchImportLab && window.location.protocol === "file:") return LOCAL_EDITOR_URL;
+  const isDualPitchImportLab = path.includes("/experiments/dual-pitch-envelopes/import-lab/");
+  if (isDualPitchImportLab && window.location.protocol === "file:") return LOCAL_EDITOR_URL;
 
   const host = window.location.hostname;
   const isLocalDev = host === "localhost" || host === "127.0.0.1" || host === "::1";
@@ -408,6 +423,12 @@ function selectPitchStages(czPatch, mode) {
   return mergeCzEnvelopes(czPatch.dco1Pitch, czPatch.dco2Pitch);
 }
 
+function selectLineEnvelopeStages(line1Envelope, line2Envelope, mode) {
+  if (mode === "line1") return cloneCzEnvelopeStages(line1Envelope);
+  if (mode === "line2") return cloneCzEnvelopeStages(line2Envelope);
+  return mergeCzEnvelopes(line1Envelope, line2Envelope);
+}
+
 function czEnvelopeToC1Stages(stages, timeMin = 240, timeMax = 48000) {
   return stages.map((stage) => roundStage(
     (stage.level / 99) * 4095,
@@ -456,7 +477,13 @@ function classifyWave(bytes) {
   return WAVE_FAMILIES[0];
 }
 
-function buildDraftPreset(decodedBytes, patchName, pitchMode = pitchMappingMode) {
+function buildDraftPreset(
+  decodedBytes,
+  patchName,
+  pitchMode = pitchMappingMode,
+  ampMode = ampMappingMode,
+  pdMode = pdMappingMode
+) {
   if (!decodedBytes.length) return null;
 
   const baseName = patchName
@@ -466,14 +493,19 @@ function buildDraftPreset(decodedBytes, patchName, pitchMode = pitchMappingMode)
 
   const wave = classifyWave(decodedBytes);
   const czPatch = parseCzPatch(decodedBytes);
-  const ampEnvelope = czEnvelopeToC1Stages(czPatch.ampStages, 140, 24000);
-  const dcwEnvelope = czEnvelopeToC1Stages(czPatch.pdStages, 120, 30000);
+  const ampStages = selectLineEnvelopeStages(czPatch.dca1, czPatch.dca2, ampMode);
+  const dcwStages = selectLineEnvelopeStages(czPatch.dcw1, czPatch.dcw2, pdMode);
+  const ampEnvelope = czEnvelopeToC1Stages(ampStages, 140, 24000);
+  const dcwEnvelope = czEnvelopeToC1Stages(dcwStages, 120, 30000);
   const pitchStages = selectPitchStages(czPatch, pitchMode);
   const pitchEnvelope = czEnvelopeToC1Stages(pitchStages, 240, 48000);
+  const dco1PitchEnvelope = czEnvelopeToC1Stages(cloneCzEnvelopeStages(czPatch.dco1Pitch), 240, 48000);
+  const dco2PitchEnvelope = czEnvelopeToC1Stages(cloneCzEnvelopeStages(czPatch.dco2Pitch), 240, 48000);
+  const pitch2Envelope = pitchMode === "dual" ? dco2PitchEnvelope : pitchEnvelope;
   const pitchAlternatives = {
     merged: czEnvelopeToC1Stages(mergeCzEnvelopes(czPatch.dco1Pitch, czPatch.dco2Pitch), 240, 48000),
-    dco1: czEnvelopeToC1Stages(cloneCzEnvelopeStages(czPatch.dco1Pitch), 240, 48000),
-    dco2: czEnvelopeToC1Stages(cloneCzEnvelopeStages(czPatch.dco2Pitch), 240, 48000),
+    dco1: dco1PitchEnvelope,
+    dco2: dco2PitchEnvelope,
     difference: czEnvelopeToC1Stages(differenceCzPitchStages(czPatch.dco1Pitch, czPatch.dco2Pitch), 240, 48000)
   };
   const detune = clamp(Math.round((decodedBytes[48] ?? 128) / 255 * 4095), 0, 4095);
@@ -485,12 +517,23 @@ function buildDraftPreset(decodedBytes, patchName, pitchMode = pitchMappingMode)
     wave,
     amp: ampEnvelope,
     pd: dcwEnvelope,
+    pitch: pitchMode === "dual" ? dco1PitchEnvelope : pitchEnvelope,
+    pitch2: pitch2Envelope,
     sourceEnvelopes: {
-      pitch: pitchEnvelope,
+      pitch: pitchMode === "dual" ? dco1PitchEnvelope : pitchEnvelope,
+      pitch2: pitch2Envelope,
       pitchAlternatives,
       pitchMapping: {
         mode: pitchMode,
         label: PITCH_MAPPING_MODES[pitchMode] || PITCH_MAPPING_MODES.merged
+      },
+      ampMapping: {
+        mode: ampMode,
+        label: AMP_MAPPING_MODES[ampMode] || AMP_MAPPING_MODES.merged
+      },
+      pdMapping: {
+        mode: pdMode,
+        label: PD_MAPPING_MODES[pdMode] || PD_MAPPING_MODES.merged
       },
       dcw: dcwEnvelope,
       amp: ampEnvelope,
@@ -536,7 +579,7 @@ function renderDraft(draft) {
   }
 
   el.decodedPatchBox.textContent = `${draft.name} decoded and unpacked into a draft preset.`;
-  el.mappedDraftBox.textContent = `8-wave family ${draft.wave.label}, CZ DCA -> C1ZZL3 amplitude, CZ DCW -> C1ZZL3 phase distortion, and ${draft.sourceEnvelopes.pitchMapping.label} -> C1ZZL3 pitch.`;
+  el.mappedDraftBox.textContent = `8-wave family ${draft.wave.label}, ${draft.sourceEnvelopes.ampMapping.label} -> C1ZZL3 amplitude, ${draft.sourceEnvelopes.pdMapping.label} -> C1ZZL3 phase distortion, and ${draft.sourceEnvelopes.pitchMapping.label} -> C1ZZL3 pitch.`;
   el.confidenceBox.textContent = draft.confidence;
   el.supportedOutputBox.textContent = "Envelope Lab draft handoff";
   el.draftNameBox.textContent = `${draft.name} (${draft.confidence} confidence)`;
@@ -683,10 +726,10 @@ async function handleFile(file) {
   setStatus(result.ok ? "Patch decoded. Draft preset created." : "Patch did not match a supported CZ import.", result.tone);
 }
 
-function rebuildCurrentDraftForPitchMode() {
+function rebuildCurrentDraftForMapping() {
   if (!lastImportBuffer || !lastImportFileName) {
     renderDraft(null);
-    setStatus("Choose a CZ patch before selecting a DCO pitch source.", "warn");
+    setStatus("Choose a CZ patch before selecting envelope sources.", "warn");
     return;
   }
 
@@ -697,13 +740,21 @@ function rebuildCurrentDraftForPitchMode() {
   el.summaryBox.textContent = result.summary;
   el.decodedBox.textContent = result.decoded;
   renderDraft(currentDraft);
-  setStatus(result.ok ? `Pitch source set to ${PITCH_MAPPING_MODES[pitchMappingMode]}.` : "Patch did not match a supported CZ import.", result.tone);
+  setStatus(result.ok ? `Envelope sources set to ${AMP_MAPPING_MODES[ampMappingMode]}, ${PD_MAPPING_MODES[pdMappingMode]}, and ${PITCH_MAPPING_MODES[pitchMappingMode]}.` : "Patch did not match a supported CZ import.", result.tone);
 }
 
 el.file.addEventListener("change", () => handleFile(el.file.files?.[0]));
+el.ampMode.addEventListener("change", () => {
+  ampMappingMode = el.ampMode.value;
+  rebuildCurrentDraftForMapping();
+});
+el.pdMode.addEventListener("change", () => {
+  pdMappingMode = el.pdMode.value;
+  rebuildCurrentDraftForMapping();
+});
 el.pitchMode.addEventListener("change", () => {
   pitchMappingMode = el.pitchMode.value;
-  rebuildCurrentDraftForPitchMode();
+  rebuildCurrentDraftForMapping();
 });
 el.themeToggle.addEventListener("click", () => {
   themeMode = themeMode === "light" ? "dark" : "light";

@@ -16,18 +16,34 @@ const el = {
   perfBox: document.querySelector("#perfBox"),
   ampDraftBox: document.querySelector("#ampDraftBox"),
   pdDraftBox: document.querySelector("#pdDraftBox"),
+  ampMode: document.querySelector("#ampMode"),
+  pdMode: document.querySelector("#pdMode"),
   pitchDco1Box: document.querySelector("#pitchDco1Box"),
   pitchDco2Box: document.querySelector("#pitchDco2Box"),
   openDraft: document.querySelector("#openDraft"),
 };
 
 let currentDraft = null;
+let lastImportBuffer = null;
+let lastImportFileName = "";
+let ampMappingMode = "merged";
+let pdMappingMode = "merged";
 let themeMode = loadThemeMode();
 const HANDOFF_KEY = "c1zzl3-cz-import-draft";
 const THEME_KEY = "c1zzl3-theme-mode";
 const LOCAL_EDITOR_URL = "../../web-midi/editor/index.html";
 const HOSTED_EDITOR_URL = "https://soveda.github.io/CozmikC1zzl3/web-midi/editor/index.html";
 const ENVELOPE_LAB_WINDOW_NAME = "c1zzl3-envelope-lab";
+const AMP_MAPPING_MODES = {
+  merged: "Merged DCA1 + DCA2 average",
+  line1: "DCA1 amplitude only",
+  line2: "DCA2 amplitude only"
+};
+const PD_MAPPING_MODES = {
+  merged: "Merged DCW1 + DCW2 average",
+  line1: "DCW1 phase distortion only",
+  line2: "DCW2 phase distortion only"
+};
 const WAVE_FAMILIES = [
   { label: "Saw", value: 0, hint: "lower CC23 range" },
   { label: "Square", value: 1, hint: "lower-mid CC23 range" },
@@ -368,6 +384,21 @@ function mergeCzEnvelopes(a, b) {
   });
 }
 
+function cloneCzEnvelopeStages(envelope) {
+  return envelope.stages.map((stage) => ({
+    rate: stage.rate,
+    level: stage.level,
+    sustain: stage.sustain,
+    down: stage.down
+  }));
+}
+
+function selectLineEnvelopeStages(line1Envelope, line2Envelope, mode) {
+  if (mode === "line1") return cloneCzEnvelopeStages(line1Envelope);
+  if (mode === "line2") return cloneCzEnvelopeStages(line2Envelope);
+  return mergeCzEnvelopes(line1Envelope, line2Envelope);
+}
+
 function czEnvelopeToC1Stages(stages, timeMin = 240, timeMax = 48000) {
   return stages.map((stage) => roundStage(
     (stage.level / 99) * 4095,
@@ -416,7 +447,7 @@ function classifyWave(bytes) {
   return WAVE_FAMILIES[0];
 }
 
-function buildDraftPreset(decodedBytes, patchName) {
+function buildDraftPreset(decodedBytes, patchName, ampMode = ampMappingMode, pdMode = pdMappingMode) {
   if (!decodedBytes.length) return null;
 
   const baseName = patchName
@@ -426,8 +457,10 @@ function buildDraftPreset(decodedBytes, patchName) {
 
   const wave = classifyWave(decodedBytes);
   const czPatch = parseCzPatch(decodedBytes);
-  const ampEnvelope = czEnvelopeToC1Stages(czPatch.ampStages, 140, 24000);
-  const dcwEnvelope = czEnvelopeToC1Stages(czPatch.pdStages, 120, 30000);
+  const ampStages = selectLineEnvelopeStages(czPatch.dca1, czPatch.dca2, ampMode);
+  const dcwStages = selectLineEnvelopeStages(czPatch.dcw1, czPatch.dcw2, pdMode);
+  const ampEnvelope = czEnvelopeToC1Stages(ampStages, 140, 24000);
+  const dcwEnvelope = czEnvelopeToC1Stages(dcwStages, 120, 30000);
   const pitchEnvelope = czEnvelopeToC1Stages(czPatch.pitchStages, 240, 48000);
   const detune = clamp(Math.round((decodedBytes[48] ?? 128) / 255 * 4095), 0, 4095);
   const ring = clamp(Math.round((decodedBytes[49] ?? 0) / 255 * 1200), 0, 4095);
@@ -440,6 +473,14 @@ function buildDraftPreset(decodedBytes, patchName) {
     pd: dcwEnvelope,
     sourceEnvelopes: {
       pitch: pitchEnvelope,
+      ampMapping: {
+        mode: ampMode,
+        label: AMP_MAPPING_MODES[ampMode] || AMP_MAPPING_MODES.merged
+      },
+      pdMapping: {
+        mode: pdMode,
+        label: PD_MAPPING_MODES[pdMode] || PD_MAPPING_MODES.merged
+      },
       dcw: dcwEnvelope,
       amp: ampEnvelope,
       cz: czPatch
@@ -483,7 +524,7 @@ function renderDraft(draft) {
   }
 
   el.decodedPatchBox.textContent = `${draft.name} decoded and unpacked into a draft preset.`;
-  el.mappedDraftBox.textContent = `8-wave family ${draft.wave.label}, CZ DCA -> C1ZZL3 amplitude, CZ DCW -> C1ZZL3 phase distortion, and CZ DCO pitch envelopes are decoded for Envelope Lab review.`;
+  el.mappedDraftBox.textContent = `8-wave family ${draft.wave.label}, ${draft.sourceEnvelopes.ampMapping.label} -> C1ZZL3 amplitude, ${draft.sourceEnvelopes.pdMapping.label} -> C1ZZL3 phase distortion, and CZ DCO pitch envelopes are decoded for Envelope Lab review.`;
   el.confidenceBox.textContent = draft.confidence;
   el.supportedOutputBox.textContent = "Envelope Lab draft handoff";
   el.draftNameBox.textContent = `${draft.name} (${draft.confidence} confidence)`;
@@ -617,6 +658,8 @@ async function handleFile(file) {
   if (!file) return;
   setStatus(`Reading ${file.name}...`, "warn");
   const buffer = await file.arrayBuffer();
+  lastImportBuffer = buffer;
+  lastImportFileName = file.name;
   const result = decodePatch(buffer, file.name);
   currentDraft = result.draft;
   el.validationBox.textContent = result.validation;
@@ -627,7 +670,32 @@ async function handleFile(file) {
   setStatus(result.ok ? "Patch decoded. Draft preset created." : "Patch did not match a supported CZ import.", result.tone);
 }
 
+function rebuildCurrentDraftForMapping() {
+  if (!lastImportBuffer || !lastImportFileName) {
+    renderDraft(null);
+    setStatus("Choose a CZ patch before selecting envelope sources.", "warn");
+    return;
+  }
+
+  const result = decodePatch(lastImportBuffer, lastImportFileName);
+  currentDraft = result.draft;
+  el.validationBox.textContent = result.validation;
+  el.patchTypeBox.textContent = result.patchType;
+  el.summaryBox.textContent = result.summary;
+  el.decodedBox.textContent = result.decoded;
+  renderDraft(currentDraft);
+  setStatus(result.ok ? `Envelope sources set to ${AMP_MAPPING_MODES[ampMappingMode]} and ${PD_MAPPING_MODES[pdMappingMode]}.` : "Patch did not match a supported CZ import.", result.tone);
+}
+
 el.file.addEventListener("change", () => handleFile(el.file.files?.[0]));
+el.ampMode.addEventListener("change", () => {
+  ampMappingMode = el.ampMode.value;
+  rebuildCurrentDraftForMapping();
+});
+el.pdMode.addEventListener("change", () => {
+  pdMappingMode = el.pdMode.value;
+  rebuildCurrentDraftForMapping();
+});
 el.themeToggle.addEventListener("click", () => {
   themeMode = themeMode === "light" ? "dark" : "light";
   saveThemeMode();

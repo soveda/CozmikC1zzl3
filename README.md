@@ -164,8 +164,9 @@ Current Import Lab features:
 - Browser-side validation, patch summary, decoded data, and draft mapping.
 - CZ frame awareness for common patch-send SysEx files, including command,
   location, channel, selected data offset, and payload candidates.
-- CZ envelope assignment: CZ DCW maps to C1ZZL3 phase distortion, CZ DCA maps
-  to C1ZZL3 amplitude, and CZ DCO pitch envelopes map to the pitch lane.
+- CZ envelope assignment: choose merged, line 1, or line 2 mapping for CZ DCA
+  amplitude and DCW phase-distortion envelopes; CZ DCO pitch envelopes map to
+  the pitch lane.
 - Draft handoff into Envelope Lab in a new tab for final editing and card send.
 - Separate import page so CZ translation and envelope editing stay distinct.
 
@@ -197,6 +198,44 @@ Beta pitch options:
 - `DCO2 pitch only`: useful when oscillator 2 has the clearer contour.
 - `Advanced: DCO1 / DCO2 difference emphasis`: can be interesting when the two
   envelopes differ, but may lose character when they are too similar.
+
+The Import Labs also expose CZ line choices for amplitude and phase distortion:
+
+- `Merged DCA1 + DCA2 average`: keeps the previous default behaviour.
+- `DCA1 amplitude only` / `DCA2 amplitude only`: useful when one CZ line carries
+  the important loudness contour.
+- `Merged DCW1 + DCW2 average`: keeps the previous default PD translation.
+- `DCW1 phase distortion only` / `DCW2 phase distortion only`: useful when one
+  CZ line carries the important brightness/phase contour.
+
+## Experiment: Dual Pitch Firmware
+
+Hosted experiment:
+
+```text
+https://soveda.github.io/CozmikC1zzl3/experiments/dual-pitch-envelopes/import-lab/
+```
+
+Matching test UF2:
+
+```text
+experimental-firmware/dual-pitch-envelopes/C1ZZL3_DUAL_PITCH.uf2
+```
+
+This experiment should live alongside the stable main editor rather than
+replace it. It tests envelope protocol version 3, where imported CZ DCO1 pitch
+is sent to oscillator 1 and imported CZ DCO2 pitch is sent to oscillator 2.
+
+Current scope:
+
+- Requires the matching dual-pitch experimental firmware.
+- Preserves the production editor and production UF2 unchanged.
+- Accepts older single-pitch envelope payloads by copying the pitch lane to both
+  oscillators.
+- Sends and reads separate oscillator pitch lanes.
+- Uses the same DCA/DCW line-selection controls as the other Import Labs.
+- Keeps direct pitch graph editing focused on the main pitch lane for now, while
+  preserving imported oscillator 2 pitch data for firmware testing.
 
 ## How To Use The Editor
 

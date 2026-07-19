@@ -25,7 +25,7 @@ const SYSEX_COMMAND_REQUEST_ENVELOPE = 0x0a;
 const SYSEX_COMMAND_ENVELOPE_RESPONSE = 0x0b;
 const SYSEX_COMMAND_REQUEST_PITCH_ENVELOPE = 0x0c;
 const SYSEX_COMMAND_PITCH_ENVELOPE_RESPONSE = 0x0d;
-const ENVELOPE_PROTOCOL_VERSION = 2;
+const ENVELOPE_PROTOCOL_VERSION = 3;
 
 const factoryPresets = [
   preset("Off", fill(0, 1), fill(0, 1)),
@@ -78,11 +78,11 @@ let settingsRequestTimer = null;
 let envelopeReadSession = null;
 let envelopeReadTimer = null;
 let envelopeReadSupported = null;
-const PRESET_STORAGE_KEY = "c1zzl3-dco-pitch-envelope-presets";
-const PERFORMANCE_STORAGE_KEY = "c1zzl3-dco-pitch-performance-settings";
-const CZ_IMPORT_HANDOFF_KEY = "c1zzl3-dco-pitch-import-draft";
-const HOSTED_EDITOR_URL = "https://soveda.github.io/CozmikC1zzl3/experiments/dco-pitch-handling/index.html";
-const HOSTED_IMPORT_LAB_URL = "https://soveda.github.io/CozmikC1zzl3/experiments/dco-pitch-handling/import-lab/";
+const PRESET_STORAGE_KEY = "c1zzl3-dual-pitch-envelope-presets";
+const PERFORMANCE_STORAGE_KEY = "c1zzl3-dual-pitch-performance-settings";
+const CZ_IMPORT_HANDOFF_KEY = "c1zzl3-dual-pitch-import-draft";
+const HOSTED_EDITOR_URL = "https://soveda.github.io/CozmikC1zzl3/experiments/dual-pitch-envelopes/index.html";
+const HOSTED_IMPORT_LAB_URL = "https://soveda.github.io/CozmikC1zzl3/experiments/dual-pitch-envelopes/import-lab/";
 const LOCAL_IMPORT_LAB_URL = "import-lab/index.html";
 let messageImportedDraft = null;
 const WAVE_FAMILIES = [
@@ -159,12 +159,14 @@ const el = {
   turingMidiChannel: document.querySelector("#turingMidiChannel")
 };
 
-function preset(name, amp, pd, slot = null, cardDirty = false, pitch = null, pitchSource = null) {
+function preset(name, amp, pd, slot = null, cardDirty = false, pitch = null, pitchSource = null, pitch2 = null) {
+  const pitchLane = normalizePitchStages(pitch);
   return {
     name,
     amp: normalizeStages(amp),
     pd: normalizeStages(pd),
-    pitch: normalizePitchStages(pitch),
+    pitch: pitchLane,
+    pitch2: normalizePitchStages(pitch2 || pitchLane),
     pitchSource: pitchSource || null,
     slot: Number.isInteger(slot) ? clampInt(slot, 0, CUSTOM_SLOT_COUNT - 1) : null,
     cardDirty: Boolean(cardDirty)
@@ -205,8 +207,14 @@ function envelopeMaxSamples(presetItem) {
 
 function constrainPitchToEnvelope(presetItem) {
   const maxSamples = envelopeMaxSamples(presetItem);
+  presetItem.pitch = constrainPitchLaneToSamples(presetItem.pitch, maxSamples);
+  presetItem.pitch2 = constrainPitchLaneToSamples(presetItem.pitch2 || presetItem.pitch, maxSamples);
+  return presetItem;
+}
+
+function constrainPitchLaneToSamples(stages, maxSamples) {
   let remaining = maxSamples;
-  presetItem.pitch = normalizePitchStages(presetItem.pitch).map((stage, index) => {
+  return normalizePitchStages(stages).map((stage, index) => {
     const stagesLeft = STAGES - index - 1;
     const reserve = stagesLeft;
     const time = Math.max(1, Math.min(stage.time, Math.max(1, remaining - reserve)));
@@ -216,7 +224,6 @@ function constrainPitchToEnvelope(presetItem) {
       time
     };
   });
-  return presetItem;
 }
 
 function spreadPitchPoints() {
@@ -247,13 +254,13 @@ function loadPresets() {
     if (Array.isArray(saved)) {
       const custom = saved
         .slice(FACTORY_PRESET_COUNT)
-        .map((item) => constrainPitchToEnvelope(preset(item.name || "Custom preset", item.amp, item.pd, item.slot, item.cardDirty, item.pitch, item.pitchSource)))
+        .map((item) => constrainPitchToEnvelope(preset(item.name || "Custom preset", item.amp, item.pd, item.slot, item.cardDirty, item.pitch, item.pitchSource, item.pitch2)))
         .slice(0, MAX_BROWSER_CUSTOM_PRESETS);
       return [...structuredClone(factoryPresets), ...custom];
     }
     if (Array.isArray(saved?.customPresets)) {
       const custom = saved.customPresets
-        .map((item) => constrainPitchToEnvelope(preset(item.name || "Custom preset", item.amp, item.pd, item.slot, item.cardDirty, item.pitch, item.pitchSource)))
+        .map((item) => constrainPitchToEnvelope(preset(item.name || "Custom preset", item.amp, item.pd, item.slot, item.cardDirty, item.pitch, item.pitchSource, item.pitch2)))
         .slice(0, MAX_BROWSER_CUSTOM_PRESETS);
       return [...structuredClone(factoryPresets), ...custom];
     }
@@ -272,6 +279,7 @@ function savePresets() {
         amp: item.amp,
         pd: item.pd,
         pitch: item.pitch,
+        pitch2: item.pitch2,
         pitchSource: item.pitchSource || null,
         slot: Number.isInteger(item.slot) ? item.slot : null,
         cardDirty: Boolean(item.cardDirty)
@@ -361,6 +369,11 @@ function importedPitchStages(draft) {
   return Array.isArray(directPitch) ? directPitch : null;
 }
 
+function importedPitch2Stages(draft) {
+  const directPitch = draft?.pitch2 || draft?.sourceEnvelopes?.pitch2;
+  return Array.isArray(directPitch) ? directPitch : importedPitchStages(draft);
+}
+
 function importedPitchSource(draft) {
   const cz = draft?.sourceEnvelopes?.cz;
   if (!cz) return null;
@@ -380,7 +393,8 @@ function makeImportedPreset(draft) {
     null,
     false,
     importedPitchStages(draft),
-    importedPitchSource(draft)
+    importedPitchSource(draft),
+    importedPitch2Stages(draft)
   );
 }
 
@@ -699,7 +713,7 @@ function duplicateFactoryPreset() {
   }
 
   const source = presets[selected];
-  presets.push(preset(`${source.name} copy`, source.amp, source.pd, null, false, source.pitch, source.pitchSource));
+  presets.push(preset(`${source.name} copy`, source.amp, source.pd, null, false, source.pitch, source.pitchSource, source.pitch2));
   selected = presets.length - 1;
   savePresets();
   render();
@@ -1502,6 +1516,7 @@ function buildSysex(command) {
   appendStages(payload, presets[selected].amp);
   appendStages(payload, presets[selected].pd);
   appendStages(payload, presets[selected].pitch);
+  appendStages(payload, presets[selected].pitch2 || presets[selected].pitch);
   return [0xf0, SYSEX_MANUFACTURER, ...ensureArray(SYSEX_ID, "SYSEX_ID"), command, ...ensureArray(payload, "payload"), 0xf7];
 }
 
@@ -1628,7 +1643,8 @@ function stagesMatch(a, b) {
 function envelopesMatch(a, b) {
   return stagesMatch(a.amp, b.amp) &&
     stagesMatch(a.pd, b.pd) &&
-    stagesMatch(normalizePitchStages(a.pitch), normalizePitchStages(b.pitch));
+    stagesMatch(normalizePitchStages(a.pitch), normalizePitchStages(b.pitch)) &&
+    stagesMatch(normalizePitchStages(a.pitch2 || a.pitch), normalizePitchStages(b.pitch2 || b.pitch));
 }
 
 function markCardSlotLocal(slot) {
@@ -1682,13 +1698,14 @@ function reconcileCardEnvelopes(mask, cardEnvelopes) {
         existing.amp = normalizeStages(cardEnvelope.amp);
         existing.pd = normalizeStages(cardEnvelope.pd);
         existing.pitch = normalizePitchStages(cardEnvelope.pitch);
+        existing.pitch2 = normalizePitchStages(cardEnvelope.pitch2 || cardEnvelope.pitch);
         constrainPitchToEnvelope(existing);
         existing.cardDirty = false;
         return;
       }
     }
 
-    const cardPreset = constrainPitchToEnvelope(preset(`Card Envelope ${slot + 1}`, cardEnvelope.amp, cardEnvelope.pd, slot, false, cardEnvelope.pitch));
+    const cardPreset = constrainPitchToEnvelope(preset(`Card Envelope ${slot + 1}`, cardEnvelope.amp, cardEnvelope.pd, slot, false, cardEnvelope.pitch, null, cardEnvelope.pitch2));
     if (customPresetCount() >= MAX_BROWSER_CUSTOM_PRESETS) {
       const replacementIndex = presets.findIndex((item, index) =>
         index >= FACTORY_PRESET_COUNT && item.slot === null);
@@ -1839,7 +1856,7 @@ function finishEnvelopeRead() {
   if (session.reason === "delete") {
     const deleted = (session.mask & (1 << session.slot)) === 0;
     setStatus(deleted
-      ? `Verified card slot ${session.slot + 1} is empty. Any matching beta card-slot draft was removed.`
+      ? `Verified card slot ${session.slot + 1} is empty. Any matching dual-pitch card-slot draft was removed.`
       : `Card slot ${session.slot + 1} still reports a saved envelope.`);
     return;
   }
@@ -1849,7 +1866,7 @@ function finishEnvelopeRead() {
   if (result.replacedLocal) notes.push(`${result.replacedLocal} local draft${result.replacedLocal === 1 ? " was" : "s were"} replaced to show card data`);
   if (result.skipped) notes.push(`${result.skipped} card envelope${result.skipped === 1 ? " was" : "s were"} not added because the browser list is full`);
   const emptyNote = count === 0
-    ? " No saved card envelopes were reported; any remaining presets are beta browser drafts."
+    ? " No saved card envelopes were reported; any remaining presets are dual-pitch browser drafts."
     : "";
   if (count === 0 && session.reason === "manual") {
     selected = Math.min(3, presets.length - 1);
@@ -1972,11 +1989,11 @@ function requestPitchEnvelopeForSlot(slot) {
 }
 
 function handlePitchEnvelopeResponse(data) {
-  if (data.length !== 49) return;
+  if (data.length !== 49 && data.length !== 89) return;
   const slot = data[7] & 0x07;
 
   let offset = 8;
-  const pitch = Array.from({ length: STAGES }, () => {
+  const readPitchStages = () => Array.from({ length: STAGES }, () => {
     const stage = {
       level: clampInt(unpackUint14(data, offset), 0, MAX_LEVEL),
       time: clampInt(unpackUint21(data, offset + 2), 1, 192000)
@@ -1984,31 +2001,44 @@ function handlePitchEnvelopeResponse(data) {
     offset += 5;
     return stage;
   });
+  const pitch = readPitchStages();
+  const pitch2 = data.length === 89 ? readPitchStages() : pitch;
 
   if (!envelopeReadSession) {
-    applyLatePitchReadback(slot, pitch);
+    applyLatePitchReadback(slot, pitch, pitch2);
     return;
   }
 
   if (slot !== envelopeReadSession.waitingForPitchSlot &&
       slot !== envelopeReadSession.lastEnvelopeSlot) {
     const existingSlot = envelopeReadSession.cardEnvelopes.get(slot);
-    if (existingSlot) existingSlot.pitch = pitch;
+    if (existingSlot) {
+      existingSlot.pitch = pitch;
+      existingSlot.pitch2 = pitch2;
+    }
     return;
   }
 
   const existing = envelopeReadSession.cardEnvelopes.get(slot);
-  if (existing) existing.pitch = pitch;
-  logDeveloper("Pitch envelope response received.", { slot: slot + 1 });
+  if (existing) {
+    existing.pitch = pitch;
+    existing.pitch2 = pitch2;
+  }
+  logDeveloper("Pitch envelope response received.", {
+    slot: slot + 1,
+    length: data.length,
+    responseType: data.length === 89 ? "pitch osc1/osc2" : "single pitch"
+  });
   envelopeReadSession.waitingForPitchSlot = null;
   envelopeReadSession.lastEnvelopeSlot = null;
 }
 
-function applyLatePitchReadback(slot, pitch) {
+function applyLatePitchReadback(slot, pitch, pitch2 = pitch) {
   let updated = false;
   presets.forEach((item, index) => {
     if (index >= FACTORY_PRESET_COUNT && item.slot === slot) {
       item.pitch = normalizePitchStages(pitch);
+      item.pitch2 = normalizePitchStages(pitch2);
       constrainPitchToEnvelope(item);
       item.cardDirty = false;
       updated = true;
@@ -2132,7 +2162,7 @@ function downloadJson() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "c1zzl3-dco-pitch-beta-presets.json";
+  link.download = "c1zzl3-dual-pitch-presets.json";
   link.click();
   URL.revokeObjectURL(url);
 }

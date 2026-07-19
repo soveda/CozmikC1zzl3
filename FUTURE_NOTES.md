@@ -59,6 +59,60 @@ Possible future optimisations:
 
 Any optimisation should be tested against audible behaviour before promotion.
 
+## Fully Separate Oscillator Paths
+
+The dual-pitch envelope experiment is intended to sit alongside the stable main
+build rather than replace it. If the protocol v3 test passes, the next deeper
+experiment is not simply "more pitch lanes" but a fuller split of the two
+oscillator paths.
+
+Areas to inspect before changing firmware:
+
+- Whether oscillator 1 and oscillator 2 should each have independent pitch
+  envelope, PD envelope, amplitude trim, and waveform-family handling.
+- Whether the shared amplitude envelope should remain the final voice envelope,
+  even if oscillator pitch becomes independent.
+- Whether detune should remain a static offset on oscillator 2 or become part of
+  the oscillator 2 pitch path after its own envelope.
+- Whether ring modulation should continue to combine the two oscillators after
+  their independent shaping, or move earlier/later in the signal chain.
+- Whether the Web MIDI protocol should add fully separate oscillator payloads or
+  only extend the existing envelope payload with optional second-lane data.
+
+Keep this as a new experiment. Do not promote it over stable production until
+hardware tests confirm CPU headroom, envelope timing, Web MIDI compatibility,
+and audio behaviour.
+
+## Flash Size And Overclock Headroom
+
+If future experiments move beyond dual pitch envelopes into two fuller
+oscillator paths, review processor speed, RAM use, and flash size before
+committing to the architecture.
+
+Current measurements:
+
+- Stable build UF2 is about 287 KB.
+- Dual-pitch experiment UF2 is about 286 KB.
+- Stable ELF reports about 150 KB text/data plus about 9.6 KB BSS.
+- Dual-pitch ELF reports about 150 KB text/data plus about 10.1 KB BSS.
+- The linker target currently reports 2 MB flash and 256 KB RAM.
+- Both stable and dual-pitch builds already define `C1ZZL3_OVERCLOCK_KHZ=192000`.
+- The firmware uses `copy_to_ram`, so RAM and CPU headroom are more important
+  than raw flash size for the immediate dual-oscillator audio path.
+
+16 MB flash may become useful if a future version adds larger wavetable banks,
+patch libraries, more saved card data, sample-like resources, or multiple
+firmware assets. It is not currently required for the dual-pitch envelope test.
+
+Before increasing clock speed further:
+
+- Measure audio stability under rapid retriggering, MIDI traffic, and high-PD
+  settings.
+- Check USB MIDI device and host reliability.
+- Check heat/power behaviour on the Workshop Computer card.
+- Prefer reducing per-sample work before pushing the clock beyond the already
+  tested 192 MHz baseline.
+
 ## Code Cleanup
 
 The code has grown through hardware-led iteration. If future work becomes

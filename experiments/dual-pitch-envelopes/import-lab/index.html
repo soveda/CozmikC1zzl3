@@ -3,19 +3,19 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>C1ZZL3 DCO Pitch Import Lab</title>
+  <title>C1ZZL3 Dual Pitch Import Lab</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <main class="shell">
     <header class="topbar">
       <div class="hero-copy">
-        <p class="eyebrow">Beta Test</p>
-        <h1>C1ZZL3 DCO Pitch Import Lab</h1>
+        <p class="eyebrow">Dual Pitch Experiment</p>
+        <h1>C1ZZL3 Dual Pitch Import Lab</h1>
         <p class="top-note">
           Bring in a Casio CZ SysEx patch, decode its amplitude, DCW, and DCO
-          pitch envelopes, choose how DCO1/DCO2 should become the C1ZZL3 pitch
-          lane, then move into Envelope Lab.
+          pitch envelopes, then map DCO1 to oscillator 1 and DCO2 to oscillator
+          2 in the experimental Envelope Lab.
         </p>
         <div class="hero-panels">
           <div class="hero-panel">
@@ -25,14 +25,14 @@
           </div>
           <div class="hero-panel">
             <span class="hero-label">How to use it</span>
-            <strong>Choose merged, DCO1, or DCO2 pitch handling</strong>
-            <p>Merged is the recommended default. DCO1 or DCO2 can reveal a more distinctive oscillator contour.</p>
+            <strong>Send two separate pitch lanes</strong>
+            <p>DCO1 becomes oscillator 1 pitch and DCO2 becomes oscillator 2 pitch for firmware protocol v3 testing.</p>
           </div>
         </div>
       </div>
       <div class="top-actions">
         <button id="themeToggle" type="button" role="switch" aria-checked="false" title="Toggle light mode">Dark</button>
-        <a class="pill pill-link" href="../index.html" target="_blank" rel="noopener noreferrer">Open Beta Envelope Lab</a>
+        <a class="pill pill-link" href="../index.html" target="_blank" rel="noopener noreferrer">Open Dual Pitch Lab</a>
       </div>
     </header>
 
@@ -97,8 +97,25 @@
             <div id="draftNameBox" class="value-box">No draft created yet.</div>
           </div>
           <div class="field">
-            <label for="pitchMode">Pitch source for C1ZZL3 pitch lane</label>
+            <label for="ampMode">Amplitude mapping</label>
+            <select id="ampMode">
+              <option value="merged">Merged DCA1 + DCA2 average</option>
+              <option value="line1">DCA1 amplitude only</option>
+              <option value="line2">DCA2 amplitude only</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="pdMode">Phase distortion mapping</label>
+            <select id="pdMode">
+              <option value="merged">Merged DCW1 + DCW2 average</option>
+              <option value="line1">DCW1 phase distortion only</option>
+              <option value="line2">DCW2 phase distortion only</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="pitchMode">Pitch mapping</label>
             <select id="pitchMode">
+              <option value="dual">DCO1 -> osc 1, DCO2 -> osc 2</option>
               <option value="merged">Merged DCO1 + DCO2 average</option>
               <option value="dco1">DCO1 pitch only</option>
               <option value="dco2">DCO2 pitch only</option>
@@ -127,7 +144,7 @@
           <ul>
             <li>Waveform behavior is approximate.</li>
             <li>Pitch envelope decoding is approximate and may need adjustment in Envelope Lab.</li>
-            <li>Dual-oscillator structure may not map exactly.</li>
+            <li>CZ has separate DCA/DCW/DCO envelopes per synth line; choose line 1, line 2, or merged mappings to compare translations.</li>
             <li>Modulation details may be dropped in the first pass.</li>
             <li>Only files that pass the CZ frame checks are treated as draft candidates.</li>
           </ul>
@@ -171,7 +188,7 @@
             </div>
           </div>
           <div class="field">
-            <label>Selected C1ZZL3 pitch lane</label>
+            <label>Selected C1ZZL3 pitch lane 1</label>
             <pre id="pitchSelectedBox">No draft yet.</pre>
           </div>
         </div>
@@ -180,25 +197,25 @@
       <article class="card full-span">
         <div class="card-head">
           <h2>Next Step</h2>
-          <span class="meta">Send the decoded draft into the beta Envelope Lab</span>
+          <span class="meta">Send the decoded draft into the dual-pitch Envelope Lab</span>
         </div>
         <div class="card-body stack">
           <div class="top-actions start">
-            <button id="openDraft" class="primary" type="button">Open In Beta Envelope Lab</button>
+            <button id="openDraft" class="primary" type="button">Open In Dual Pitch Lab</button>
           </div>
           <div class="banner">
             <strong>Note:</strong>
-            <span>This page decodes both CZ DCO pitch envelopes. Use the beta Envelope Lab to compare the selected pitch-lane mapping with the current firmware.</span>
+            <span>This page decodes both CZ DCO pitch envelopes. Use the dual-pitch Envelope Lab with the experimental dual-pitch UF2.</span>
           </div>
         </div>
       </article>
     </section>
 
     <div class="footer">
-      Beta test: uses the current production firmware and sends one selected pitch lane to the card.
+      Dual pitch experiment: requires the matching experimental dual-pitch firmware and sends two pitch lanes to the card.
     </div>
   </main>
 
-  <script src="app.js?v=20260718-beta-storage-fix"></script>
+  <script src="app.js?v=20260719-line-mapping"></script>
 </body>
 </html>

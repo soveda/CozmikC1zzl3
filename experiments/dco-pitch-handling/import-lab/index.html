@@ -97,6 +97,22 @@
             <div id="draftNameBox" class="value-box">No draft created yet.</div>
           </div>
           <div class="field">
+            <label for="ampMode">Amplitude mapping</label>
+            <select id="ampMode">
+              <option value="merged">Merged DCA1 + DCA2 average</option>
+              <option value="line1">DCA1 amplitude only</option>
+              <option value="line2">DCA2 amplitude only</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="pdMode">Phase distortion mapping</label>
+            <select id="pdMode">
+              <option value="merged">Merged DCW1 + DCW2 average</option>
+              <option value="line1">DCW1 phase distortion only</option>
+              <option value="line2">DCW2 phase distortion only</option>
+            </select>
+          </div>
+          <div class="field">
             <label for="pitchMode">Pitch source for C1ZZL3 pitch lane</label>
             <select id="pitchMode">
               <option value="merged">Merged DCO1 + DCO2 average</option>
@@ -127,7 +143,7 @@
           <ul>
             <li>Waveform behavior is approximate.</li>
             <li>Pitch envelope decoding is approximate and may need adjustment in Envelope Lab.</li>
-            <li>Dual-oscillator structure may not map exactly.</li>
+            <li>CZ has separate DCA/DCW/DCO envelopes per synth line; choose line 1, line 2, or merged mappings to compare translations.</li>
             <li>Modulation details may be dropped in the first pass.</li>
             <li>Only files that pass the CZ frame checks are treated as draft candidates.</li>
           </ul>
@@ -199,6 +215,6 @@
     </div>
   </main>
 
-  <script src="app.js?v=20260718-beta-storage-fix"></script>
+  <script src="app.js?v=20260719-line-mapping"></script>
 </body>
 </html>

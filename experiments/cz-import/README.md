@@ -44,8 +44,8 @@ Casio CZ patches include things like:
 
 - CZ waveform selection and combinations
 - DCW behaviour that does not map 1:1 to C1ZZL3
-- DCA and DCW envelopes
-- pitch envelope
+- DCA and DCW envelopes for each CZ synth line
+- DCO pitch envelopes for each CZ synth line
 - modulation settings
 - tone structure choices that may not match C1ZZL3 directly
 
@@ -66,8 +66,9 @@ the main envelope editor page.
 - Validation, summary, decoded readout, warnings, and draft mapping panels.
 - CZ frame awareness for common `F0 44 00 00 7n 20 ... F7` patch-send
   SysEx files, including command, location, channel, and selected data offset.
-- CZ DCA maps to amplitude, DCW maps to phase distortion, and DCO pitch
-  envelopes map to the Envelope Lab pitch lane.
+- Choose merged, line 1, or line 2 mapping for CZ DCA amplitude and DCW
+  phase-distortion envelopes.
+- CZ DCO pitch envelopes map to the Envelope Lab pitch lane.
 - `Open In Envelope Lab` handoff for final editing and card send.
 
 ## Decoder Accuracy Notes

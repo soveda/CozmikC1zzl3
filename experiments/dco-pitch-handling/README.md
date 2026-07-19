@@ -14,6 +14,15 @@ visible and lets the user choose how the single C1ZZL3 pitch lane is generated:
 - `DCO2 pitch only`
 - `Advanced: DCO1 / DCO2 difference emphasis`
 
+It also exposes the same line-choice problem for the other CZ envelopes:
+
+- `Merged DCA1 + DCA2 average`, the previous default amplitude behaviour
+- `DCA1 amplitude only`
+- `DCA2 amplitude only`
+- `Merged DCW1 + DCW2 average`, the previous default phase-distortion behaviour
+- `DCW1 phase distortion only`
+- `DCW2 phase distortion only`
+
 ## Current Scope
 
 - No firmware protocol changes.
@@ -49,8 +58,8 @@ Test flow:
 
 1. Import a Casio CZ `.syx` patch.
 2. Compare the decoded `DCO1 pitch envelope` and `DCO2 pitch envelope` panels.
-3. Change `Pitch source for C1ZZL3 pitch lane`.
-4. Confirm `Selected C1ZZL3 pitch lane` changes.
+3. Change `Amplitude mapping`, `Phase distortion mapping`, and `Pitch source for C1ZZL3 pitch lane`.
+4. Confirm the mapped draft changes to show the selected sources.
 5. Click `Open In Beta Envelope Lab`.
 6. Confirm the pitch-source badge shows the selected mapping.
 7. Audition or send as usual, remembering this still sends one pitch lane.
