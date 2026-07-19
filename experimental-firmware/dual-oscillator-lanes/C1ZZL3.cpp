@@ -22,7 +22,7 @@ static constexpr uint8_t WebMidiCommandRequestEnvelope = 0x0Au;
 static constexpr uint8_t WebMidiCommandEnvelopeResponse = 0x0Bu;
 static constexpr uint8_t WebMidiCommandRequestPitchEnvelope = 0x0Cu;
 static constexpr uint8_t WebMidiCommandPitchEnvelopeResponse = 0x0Du;
-static constexpr uint8_t WebMidiEnvelopeProtocolVersion = 3u;
+static constexpr uint8_t WebMidiEnvelopeProtocolVersion = 4u;
 static constexpr uint32_t WebMidiSettingsPayloadLength = 14u;
 static constexpr uint32_t WebMidiStableSettingsPayloadLength = 8u;
 static constexpr uint32_t WebMidiRangeSettingsPayloadLength = 6u;
@@ -30,8 +30,9 @@ static constexpr uint32_t WebMidiLegacySettingsPayloadLength = 5u;
 static constexpr uint32_t WebMidiLegacyEnvelopePayloadLength = 97u;
 static constexpr uint32_t WebMidiEnvelopePayloadLength = 137u;
 static constexpr uint32_t WebMidiDualPitchEnvelopePayloadLength = 177u;
+static constexpr uint32_t WebMidiDualOscEnvelopePayloadLength = 217u;
 static constexpr uint32_t WebMidiDeleteEnvelopePayloadLength = 1u;
-static constexpr uint32_t WebMidiMaxSysexLength = 196u;
+static constexpr uint32_t WebMidiMaxSysexLength = 236u;
 
 class C1ZZL3 : public ComputerCard
 {
@@ -315,6 +316,7 @@ private:
         EnvelopeStage pd[8];
         EnvelopeStage pitch[8];
         EnvelopeStage pitch2[8];
+        EnvelopeStage pd2[8];
     };
 
     static constexpr uint8_t DefaultTuringCvOctaveRange = 2;
@@ -374,7 +376,7 @@ private:
         (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE) &
         ~(FLASH_SECTOR_SIZE - 1u);
     static constexpr uint32_t CustomEnvelopeMagic = 0x4331454Eu; // C1EN
-    static constexpr uint16_t CustomEnvelopeSaveVersion = 3;
+    static constexpr uint16_t CustomEnvelopeSaveVersion = 4;
     static constexpr uint32_t CustomEnvelopeFlashOffset =
         SaveFlashOffset - FLASH_SECTOR_SIZE;
     static constexpr uint32_t SaveHoldSamples = 384000u;
@@ -500,16 +502,17 @@ private:
     {
         int32_t envelopeLevel = updateEnvelope();
         int32_t freq1 = applyPitchEnvelopeToFrequency(freq, pitchEnvelopeLevel);
-        pd = applyEnvelopeToPd(pd, envelopeLevel);
+        int32_t pd1 = applyEnvelopeToPd(pd, pdEnvelopeLevel);
+        int32_t pd2 = applyEnvelopeToPd(pd, pd2EnvelopeLevel);
 
         int32_t osc1 =
-            oscCZ(phase1, freq1, pd, wave, noiseAmt);
+            oscCZ(phase1, freq1, pd1, wave, noiseAmt);
 
         int32_t freq2 =
             applyPitchEnvelopeToFrequency(applyDetune(freq, osc2Detune), pitch2EnvelopeLevel);
 
         int32_t osc2 =
-            oscCZ(phase2, freq2, pd, wave, noiseAmt);
+            oscCZ(phase2, freq2, pd2, wave, noiseAmt);
 
         int32_t osc2Raw = osc2;
         osc2 = osc2Raw;
@@ -523,7 +526,7 @@ private:
         osc1 = mix(osc1, ringSig, ringMix);
 
         int32_t ampScale = envelopeAmpScale(envelopeLevel);
-        ampScale = (ampScale * pdCompensationScale(pd)) >> 12;
+        ampScale = (ampScale * pdCompensationScale(pd1 > pd2 ? pd1 : pd2)) >> 12;
         ampScale = (ampScale * updateSyncFade()) >> 12;
         ampScale = (ampScale * updateLoopFade()) >> 12;
         osc1 = (osc1 * ampScale) >> 12;
@@ -611,6 +614,7 @@ private:
         // hard-step to zero and click.
         int32_t ampStartLevel = envelopeActive ? ampEnvelopeLevel : 0;
         int32_t pdStartLevel = envelopeActive ? pdEnvelopeLevel : 0;
+        int32_t pd2StartLevel = envelopeActive ? pd2EnvelopeLevel : 0;
         int32_t pitchStartLevel = envelopeActive ? pitchEnvelopeLevel : PitchEnvelopeCenter;
         int32_t pitch2StartLevel = envelopeActive ? pitch2EnvelopeLevel : PitchEnvelopeCenter;
 
@@ -622,6 +626,10 @@ private:
         pdEnvelopeSample = 0;
         pdEnvelopeStartLevel = pdStartLevel;
         pdEnvelopeLevel = pdStartLevel;
+        pd2EnvelopeStage = 0;
+        pd2EnvelopeSample = 0;
+        pd2EnvelopeStartLevel = pd2StartLevel;
+        pd2EnvelopeLevel = pd2StartLevel;
         pitchEnvelopeStage = 0;
         pitchEnvelopeSample = 0;
         pitchEnvelopeStartLevel = pitchStartLevel;
@@ -672,6 +680,19 @@ private:
             loopEnabled,
             false);
 
+        const EnvelopeStage* pd2Program =
+            pitchLaneHasData(program.pd2) ? program.pd2 : program.pd;
+        bool pd2Done = updateEnvelopeRunner(
+            pd2Program,
+            pd2EnvelopeStage,
+            pd2EnvelopeSample,
+            pd2EnvelopeLevel,
+            pd2EnvelopeStartLevel,
+            envelopeHeld,
+            envelopeReleaseRequested,
+            loopEnabled,
+            false);
+
         bool pitchDone = updateEnvelopeRunner(
             program.pitch,
             pitchEnvelopeStage,
@@ -696,7 +717,7 @@ private:
             loopEnabled,
             false);
 
-        if (ampDone && pdDone && pitchDone && pitch2Done)
+        if (ampDone && pdDone && pd2Done && pitchDone && pitch2Done)
         {
             envelopeActive = false;
             envelopeHeld = false;
@@ -724,8 +745,7 @@ private:
 
     int32_t applyEnvelopeToPd(int32_t pd, int32_t level)
     {
-        (void)level;
-        return clamp12(pd + pdEnvelopeLevel);
+        return clamp12(pd + level);
     }
 
     int32_t applyPitchEnvelopeToFrequency(int32_t freq, int32_t pitchEnvelope)
@@ -1063,7 +1083,7 @@ private:
         if (!customEnvelopeLoaded[slot])
             return;
 
-        uint8_t frame[89] = {
+        uint8_t frame[129] = {
             0xF0u,
             WebMidiManufacturer,
             WebMidiId[0],
@@ -1084,6 +1104,13 @@ private:
         {
             appendWebMidiUint14(frame, offset, envelope.pd[i].level);
             appendWebMidiUint21(frame, offset, envelope.pd[i].time);
+        }
+        const EnvelopeStage* pd2Program =
+            pitchLaneHasData(envelope.pd2) ? envelope.pd2 : envelope.pd;
+        for (uint32_t i = 0; i < 8u; ++i)
+        {
+            appendWebMidiUint14(frame, offset, pd2Program[i].level);
+            appendWebMidiUint21(frame, offset, pd2Program[i].time);
         }
         frame[offset++] = 0xF7u;
         tud_midi_stream_write(0, frame, offset);
@@ -1135,7 +1162,8 @@ private:
         bool legacyPayload = sysexLength == WebMidiLegacyEnvelopePayloadLength + 6u;
         bool singlePitchPayload = sysexLength == WebMidiEnvelopePayloadLength + 6u;
         bool dualPitchPayload = sysexLength == WebMidiDualPitchEnvelopePayloadLength + 6u;
-        if (!legacyPayload && !singlePitchPayload && !dualPitchPayload)
+        bool dualOscPayload = sysexLength == WebMidiDualOscEnvelopePayloadLength + 6u;
+        if (!legacyPayload && !singlePitchPayload && !dualPitchPayload && !dualOscPayload)
             return;
 
         uint32_t offset = 6;
@@ -1161,6 +1189,7 @@ private:
             uint16_t level = decodeWebMidiUint14(offset);
             uint32_t time = decodeWebMidiUint21(offset);
             next.pd[i] = {level, time};
+            next.pd2[i] = next.pd[i];
         }
 
         if (legacyPayload)
@@ -1180,7 +1209,7 @@ private:
                 next.pitch[i] = {level, time};
             }
 
-            if (dualPitchPayload)
+            if (dualPitchPayload || dualOscPayload)
             {
                 for (uint32_t i = 0; i < 8u; ++i)
                 {
@@ -1193,6 +1222,16 @@ private:
             {
                 for (uint32_t i = 0; i < 8u; ++i)
                     next.pitch2[i] = next.pitch[i];
+            }
+        }
+
+        if (dualOscPayload)
+        {
+            for (uint32_t i = 0; i < 8u; ++i)
+            {
+                uint16_t level = decodeWebMidiUint14(offset);
+                uint32_t time = decodeWebMidiUint21(offset);
+                next.pd2[i] = {level, time};
             }
         }
 
@@ -1282,7 +1321,7 @@ private:
             {PitchEnvelopeCenter, 1}, {PitchEnvelopeCenter, 1},
             {PitchEnvelopeCenter, 1}, {PitchEnvelopeCenter, 1},
             {PitchEnvelopeCenter, 1}, {PitchEnvelopeCenter, 1}
-        }};
+        }, {}, {}};
 
         static const EnvelopeProgram doublePluck = {{
             {4095, 180}, {700, 4800}, {0, 2400}, {3600, 180},
@@ -1295,7 +1334,7 @@ private:
             {PitchEnvelopeCenter, 1}, {PitchEnvelopeCenter, 1},
             {PitchEnvelopeCenter, 1}, {PitchEnvelopeCenter, 1},
             {PitchEnvelopeCenter, 1}, {PitchEnvelopeCenter, 1}
-        }};
+        }, {}, {}};
 
         static const EnvelopeProgram bounce = {{
             {4095, 120}, {1200, 3600}, {3300, 3600}, {1700, 4800},
@@ -1308,7 +1347,7 @@ private:
             {PitchEnvelopeCenter, 1}, {PitchEnvelopeCenter, 1},
             {PitchEnvelopeCenter, 1}, {PitchEnvelopeCenter, 1},
             {PitchEnvelopeCenter, 1}, {PitchEnvelopeCenter, 1}
-        }};
+        }, {}, {}};
 
         static const EnvelopeProgram bell = {{
             {4095, 240}, {2600, 12000}, {1200, 24000}, {0, 36000},
@@ -1321,7 +1360,7 @@ private:
             {PitchEnvelopeCenter, 1}, {PitchEnvelopeCenter, 1},
             {PitchEnvelopeCenter, 1}, {PitchEnvelopeCenter, 1},
             {PitchEnvelopeCenter, 1}, {PitchEnvelopeCenter, 1}
-        }};
+        }, {}, {}};
 
         static const EnvelopeProgram brass = {{
             {4095, 4800}, {3400, 30000}, {3200, 18000}, {3000, 18000},
@@ -1334,7 +1373,7 @@ private:
             {PitchEnvelopeCenter, 1}, {PitchEnvelopeCenter, 1},
             {PitchEnvelopeCenter, 1}, {PitchEnvelopeCenter, 1},
             {PitchEnvelopeCenter, 1}, {PitchEnvelopeCenter, 1}
-        }};
+        }, {}, {}};
 
         static const EnvelopeProgram strings = {{
             {2200, 24000}, {3600, 24000}, {3800, 48000}, {3600, 48000},
@@ -1347,7 +1386,7 @@ private:
             {PitchEnvelopeCenter, 1}, {PitchEnvelopeCenter, 1},
             {PitchEnvelopeCenter, 1}, {PitchEnvelopeCenter, 1},
             {PitchEnvelopeCenter, 1}, {PitchEnvelopeCenter, 1}
-        }};
+        }, {}, {}};
 
         static const EnvelopeProgram reverseSwell = {{
             {200, 12000}, {900, 18000}, {1800, 18000}, {3000, 18000},
@@ -1360,7 +1399,7 @@ private:
             {PitchEnvelopeCenter, 1}, {PitchEnvelopeCenter, 1},
             {PitchEnvelopeCenter, 1}, {PitchEnvelopeCenter, 1},
             {PitchEnvelopeCenter, 1}, {PitchEnvelopeCenter, 1}
-        }};
+        }, {}, {}};
 
         static const EnvelopeProgram evolvingDigital = {{
             {4095, 480}, {3900, 12000}, {3800, 12000}, {3600, 12000},
@@ -1373,7 +1412,7 @@ private:
             {PitchEnvelopeCenter, 1}, {PitchEnvelopeCenter, 1},
             {PitchEnvelopeCenter, 1}, {PitchEnvelopeCenter, 1},
             {PitchEnvelopeCenter, 1}, {PitchEnvelopeCenter, 1}
-        }};
+        }, {}, {}};
 
         static const EnvelopeProgram off = {{
             {0, 1}, {0, 1}, {0, 1}, {0, 1},
@@ -1386,7 +1425,7 @@ private:
             {PitchEnvelopeCenter, 1}, {PitchEnvelopeCenter, 1},
             {PitchEnvelopeCenter, 1}, {PitchEnvelopeCenter, 1},
             {PitchEnvelopeCenter, 1}, {PitchEnvelopeCenter, 1}
-        }};
+        }, {}, {}};
 
         if (envelopePreset >= CustomEnvelopePreset)
         {
@@ -2501,18 +2540,22 @@ private:
     int32_t heldPhaseNoise = 0;
     uint32_t ampEnvelopeSample = 0;
     uint32_t pdEnvelopeSample = 0;
+    uint32_t pd2EnvelopeSample = 0;
     uint32_t pitchEnvelopeSample = 0;
     uint32_t pitch2EnvelopeSample = 0;
     int32_t ampEnvelopeLevel = 0;
     int32_t pdEnvelopeLevel = 0;
+    int32_t pd2EnvelopeLevel = 0;
     int32_t pitchEnvelopeLevel = PitchEnvelopeCenter;
     int32_t pitch2EnvelopeLevel = PitchEnvelopeCenter;
     int32_t ampEnvelopeStartLevel = 0;
     int32_t pdEnvelopeStartLevel = 0;
+    int32_t pd2EnvelopeStartLevel = 0;
     int32_t pitchEnvelopeStartLevel = PitchEnvelopeCenter;
     int32_t pitch2EnvelopeStartLevel = PitchEnvelopeCenter;
     uint8_t ampEnvelopeStage = 8;
     uint8_t pdEnvelopeStage = 8;
+    uint8_t pd2EnvelopeStage = 8;
     uint8_t pitchEnvelopeStage = 8;
     uint8_t pitch2EnvelopeStage = 8;
     bool envelopeActive = false;

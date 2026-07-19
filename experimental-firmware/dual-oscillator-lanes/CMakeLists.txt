@@ -12,7 +12,7 @@ include(${PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 # Project
 # ============================================================
 
-project(C1ZZL3_DUAL_PITCH C CXX ASM)
+project(C1ZZL3_DUAL_OSCILLATOR_LANES C CXX ASM)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
@@ -27,7 +27,7 @@ pico_sdk_init()
 # Executable
 # ============================================================
 
-add_executable(C1ZZL3_DUAL_PITCH
+add_executable(C1ZZL3_DUAL_OSCILLATOR_LANES
     C1ZZL3.cpp
     C1ZZL3_LUT.cpp
     usb_descriptors.c
@@ -39,7 +39,7 @@ add_executable(C1ZZL3_DUAL_PITCH
 # Include paths
 # ============================================================
 
-target_include_directories(C1ZZL3_DUAL_PITCH PRIVATE
+target_include_directories(C1ZZL3_DUAL_OSCILLATOR_LANES PRIVATE
     .
 )
 
@@ -47,7 +47,7 @@ target_include_directories(C1ZZL3_DUAL_PITCH PRIVATE
 # Libraries required by ComputerCard
 # ============================================================
 
-target_link_libraries(C1ZZL3_DUAL_PITCH
+target_link_libraries(C1ZZL3_DUAL_OSCILLATOR_LANES
     pico_stdlib
     pico_unique_id
     pico_multicore
@@ -68,19 +68,19 @@ target_link_libraries(C1ZZL3_DUAL_PITCH
 # Workshop Computer hardware settings
 # ============================================================
 
-target_compile_definitions(C1ZZL3_DUAL_PITCH PRIVATE
+target_compile_definitions(C1ZZL3_DUAL_OSCILLATOR_LANES PRIVATE
     PICO_XOSC_STARTUP_DELAY_MULTIPLIER=64
     C1ZZL3_OVERCLOCK_KHZ=192000
 )
 
-pico_enable_stdio_usb(C1ZZL3_DUAL_PITCH 0)
-pico_set_binary_type(C1ZZL3_DUAL_PITCH copy_to_ram)
+pico_enable_stdio_usb(C1ZZL3_DUAL_OSCILLATOR_LANES 0)
+pico_set_binary_type(C1ZZL3_DUAL_OSCILLATOR_LANES copy_to_ram)
 
 # ============================================================
 # Optimisation
 # ============================================================
 
-target_compile_options(C1ZZL3_DUAL_PITCH PRIVATE
+target_compile_options(C1ZZL3_DUAL_OSCILLATOR_LANES PRIVATE
     -O3
     -ffast-math
     -Wdouble-promotion
@@ -89,7 +89,7 @@ target_compile_options(C1ZZL3_DUAL_PITCH PRIVATE
     -Wextra
 )
 
-target_link_options(C1ZZL3_DUAL_PITCH PRIVATE
+target_link_options(C1ZZL3_DUAL_OSCILLATOR_LANES PRIVATE
     -Wl,--print-memory-usage
 )
 
@@ -97,4 +97,4 @@ target_link_options(C1ZZL3_DUAL_PITCH PRIVATE
 # Create UF2/BIN/etc
 # ============================================================
 
-pico_add_extra_outputs(C1ZZL3_DUAL_PITCH)
+pico_add_extra_outputs(C1ZZL3_DUAL_OSCILLATOR_LANES)

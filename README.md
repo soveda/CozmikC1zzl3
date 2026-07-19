@@ -48,6 +48,12 @@ Previous UF2s are archived in:
 uf2/archive/
 ```
 
+Current experimental and beta-test UF2s are collected in:
+
+```text
+experimental-firmware/active-uf2s/
+```
+
 Source snapshots and experiment notes are archived in:
 
 ```text
@@ -208,7 +214,7 @@ The Import Labs also expose CZ line choices for amplitude and phase distortion:
 - `DCW1 phase distortion only` / `DCW2 phase distortion only`: useful when one
   CZ line carries the important brightness/phase contour.
 
-## Experiment: Dual Pitch Firmware
+## Stable Dual Pitch Firmware
 
 Hosted experiment:
 
@@ -219,12 +225,13 @@ https://soveda.github.io/CozmikC1zzl3/experiments/dual-pitch-envelopes/import-la
 Matching test UF2:
 
 ```text
-experimental-firmware/dual-pitch-envelopes/C1ZZL3_DUAL_PITCH.uf2
+experimental-firmware/active-uf2s/C1ZZL3_STABLE_DUAL_PITCH_PROTOCOL_V3.uf2
 ```
 
-This experiment should live alongside the stable main editor rather than
-replace it. It tests envelope protocol version 3, where imported CZ DCO1 pitch
-is sent to oscillator 1 and imported CZ DCO2 pitch is sent to oscillator 2.
+This version lives alongside the stable main editor rather than replacing it.
+It is the stable dual-pitch reference for envelope protocol version 3, where
+imported CZ DCO1 pitch is sent to oscillator 1 and imported CZ DCO2 pitch is
+sent to oscillator 2.
 
 Current scope:
 
@@ -236,6 +243,31 @@ Current scope:
 - Uses the same DCA/DCW line-selection controls as the other Import Labs.
 - Keeps direct pitch graph editing focused on the main pitch lane for now, while
   preserving imported oscillator 2 pitch data for firmware testing.
+
+## Experiment: Dual Oscillator Lanes
+
+Current first-pass firmware:
+
+```text
+experimental-firmware/active-uf2s/C1ZZL3_EXPERIMENT_DUAL_OSCILLATOR_LANES_PROTOCOL_V4.uf2
+```
+
+Experiment folder:
+
+```text
+experimental-firmware/dual-oscillator-lanes/
+```
+
+This is the next experiment after stable dual pitch. It tests envelope protocol
+version 4 with an optional second phase-distortion envelope lane:
+
+- Oscillator 1 uses PD lane 1.
+- Oscillator 2 uses PD lane 2.
+- Older protocol v3 dual-pitch payloads still load by copying PD lane 1 to PD
+  lane 2.
+- Pitch 1 and pitch 2 behaviour is inherited from the stable dual-pitch build.
+- The matching web UI still needs to be implemented in
+  `experiments/dual-oscillator-lanes/`.
 
 ## How To Use The Editor
 

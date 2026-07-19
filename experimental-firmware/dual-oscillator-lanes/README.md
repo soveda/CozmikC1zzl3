@@ -1,6 +1,7 @@
 # C1ZZL3 Dual Oscillator Lanes Firmware Experiment
 
-This folder is reserved for firmware work after the stable dual-pitch build.
+This folder contains the first-pass firmware experiment after the stable
+dual-pitch build.
 
 The stable dual-pitch firmware reference remains in:
 
@@ -10,11 +11,45 @@ experimental-firmware/dual-pitch-envelopes
 
 Do not move or overwrite that reference while developing this experiment.
 
-## Intended Sequence
+## First Pass Scope
 
-1. Add protocol support for two PD envelope lanes.
-2. Keep the current dual-pitch behaviour as the baseline.
-3. Confirm old protocol v3 dual-pitch payloads still work or fail clearly.
+- Envelope SysEx protocol is bumped to version 4.
+- The custom envelope program now has five lanes:
+  - amplitude
+  - oscillator 1 phase distortion
+  - oscillator 1 pitch
+  - oscillator 2 pitch
+  - oscillator 2 phase distortion
+- Oscillator 1 uses PD lane 1.
+- Oscillator 2 uses PD lane 2.
+- If a v3 dual-pitch payload is received, PD lane 2 is copied from PD lane 1.
+- Factory envelopes and legacy payloads fall back to shared PD behaviour.
+- Pitch 1 and pitch 2 behaviour is inherited from the stable dual-pitch build.
+- Amplitude, wave family, ring modulation, noise/grit, and detune remain shared.
+
+## Build
+
+From the repository root:
+
+```sh
+cmake -S experimental-firmware/dual-oscillator-lanes -B experimental-firmware/dual-oscillator-lanes/build -DPICO_NO_PICOTOOL=1
+cmake --build experimental-firmware/dual-oscillator-lanes/build -j2
+./build/_deps/picotool/picotool uf2 convert experimental-firmware/dual-oscillator-lanes/build/C1ZZL3_DUAL_OSCILLATOR_LANES.elf -t elf experimental-firmware/dual-oscillator-lanes/C1ZZL3_DUAL_OSCILLATOR_LANES.uf2 -t uf2
+```
+
+## Test Firmware
+
+Expected UF2 path after build:
+
+```text
+experimental-firmware/dual-oscillator-lanes/C1ZZL3_DUAL_OSCILLATOR_LANES.uf2
+```
+
+## Intended Sequence After This Pass
+
+1. Add matching web UI support for two PD lanes.
+2. Test v3 dual-pitch payload compatibility.
+3. Test v4 two-PD-lane send/readback.
 4. Only after two-lane PD passes, consider fuller oscillator separation.
 
 ## Later Full Two-Lane Behaviour
