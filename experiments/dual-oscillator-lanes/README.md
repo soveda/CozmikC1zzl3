@@ -1,7 +1,8 @@
 # C1ZZL3 Dual Oscillator Lanes Experiment
 
-This folder is reserved for the next web UI experiment after the stable
-dual-pitch Envelope Lab.
+This folder contains the first experimental web UI for the protocol v4
+dual-oscillator-lanes firmware. It is based on the stable dual-pitch Envelope
+Lab, but adds separate PD1 and PD2 lanes.
 
 The stable dual-pitch reference remains in:
 
@@ -11,16 +12,63 @@ experiments/dual-pitch-envelopes
 
 Do not move or overwrite that reference while developing this experiment.
 
-## Intended Sequence
+## Current Scope
 
-1. Add two-lane PD envelope handling.
-2. Keep amplitude shared until the two-lane PD behaviour is understood.
-3. Test import choices for DCW1/DCW2:
-   - merged
-   - line 1 only
-   - line 2 only
-   - dual lane
-4. If two-lane PD is useful, expand toward full two-lane oscillator behaviour.
+- Main graph has three selectable lanes:
+  - amplitude
+  - PD 1 / oscillator 1
+  - PD 2 / oscillator 2
+- Pitch graph keeps two selectable pitch lanes:
+  - pitch 1 / oscillator 1
+  - pitch 2 / oscillator 2
+- SysEx envelope send/save uses protocol v4 payload order:
+  - amplitude
+  - PD 1
+  - pitch 1
+  - pitch 2
+  - PD 2
+- CZ Import Lab defaults to dual DCW mapping:
+  - DCW1 -> PD1
+  - DCW2 -> PD2
+- Other DCW modes still copy the selected/merged PD shape to both lanes.
+
+## Important Limitation
+
+The current protocol v4 firmware can load separate PD1/PD2 lanes into RAM.
+Saved card slots currently read back as PD1 shared to both PD lanes until the
+firmware save/readback path is expanded for persistent PD2 storage.
+
+For true PD1/PD2 listening tests, use `Load RAM` or `Load Envelope + Settings`.
+Use `Save Envelope` only when you are intentionally testing the current
+fallback behaviour.
+
+## Local Test
+
+From the repository root:
+
+```sh
+python3 -m http.server 5177 --directory experiments/dual-oscillator-lanes
+```
+
+Then open:
+
+```text
+http://localhost:5177/import-lab/
+```
+
+## Matching Firmware
+
+Use:
+
+```text
+experimental-firmware/active-uf2s/C1ZZL3_EXPERIMENT_DUAL_OSCILLATOR_LANES_PROTOCOL_V4.uf2
+```
+
+## Next Sequence
+
+1. Hardware-test two-lane PD with `Load RAM`.
+2. Decide whether PD2 persistence/readback is worth adding next.
+3. If two-lane PD is useful, expand toward full two-lane oscillator behaviour.
 
 ## Full Two-Lane Behaviour To Consider Later
 
@@ -35,5 +83,21 @@ Do not move or overwrite that reference while developing this experiment.
 
 ## Compatibility Goal
 
-This experiment should be designed so the current stable dual-pitch web app and
-firmware remain available as a rollback and comparison target.
+Keep this in reserve for the next UI pass: the long-term goal is a single
+Envelope Lab that can talk to both card versions.
+
+- Protocol v3 / stable dual-pitch cards use one PD envelope lane and two pitch
+  lanes. The editor should hide or disable PD2 controls after detecting this
+  card version, while keeping imported PD2 data in the browser draft so it is
+  not lost.
+- Protocol v4 / dual-oscillator-lanes cards use PD1, PD2, pitch1, and pitch2.
+  The editor should expose both PD lanes and send the full protocol v4 payload.
+- If protocol is not detected yet, the editor should default to the safer
+  protocol v3 send path and clearly label PD2 as browser-only until a protocol
+  v4 card is confirmed.
+- Readback should adapt to the received payload shape rather than treating a
+  missing PD2 lane as an error. A protocol v3 read should copy PD1 to PD2 for
+  display only and mark that second lane as inferred.
+- Import Lab can keep decoding both CZ DCW lanes. The single UI should let the
+  user choose whether to send a merged/single-PD version or the full dual-PD
+  version once the connected card capability is known.

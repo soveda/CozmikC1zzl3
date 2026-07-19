@@ -258,6 +258,12 @@ Experiment folder:
 experimental-firmware/dual-oscillator-lanes/
 ```
 
+Hosted web experiment:
+
+```text
+https://soveda.github.io/CozmikC1zzl3/experiments/dual-oscillator-lanes/import-lab/
+```
+
 This is the next experiment after stable dual pitch. It tests envelope protocol
 version 4 with an optional second phase-distortion envelope lane:
 
@@ -266,8 +272,10 @@ version 4 with an optional second phase-distortion envelope lane:
 - Older protocol v3 dual-pitch payloads still load by copying PD lane 1 to PD
   lane 2.
 - Pitch 1 and pitch 2 behaviour is inherited from the stable dual-pitch build.
-- The matching web UI still needs to be implemented in
-  `experiments/dual-oscillator-lanes/`.
+- The matching web UI lives in `experiments/dual-oscillator-lanes/` and sends
+  PD1, pitch1, pitch2, and PD2 to the card for RAM testing.
+- Saved card slots currently read back as PD1 shared to both PD lanes until
+  protocol v4 save/readback is expanded.
 
 ## How To Use The Editor
 

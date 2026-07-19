@@ -11,8 +11,9 @@ Envelope Lab.
   DCO2-only pitch mapping while still using the production firmware.
 - `dual-pitch-envelopes/`: stable dual-pitch web app for the protocol v3
   firmware.
-- `dual-oscillator-lanes/`: next experiment scaffold for two-lane PD envelopes,
-  then fuller two-lane oscillator behaviour.
+- `dual-oscillator-lanes/`: protocol v4 experiment for two-lane PD envelopes
+  plus the existing two pitch lanes. Use it with the matching dual-oscillator
+  experimental UF2.
 
 ## Archived Web Experiments
 
