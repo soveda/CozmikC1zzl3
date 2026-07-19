@@ -1083,7 +1083,7 @@ private:
         if (!customEnvelopeLoaded[slot])
             return;
 
-        uint8_t frame[129] = {
+        uint8_t frame[89] = {
             0xF0u,
             WebMidiManufacturer,
             WebMidiId[0],
@@ -1104,13 +1104,6 @@ private:
         {
             appendWebMidiUint14(frame, offset, envelope.pd[i].level);
             appendWebMidiUint21(frame, offset, envelope.pd[i].time);
-        }
-        const EnvelopeStage* pd2Program =
-            pitchLaneHasData(envelope.pd2) ? envelope.pd2 : envelope.pd;
-        for (uint32_t i = 0; i < 8u; ++i)
-        {
-            appendWebMidiUint14(frame, offset, pd2Program[i].level);
-            appendWebMidiUint21(frame, offset, pd2Program[i].time);
         }
         frame[offset++] = 0xF7u;
         tud_midi_stream_write(0, frame, offset);
