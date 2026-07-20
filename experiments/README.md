@@ -17,6 +17,9 @@ Envelope Lab.
 - `dual-amplitude-envelopes/`: protocol v6 experiment for separate Amp1/Amp2
   envelopes plus PD1/PD2, Pitch1/Pitch2, and CZ-style sustain markers. Use it
   only with the matching dual-amplitude experimental UF2.
+- `full-dual-oscillators/`: protocol v7 first-pass experiment for separate
+  oscillator wave-family settings on top of the tested dual-amplitude lanes.
+  Use it only with the matching full-dual-oscillator experimental UF2.
 
 ## Archived Web Experiments
 

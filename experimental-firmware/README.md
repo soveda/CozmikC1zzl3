@@ -21,6 +21,7 @@ Current active choices:
 | `C1ZZL3_ROLLBACK_DUAL_PD_PROTOCOL_V4.uf2` | You want the fully tested dual-PD protocol v4 rollback experimental before trying later experiments. |
 | `C1ZZL3_ROLLBACK_DUAL_AMPLITUDE_PROTOCOL_V6.uf2` | You want the tested dual-amplitude protocol v6 rollback where decode, save, and full envelope readback pass. |
 | `C1ZZL3_EXPERIMENT_DUAL_AMPLITUDE_ENVELOPES_PROTOCOL_V6.uf2` | You are testing separate Amp1/Amp2 envelopes, PD1/PD2, Pitch1/Pitch2, and CZ-style sustain markers. |
+| `C1ZZL3_EXPERIMENT_FULL_DUAL_OSCILLATORS_PROTOCOL_V7.uf2` | You are testing separate oscillator wave-family settings on top of the dual-amplitude protocol v6 rollback. |
 | `C1ZZL3_EXPERIMENT_DUAL_AMPLITUDE_ENVELOPES_PROTOCOL_V5.uf2` | Previous dual-amplitude test without explicit CZ sustain marker read/write. |
 
 Production remains authoritative at:
@@ -42,6 +43,8 @@ one place.
   oscillator amplitude lanes and explicit sustain markers for held notes.
 - `rollback-dual-amplitude-protocol-v6/`: preserved tested rollback
   experimental for dual-amplitude protocol v6.
+- `full-dual-oscillators/`: protocol v7 first pass with separate oscillator
+  wave-family settings while preserving the existing hardware/Turing controls.
 - `workshop-release-84-v1.3/`: preserved public Workshop Computer release 84
   / version 1.3.
 
