@@ -24,6 +24,8 @@ static constexpr uint8_t WebMidiCommandRequestPitchEnvelope = 0x0Cu;
 static constexpr uint8_t WebMidiCommandPitchEnvelopeResponse = 0x0Du;
 static constexpr uint8_t WebMidiCommandPd2EnvelopeResponse = 0x0Eu;
 static constexpr uint8_t WebMidiCommandAmp2EnvelopeResponse = 0x0Fu;
+static constexpr uint8_t WebMidiCommandRequestPd2Envelope = 0x10u;
+static constexpr uint8_t WebMidiCommandRequestAmp2Envelope = 0x11u;
 static constexpr uint8_t WebMidiEnvelopeProtocolVersion = 6u;
 static constexpr uint32_t WebMidiSettingsPayloadLength = 14u;
 static constexpr uint32_t WebMidiStableSettingsPayloadLength = 8u;
@@ -852,16 +854,25 @@ private:
 
     int32_t applyPitchEnvelopeToFrequency(int32_t freq, int32_t pitchEnvelope)
     {
-        int32_t semitone =
+        int32_t semitoneQ12 =
             ((pitchEnvelope - (int32_t)PitchEnvelopeCenter) *
-             PitchEnvelopeSemitoneRange) / (int32_t)PitchEnvelopeCenter;
+             PitchEnvelopeSemitoneRange * 4096) / (int32_t)PitchEnvelopeCenter;
 
-        if (semitone < -PitchEnvelopeSemitoneRange)
-            semitone = -PitchEnvelopeSemitoneRange;
-        if (semitone > PitchEnvelopeSemitoneRange)
-            semitone = PitchEnvelopeSemitoneRange;
+        int32_t rangeQ12 = PitchEnvelopeSemitoneRange * 4096;
+        if (semitoneQ12 < -rangeQ12)
+            semitoneQ12 = -rangeQ12;
+        if (semitoneQ12 > rangeQ12)
+            semitoneQ12 = rangeQ12;
 
-        uint16_t ratio = PitchEnvelopeRatioQ12[semitone + PitchEnvelopeSemitoneRange];
+        uint32_t tablePosition = (uint32_t)(semitoneQ12 + rangeQ12);
+        uint32_t index = tablePosition >> 12;
+        if (index >= 48u)
+            index = 47u;
+        uint32_t frac = tablePosition & 0x0FFFu;
+        int32_t ratio =
+            PitchEnvelopeRatioQ12[index] +
+            ((((int32_t)PitchEnvelopeRatioQ12[index + 1u] -
+               (int32_t)PitchEnvelopeRatioQ12[index]) * (int32_t)frac) >> 12);
         return (int32_t)(((int64_t)freq * ratio) >> 12);
     }
 
@@ -1049,7 +1060,22 @@ private:
         }
 
         if (command == WebMidiCommandRequestPitchEnvelope)
+        {
             handleWebMidiRequestPitchEnvelope();
+            return;
+        }
+
+        if (command == WebMidiCommandRequestPd2Envelope)
+        {
+            handleWebMidiRequestPd2Envelope();
+            return;
+        }
+
+        if (command == WebMidiCommandRequestAmp2Envelope)
+        {
+            handleWebMidiRequestAmp2Envelope();
+            return;
+        }
     }
 
     bool webMidiHeaderMatches()
@@ -1220,9 +1246,31 @@ private:
         if (!customEnvelopePersist[slot])
             return;
 
-        sendWebMidiAmp2EnvelopeResponse(slot);
-        sendWebMidiPd2EnvelopeResponse(slot);
         sendWebMidiPitchEnvelopeResponse(slot);
+    }
+
+    void handleWebMidiRequestPd2Envelope()
+    {
+        if (sysexLength != 7u)
+            return;
+
+        uint8_t slot = sysexBuffer[6] & 0x07u;
+        if (!customEnvelopePersist[slot])
+            return;
+
+        sendWebMidiPd2EnvelopeResponse(slot);
+    }
+
+    void handleWebMidiRequestAmp2Envelope()
+    {
+        if (sysexLength != 7u)
+            return;
+
+        uint8_t slot = sysexBuffer[6] & 0x07u;
+        if (!customEnvelopePersist[slot])
+            return;
+
+        sendWebMidiAmp2EnvelopeResponse(slot);
     }
 
     void sendWebMidiAmp2EnvelopeResponse(uint8_t slot)
@@ -1690,12 +1738,6 @@ private:
 
     void requestEnvelopeRelease()
     {
-        if (envelopeHeld)
-        {
-            finishEnvelopeNow();
-            return;
-        }
-
         envelopeHeld = false;
         envelopeReleaseRequested = true;
         pulse2EnvelopeHolding = false;

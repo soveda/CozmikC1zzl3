@@ -32,13 +32,15 @@ experimental-firmware/rollback-dual-pd-protocol-v4
   PD2 copied from PD1.
 - Saved envelope readback uses small chained responses: the main response
   returns Amp1 and PD1; then separate Amp2, PD2, and Pitch responses complete
-  the slot. The Pitch response also carries sustain markers.
+  the slot.
 - When a CZ sustain marker is present before or at END, that lane holds while
   gate or MIDI note is held.
 - If all lanes reach END while the gate or MIDI note is still held, the final
   END state is held.
-- Gate low or MIDI note off is treated as the envelope end condition and stops
-  the held envelope immediately.
+- Gate low or MIDI note off releases the held envelope so any stages between
+  sustain and END can form the tail.
+- Pitch-envelope frequency changes are interpolated between semitones rather
+  than stepping through a semitone table.
 
 ## Build
 
@@ -67,11 +69,11 @@ the main Envelope Lab unless this experiment passes hardware testing.
 - Web MIDI connection.
 - Protocol v4 saved-envelope migration.
 - Protocol v6 Load RAM with distinct Amp1/Amp2 shapes.
-- Protocol v6 Save Envelope and Read Envelopes from Card, including sustain
-  marker readback.
+- Protocol v6 Save Envelope and Read Envelopes from Card.
 - Held gate / held MIDI note sustains at CZ sustain stage when present.
 - Held gate / held MIDI note holds the final END state after all lanes finish.
-- Gate low / MIDI note off stops the held envelope cleanly.
+- Gate low / MIDI note off plays any remaining release tail after sustain.
+- Pitch envelope sweeps should sound smooth rather than semitone-stepped.
 - CZ Import Lab DCA1/DCA2 mapping into Amp1/Amp2.
 - Rapid retrigger click test.
 - Audio balance with intentionally different oscillator amplitude envelopes.

@@ -28,13 +28,17 @@ firmware experiment passes hardware testing.
 - CZ Import Lab sends DCA1 to Amp1 and DCA2 to Amp2.
 - CZ Import Lab treats each CZ envelope END step as that lane's hold point
   when no earlier CZ sustain marker exists.
+- CZ Import Lab scales DCO pitch-envelope depth around neutral pitch so high
+  CZ pitch levels do not become exaggerated C1ZZL3 pitch jumps.
+- Very short final CZ pitch stages with large jumps are flattened to the
+  previous pitch level to avoid artificial end-of-envelope pitch flicks.
 - Older imported or locally saved drafts without Amp2 copy Amp1 to Amp2.
 - When a CZ envelope has a sustain point before or at END, the card holds that
   lane while the gate or MIDI note is held.
 - If all lanes reach END while the gate or MIDI note is still held, the final
   END state is held.
-- Gate low or MIDI note off is treated as the envelope end condition and stops
-  the held envelope immediately.
+- Gate low or MIDI note off releases the held envelope so any stages between
+  sustain and END can form the tail.
 
 ## Save / Readback Behaviour
 

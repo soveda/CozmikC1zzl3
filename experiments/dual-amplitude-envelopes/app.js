@@ -11,6 +11,7 @@ const ENVELOPE_READ_TIMEOUT_MS = 7000;
 const ENVELOPE_READ_RETRIES = 2;
 const SAVE_VERIFY_DELAY_MS = 2500;
 const DELETE_VERIFY_DELAY_MS = 500;
+const AUX_ENVELOPE_REQUEST_DELAY_MS = 120;
 const SYSEX_MANUFACTURER = 0x7d;
 const SYSEX_ID = [0x43, 0x31, 0x5a, 0x33];
 const SYSEX_COMMAND_PREVIEW = 0x01;
@@ -28,6 +29,8 @@ const SYSEX_COMMAND_REQUEST_PITCH_ENVELOPE = 0x0c;
 const SYSEX_COMMAND_PITCH_ENVELOPE_RESPONSE = 0x0d;
 const SYSEX_COMMAND_PD2_ENVELOPE_RESPONSE = 0x0e;
 const SYSEX_COMMAND_AMP2_ENVELOPE_RESPONSE = 0x0f;
+const SYSEX_COMMAND_REQUEST_PD2_ENVELOPE = 0x10;
+const SYSEX_COMMAND_REQUEST_AMP2_ENVELOPE = 0x11;
 const ENVELOPE_PROTOCOL_VERSION = 6;
 const MAX_READABLE_ENVELOPE_PROTOCOL_VERSION = 6;
 
@@ -93,6 +96,7 @@ let settingsRequestTimer = null;
 let envelopeReadSession = null;
 let envelopeReadTimer = null;
 let envelopeReadSupported = null;
+let auxiliaryEnvelopeRequestTimer = null;
 let lastLoggedSysexAt = 0;
 let messageImportedDraft = null;
 let lastConsumedHandoffId = null;
@@ -1728,6 +1732,14 @@ function buildRequestPitchEnvelopeSysex(slot) {
   return [0xf0, SYSEX_MANUFACTURER, ...SYSEX_ID, SYSEX_COMMAND_REQUEST_PITCH_ENVELOPE, slot & 0x07, 0xf7];
 }
 
+function buildRequestPd2EnvelopeSysex(slot) {
+  return [0xf0, SYSEX_MANUFACTURER, ...SYSEX_ID, SYSEX_COMMAND_REQUEST_PD2_ENVELOPE, slot & 0x07, 0xf7];
+}
+
+function buildRequestAmp2EnvelopeSysex(slot) {
+  return [0xf0, SYSEX_MANUFACTURER, ...SYSEX_ID, SYSEX_COMMAND_REQUEST_AMP2_ENVELOPE, slot & 0x07, 0xf7];
+}
+
 function canSendSelectedEnvelope() {
   return selected !== 0 &&
     presets[selected].amp.some((stage) => stage.level > 0) &&
@@ -1901,6 +1913,43 @@ function clearEnvelopeReadTimer() {
   }
 }
 
+function clearAuxiliaryEnvelopeRequestTimer() {
+  if (auxiliaryEnvelopeRequestTimer !== null) {
+    window.clearTimeout(auxiliaryEnvelopeRequestTimer);
+    auxiliaryEnvelopeRequestTimer = null;
+  }
+}
+
+function scheduleAuxiliaryEnvelopeRequest(label, slot, buildRequest, applyWaitingState) {
+  if (!envelopeReadSession) return;
+  const output = selectedMidiOutput();
+  if (!output) return;
+
+  clearAuxiliaryEnvelopeRequestTimer();
+  auxiliaryEnvelopeRequestTimer = window.setTimeout(() => {
+    auxiliaryEnvelopeRequestTimer = null;
+    if (!envelopeReadSession) return;
+
+    applyWaitingState();
+    try {
+      const request = buildRequest(slot);
+      output.send(request);
+      logDeveloper(`${label} envelope request sent.`, {
+        slot: slot + 1,
+        output: output.name || output.id || "Unknown output",
+        bytes: request
+      });
+      armEnvelopeReadTimeout();
+    } catch (error) {
+      logDeveloper(`${label} envelope request failed.`, {
+        slot: slot + 1,
+        message: error?.message || "Unknown error",
+        stack: error?.stack || "No stack trace"
+      });
+    }
+  }, AUX_ENVELOPE_REQUEST_DELAY_MS);
+}
+
 function armEnvelopeReadTimeout() {
   clearEnvelopeReadTimer();
   envelopeReadTimer = window.setTimeout(() => {
@@ -1910,7 +1959,13 @@ function armEnvelopeReadTimeout() {
       session.retriesRemaining--;
       envelopeReadTimer = null;
       try {
-        if (session.waitingForPitchSlot !== null) {
+        if (session.waitingForAmp2Slot !== null) {
+          output.send(buildRequestAmp2EnvelopeSysex(session.waitingForAmp2Slot));
+          setStatus(`Still waiting for card Amp2 envelope slot ${session.waitingForAmp2Slot + 1}; retrying readback...`);
+        } else if (session.waitingForPd2Slot !== null) {
+          output.send(buildRequestPd2EnvelopeSysex(session.waitingForPd2Slot));
+          setStatus(`Still waiting for card PD2 envelope slot ${session.waitingForPd2Slot + 1}; retrying readback...`);
+        } else if (session.waitingForPitchSlot !== null) {
           output.send(buildRequestPitchEnvelopeSysex(session.waitingForPitchSlot));
           setStatus(`Still waiting for card pitch envelope slot ${session.waitingForPitchSlot + 1}; retrying readback...`);
         } else if (session.waitingForSlot !== null) {
@@ -1944,6 +1999,7 @@ function armEnvelopeReadTimeout() {
 
     envelopeReadSession = null;
     envelopeReadTimer = null;
+    clearAuxiliaryEnvelopeRequestTimer();
     envelopeReadSupported = false;
     el.requestEnvelopes.disabled = false;
     renderDeveloperPorts();
@@ -2065,6 +2121,8 @@ async function requestCardEnvelopes(reason = "manual", slot = null, expectedEnve
     mask: 0,
     pendingSlots: [],
     waitingForSlot: null,
+    waitingForAmp2Slot: null,
+    waitingForPd2Slot: null,
     waitingForPitchSlot: null,
     lastEnvelopeSlot: null,
     protocolVersion: null,
@@ -2167,6 +2225,11 @@ function handleEnvelopeResponse(data) {
         ? "amp/pd/pitch"
         : "amp/pd standard; pitch may follow separately"
   });
+  if (protocolVersion >= 5) {
+    requestAmp2EnvelopeForSlot(slot);
+    armEnvelopeReadTimeout();
+    return;
+  }
   if (data.length === 89 || protocolVersion >= 4) {
     requestPitchEnvelopeForSlot(slot);
     armEnvelopeReadTimeout();
@@ -2175,27 +2238,22 @@ function handleEnvelopeResponse(data) {
   completeEnvelopeSlotRead(slot);
 }
 
-function requestPitchEnvelopeForSlot(slot) {
-  if (!envelopeReadSession) return;
-  const output = selectedMidiOutput();
-  if (!output) return;
+function requestAmp2EnvelopeForSlot(slot) {
+  scheduleAuxiliaryEnvelopeRequest("Amp2", slot, buildRequestAmp2EnvelopeSysex, () => {
+    envelopeReadSession.waitingForAmp2Slot = slot;
+  });
+}
 
-  envelopeReadSession.waitingForPitchSlot = slot;
-  try {
-    const request = buildRequestPitchEnvelopeSysex(slot);
-    output.send(request);
-    logDeveloper("Pitch envelope request sent.", {
-      slot: slot + 1,
-      output: output.name || output.id || "Unknown output",
-      bytes: request
-    });
-  } catch (error) {
-    logDeveloper("Pitch envelope request failed.", {
-      slot: slot + 1,
-      message: error?.message || "Unknown error",
-      stack: error?.stack || "No stack trace"
-    });
-  }
+function requestPd2EnvelopeForSlot(slot) {
+  scheduleAuxiliaryEnvelopeRequest("PD2", slot, buildRequestPd2EnvelopeSysex, () => {
+    envelopeReadSession.waitingForPd2Slot = slot;
+  });
+}
+
+function requestPitchEnvelopeForSlot(slot) {
+  scheduleAuxiliaryEnvelopeRequest("Pitch", slot, buildRequestPitchEnvelopeSysex, () => {
+    envelopeReadSession.waitingForPitchSlot = slot;
+  });
 }
 
 function handlePd2EnvelopeResponse(data) {
@@ -2229,12 +2287,20 @@ function handlePd2EnvelopeResponse(data) {
     existing.pd2 = pd2;
     existing.pd2Read = true;
   }
+  if (slot === envelopeReadSession.waitingForPd2Slot) {
+    envelopeReadSession.waitingForPd2Slot = null;
+  }
 
   logDeveloper("PD2 envelope response received.", {
     slot: slot + 1,
     length: data.length,
     responseType: "pd2"
   });
+  if ((envelopeReadSession.protocolVersion || 1) >= 5 && slot === envelopeReadSession.lastEnvelopeSlot) {
+    requestPitchEnvelopeForSlot(slot);
+    armEnvelopeReadTimeout();
+    return;
+  }
   maybeCompleteProtocol5SlotRead(slot);
 }
 
@@ -2269,12 +2335,20 @@ function handleAmp2EnvelopeResponse(data) {
     existing.amp2 = amp2;
     existing.amp2Read = true;
   }
+  if (slot === envelopeReadSession.waitingForAmp2Slot) {
+    envelopeReadSession.waitingForAmp2Slot = null;
+  }
 
   logDeveloper("Amp2 envelope response received.", {
     slot: slot + 1,
     length: data.length,
     responseType: "amp2"
   });
+  if ((envelopeReadSession.protocolVersion || 1) >= 5 && slot === envelopeReadSession.lastEnvelopeSlot) {
+    requestPd2EnvelopeForSlot(slot);
+    armEnvelopeReadTimeout();
+    return;
+  }
   maybeCompleteProtocol5SlotRead(slot);
 }
 
@@ -2375,7 +2449,10 @@ function completeEnvelopeSlotRead(slot) {
   if (slot === undefined) envelopeReadSession.pendingSlots.shift();
   else envelopeReadSession.pendingSlots =
     envelopeReadSession.pendingSlots.filter((pendingSlot) => pendingSlot !== slot);
+  clearAuxiliaryEnvelopeRequestTimer();
   envelopeReadSession.waitingForSlot = null;
+  envelopeReadSession.waitingForAmp2Slot = null;
+  envelopeReadSession.waitingForPd2Slot = null;
   envelopeReadSession.waitingForPitchSlot = null;
   envelopeReadSession.lastEnvelopeSlot = null;
   clearEnvelopeReadTimer();

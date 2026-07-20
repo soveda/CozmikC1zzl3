@@ -79,6 +79,10 @@ const WAVE_FAMILIES = [
 ];
 const STAGES = 8;
 const CZ_IMPORT_TIME_SCALE = 0.8;
+const CZ_IMPORT_PITCH_DEPTH_SCALE = 0.25;
+const CZ_IMPORT_SHORT_FINAL_PITCH_SAMPLES = 3000;
+const CZ_IMPORT_FINAL_PITCH_JUMP_LEVELS = 300;
+const C1_PITCH_CENTER = 2048;
 const MIN_DECODED_PATCH_BYTES = 48;
 const MAX_DECODED_PATCH_BYTES = 512;
 const CZ_FULL_PATCH_BYTES = 128;
@@ -496,6 +500,34 @@ function czEnvelopeToC1Stages(stages, timeMin = 240, timeMax = 48000, neutralLev
   ));
 }
 
+function czPitchEnvelopeToC1Stages(stages, timeMin = 240, timeMax = 48000) {
+  const mapped = stages.map((stage) => {
+    const fullRangeLevel = (stage.level / 99) * 4095;
+    const scaledLevel = C1_PITCH_CENTER + ((fullRangeLevel - C1_PITCH_CENTER) * CZ_IMPORT_PITCH_DEPTH_SCALE);
+    return roundStage(
+      stage.inactive ? C1_PITCH_CENTER : scaledLevel,
+      stage.inactive ? 1 : Math.max(1, Math.round(czRateToTime(stage.rate, timeMin, timeMax) * CZ_IMPORT_TIME_SCALE))
+    );
+  });
+  let lastActive = -1;
+  for (let index = mapped.length - 1; index >= 0; index--) {
+    if (mapped[index].time > 1) {
+      lastActive = index;
+      break;
+    }
+  }
+  if (lastActive > 0) {
+    const current = mapped[lastActive];
+    const previous = mapped[lastActive - 1];
+    const finalJump = Math.abs(current.level - previous.level);
+    if (current.time <= CZ_IMPORT_SHORT_FINAL_PITCH_SAMPLES &&
+        finalJump >= CZ_IMPORT_FINAL_PITCH_JUMP_LEVELS) {
+      mapped[lastActive] = { ...current, level: previous.level };
+    }
+  }
+  return mapped;
+}
+
 function czSustainStage(stages) {
   const endStep = Number.isFinite(stages.endStep) ? stages.endStep : 8;
   const index = stages.findIndex((stage, stageIndex) => (
@@ -570,9 +602,9 @@ function buildDraftPreset(
   const dcwEnvelope = czEnvelopeToC1Stages(pdPair.pd1, 120, 30000);
   const dcw2Envelope = czEnvelopeToC1Stages(pdPair.pd2, 120, 30000);
   const pitchStages = selectPitchStages(czPatch, pitchMode);
-  const pitchEnvelope = czEnvelopeToC1Stages(pitchStages, 240, 48000, 2048);
-  const dco1PitchEnvelope = czEnvelopeToC1Stages(cloneCzEnvelopeStages(czPatch.dco1Pitch), 240, 48000, 2048);
-  const dco2PitchEnvelope = czEnvelopeToC1Stages(cloneCzEnvelopeStages(czPatch.dco2Pitch), 240, 48000, 2048);
+  const pitchEnvelope = czPitchEnvelopeToC1Stages(pitchStages, 240, 48000);
+  const dco1PitchEnvelope = czPitchEnvelopeToC1Stages(cloneCzEnvelopeStages(czPatch.dco1Pitch), 240, 48000);
+  const dco2PitchEnvelope = czPitchEnvelopeToC1Stages(cloneCzEnvelopeStages(czPatch.dco2Pitch), 240, 48000);
   const pitch2Envelope = pitchMode === "dual" ? dco2PitchEnvelope : pitchEnvelope;
   const sustain = [
     czSustainStage(ampPair.amp1),
@@ -583,10 +615,10 @@ function buildDraftPreset(
     czSustainStage(ampPair.amp2)
   ];
   const pitchAlternatives = {
-    merged: czEnvelopeToC1Stages(mergeCzEnvelopes(czPatch.dco1Pitch, czPatch.dco2Pitch), 240, 48000, 2048),
+    merged: czPitchEnvelopeToC1Stages(mergeCzEnvelopes(czPatch.dco1Pitch, czPatch.dco2Pitch), 240, 48000),
     dco1: dco1PitchEnvelope,
     dco2: dco2PitchEnvelope,
-    difference: czEnvelopeToC1Stages(differenceCzPitchStages(czPatch.dco1Pitch, czPatch.dco2Pitch), 240, 48000, 2048)
+    difference: czPitchEnvelopeToC1Stages(differenceCzPitchStages(czPatch.dco1Pitch, czPatch.dco2Pitch), 240, 48000)
   };
   const detune = clamp(Math.round((decodedBytes[48] ?? 128) / 255 * 4095), 0, 4095);
   const ring = clamp(Math.round((decodedBytes[49] ?? 0) / 255 * 1200), 0, 4095);
