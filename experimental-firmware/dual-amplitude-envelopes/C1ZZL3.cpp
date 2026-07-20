@@ -1273,7 +1273,7 @@ private:
 
     void sendWebMidiPitchEnvelopeResponse(uint8_t slot)
     {
-        uint8_t frame[95] = {
+        uint8_t frame[89] = {
             0xF0u,
             WebMidiManufacturer,
             WebMidiId[0],
@@ -1295,8 +1295,6 @@ private:
             appendWebMidiUint14(frame, offset, envelope.pitch2[i].level);
             appendWebMidiUint21(frame, offset, envelope.pitch2[i].time);
         }
-        for (uint32_t i = 0; i < 6u; ++i)
-            frame[offset++] = sanitizeSustainStage(envelope.sustain[i]);
         frame[offset++] = 0xF7u;
         tud_midi_stream_write(0, frame, offset);
     }

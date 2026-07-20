@@ -2318,6 +2318,11 @@ function handlePitchEnvelopeResponse(data) {
     existing.pitch = pitch;
     existing.pitch2 = pitch2;
     if (sustain) existing.sustain = normalizeSustainStages(sustain);
+    else if (envelopeReadSession.reason === "save" &&
+        envelopeReadSession.slot === slot &&
+        envelopeReadSession.expectedEnvelope?.sustain) {
+      existing.sustain = normalizeSustainStages(envelopeReadSession.expectedEnvelope.sustain);
+    }
     existing.pitchRead = true;
   }
   logDeveloper("Pitch envelope response received.", {
@@ -2337,8 +2342,9 @@ function maybeCompleteProtocol5SlotRead(slot) {
 
   const existing = envelopeReadSession.cardEnvelopes.get(slot);
   if (!existing?.amp2Read || !existing?.pd2Read) return;
+  if ((envelopeReadSession.protocolVersion || 1) >= 6 && !existing.pitchRead) return;
 
-  logDeveloper("Dual-amplitude envelope readback completed from Amp2/PD2 responses; pitch and sustain may apply later.", {
+  logDeveloper("Dual-amplitude envelope readback completed from Amp2/PD2 responses.", {
     slot: slot + 1,
     pitchRead: Boolean(existing.pitchRead)
   });

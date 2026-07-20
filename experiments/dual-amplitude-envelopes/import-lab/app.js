@@ -77,6 +77,8 @@ const WAVE_FAMILIES = [
   { label: "Resonant triangle window", value: 6, hint: "upper CC23 range" },
   { label: "Resonant trapezoid window", value: 7, hint: "upper CC23 range" },
 ];
+const STAGES = 8;
+const CZ_IMPORT_TIME_SCALE = 0.8;
 const MIN_DECODED_PATCH_BYTES = 48;
 const MAX_DECODED_PATCH_BYTES = 512;
 const CZ_FULL_PATCH_BYTES = 128;
@@ -490,7 +492,7 @@ function selectAmpEnvelopePair(czPatch, mode) {
 function czEnvelopeToC1Stages(stages, timeMin = 240, timeMax = 48000, neutralLevel = 0) {
   return stages.map((stage) => roundStage(
     stage.inactive ? neutralLevel : (stage.level / 99) * 4095,
-    stage.inactive ? 1 : czRateToTime(stage.rate, timeMin, timeMax)
+    stage.inactive ? 1 : Math.max(1, Math.round(czRateToTime(stage.rate, timeMin, timeMax) * CZ_IMPORT_TIME_SCALE))
   ));
 }
 
