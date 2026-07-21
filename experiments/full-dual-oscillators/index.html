@@ -129,8 +129,8 @@
 
         <div class="output-actions editor-actions">
           <button id="sendSysex" type="button" title="Load this envelope until reset">Load RAM</button>
-          <button id="loadEnvelopeAndSettings" type="button" title="Load this envelope and send the current settings until reset">Load Envelope + Settings</button>
-          <button id="flashSysex" type="button" title="Save this envelope after reset">Save Envelope</button>
+          <button id="loadEnvelopeAndSettings" type="button" title="Load this envelope and its saved settings until reset">Load Envelope + Settings</button>
+          <button id="flashSysex" type="button" title="Save this envelope, name, and current settings after reset">Save Envelope</button>
           <button id="deleteSlot" type="button" title="Delete the selected custom slot from card flash">Delete Envelope Slot</button>
           <button id="requestEnvelopes" type="button" title="Load saved card envelopes into the editor">Read Envelopes from Card</button>
           <button id="requestSettings" type="button" title="Load current card settings into the editor">Read Settings from Card</button>
@@ -138,7 +138,7 @@
           <button id="resetPreset" type="button">Reset Preset</button>
         </div>
         <div class="volatility-warning" role="note">
-          <strong>Temporary changes:</strong> Load RAM, Load Envelope + Settings, and Send Settings are lost when the card restarts. This experimental firmware can load Amp1/Amp2, PD1/PD2, and Pitch1/Pitch2 separately. To make the current settings the hardware baseline, move the switch from middle to down and hold it until the card confirms the save.
+          <strong>Temporary changes:</strong> Load RAM, Load Envelope + Settings, and Send Settings are lost when the card restarts. Save Envelope now stores the envelope, slot name, and current settings together for this experiment. To make the global hardware startup baseline, move the switch from middle to down and hold it until the card confirms the save.
         </div>
       </section>
 
