@@ -1,4 +1,4 @@
-# C1ZZL3 Full Dual Oscillator Web Experiment
+# C1ZZL3 Full Dual Oscillator Stable Beta
 
 This folder contains the Web MIDI UI for the stable protocol v9
 full-dual-oscillator firmware. It starts from the tested dual-amplitude v6
@@ -24,6 +24,9 @@ stable full-dual workflow deliberately.
   - detune, ring, noise, MIDI input channel, Turing range, and Turing MIDI
 - Import Lab decodes separate CZ Line 1 and Line 2 oscillator waveform/window
   words and maps them to oscillator 1 and oscillator 2 wave families.
+- Import Lab detects single-line CZ patches from the CZ line mode byte and
+  mirrors the active line into both C1ZZL3 oscillator lanes; true dual-line
+  patches preserve separate lanes.
 - Protocol v7/v8/v9 settings readback returns a 24-byte response with separate
   oscillator wave-family controls.
 - Envelope send/save keeps the protocol v6 lane payload shape, with protocol

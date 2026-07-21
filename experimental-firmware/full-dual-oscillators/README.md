@@ -1,9 +1,10 @@
 # C1ZZL3 Full Dual Oscillator Firmware
 
-This folder contains the stable protocol v9 full-dual-oscillator firmware.
+This folder contains the latest stable beta protocol v9 full-dual-oscillator
+firmware.
 
 It starts from the tested protocol v6 dual-amplitude rollback and keeps the
-same oscillator lookup tables. The new experiment adds independent oscillator
+same oscillator lookup tables. This stable beta adds independent oscillator
 wave-family controls through Web MIDI settings while preserving the existing
 hardware panel and Turing machine behaviour.
 
@@ -56,13 +57,7 @@ The CMake build creates:
 experimental-firmware/full-dual-oscillators/build/C1ZZL3_FULL_DUAL_OSCILLATORS.uf2
 ```
 
-The named test UF2 is:
-
-```text
-experimental-firmware/full-dual-oscillators/C1ZZL3_FULL_DUAL_OSCILLATORS_PROTOCOL_V8.uf2
-```
-
-The current stable full-dual build is:
+The current stable beta full-dual build is:
 
 ```text
 experimental-firmware/full-dual-oscillators/C1ZZL3_FULL_DUAL_OSCILLATORS_PROTOCOL_V9.uf2
@@ -89,5 +84,5 @@ This first pass does not make that tradeoff.
 Protocol v9 treats saved custom slots as sound presets:
 the card slot should now read back envelope shape, slot name, and performance
 settings together. `Read Envelopes from Card` also restores the saved settings
-for each slot in the editor. Protocol v8 remains the rollback if the
-performance setting handoff needs more work.
+for each slot in the editor. Older v7/v8 full-dual UF2s are archived under
+`experimental-firmware/archive/superseded-20260721/`.

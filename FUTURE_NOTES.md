@@ -66,6 +66,52 @@ build rather than replace it. If the protocol v3 test passes, the next deeper
 experiment is not simply "more pitch lanes" but a fuller split of the two
 oscillator paths.
 
+## Three Production Tracks
+
+Future releases should avoid forcing every user onto the most complex version.
+The clearer product shape is three maintained choices:
+
+- `Simple / Workshop Computer`: the current Workshop Computer release style,
+  with the simpler physical interface and the least cognitive load.
+- `Advanced With Turing`: the current protocol v9 stable beta direction, using
+  the current full-dual Web UI while preserving the Turing machine mode on the
+  hardware switch.
+- `Advanced Dual Oscillator`: a future v10-style build that removes or greatly
+  reduces the Turing machine role so the physical switch/knob UI can expose
+  more direct oscillator 1 and oscillator 2 controls.
+
+The v10 no-Turing branch should be developed as a separate experiment, not as a
+replacement for production or the v9 stable beta. It should answer whether the
+extra physical dual-oscillator control is worth losing the Turing mode.
+
+Candidate v10 hardware UI:
+
+- switch up: oscillator 1 edit page
+  - Main: oscillator 1 pitch/base or shared pitch
+  - X: oscillator 1 phase distortion
+  - Y: oscillator 1 wave family
+- switch middle: oscillator 2 edit page
+  - Main: oscillator 2 detune, level, or pitch offset
+  - X: oscillator 2 phase distortion
+  - Y: oscillator 2 wave family
+- switch down hold: global performance page
+  - Main: detune/fine or mix behaviour
+  - X: ring modulation
+  - Y: noise/grit
+
+Open questions before firmware work:
+
+- Whether oscillator 2 needs level/mix on the panel, or whether detune/ring/noise
+  are enough.
+- Whether pitch remains shared with separate pitch envelopes, or each oscillator
+  gets a distinct pitch base.
+- Whether CV In 1 / CV In 2 should affect both oscillators equally or follow
+  the currently selected oscillator page.
+- How LED feedback should distinguish oscillator 1 edit, oscillator 2 edit,
+  and performance edit.
+- Whether a no-Turing build should keep Turing CV/pulse code compiled out to
+  save CPU/RAM, or merely hide the mode from the panel.
+
 Current decision:
 
 - Keep `experiments/dual-pitch-envelopes` and

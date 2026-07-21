@@ -48,7 +48,7 @@ Previous UF2s are archived in:
 uf2/archive/
 ```
 
-Current experimental and beta-test UF2s are collected in:
+Visible alternate UF2s are collected in:
 
 ```text
 experimental-firmware/active-uf2s/
@@ -184,97 +184,47 @@ Import Lab flow:
 4. Use `Open In Envelope Lab` to carry the draft into the main editor.
 5. In Envelope Lab, review the result, adjust if needed, and send or save it.
 
-## Beta Test: DCO Pitch Import
+## Latest Stable Beta: Full Dual Oscillator Protocol v9
 
-Hosted beta:
-
-```text
-https://soveda.github.io/CozmikC1zzl3/experiments/dco-pitch-handling/import-lab/
-```
-
-This beta uses the current production firmware and does not require a different
-UF2. It is for comparing how decoded CZ DCO1 and DCO2 pitch envelopes should be
-mapped into the single C1ZZL3 pitch lane before any future firmware work on
-separate oscillator pitch envelopes.
-
-Beta pitch options:
-
-- `Merged DCO1 + DCO2 average`: recommended default and usually the most useful.
-- `DCO1 pitch only`: useful when oscillator 1 has the clearer contour.
-- `DCO2 pitch only`: useful when oscillator 2 has the clearer contour.
-- `Advanced: DCO1 / DCO2 difference emphasis`: can be interesting when the two
-  envelopes differ, but may lose character when they are too similar.
-
-The Import Labs also expose CZ line choices for amplitude and phase distortion:
-
-- `Merged DCA1 + DCA2 average`: keeps the previous default behaviour.
-- `DCA1 amplitude only` / `DCA2 amplitude only`: useful when one CZ line carries
-  the important loudness contour.
-- `Merged DCW1 + DCW2 average`: keeps the previous default PD translation.
-- `DCW1 phase distortion only` / `DCW2 phase distortion only`: useful when one
-  CZ line carries the important brightness/phase contour.
-
-## Stable Dual Pitch Firmware
-
-Hosted experiment:
+Hosted stable beta lab:
 
 ```text
-https://soveda.github.io/CozmikC1zzl3/experiments/dual-pitch-envelopes/import-lab/
+https://soveda.github.io/CozmikC1zzl3/experiments/full-dual-oscillators/
 ```
 
-Matching test UF2:
+Hosted stable beta Import Lab:
 
 ```text
-experimental-firmware/active-uf2s/C1ZZL3_STABLE_DUAL_PITCH_PROTOCOL_V3.uf2
+https://soveda.github.io/CozmikC1zzl3/experiments/full-dual-oscillators/import-lab/
 ```
 
-This version lives alongside the stable main editor rather than replacing it.
-It is the stable dual-pitch reference for envelope protocol version 3, where
-imported CZ DCO1 pitch is sent to oscillator 1 and imported CZ DCO2 pitch is
-sent to oscillator 2.
+Matching stable beta UF2:
+
+```text
+experimental-firmware/active-uf2s/C1ZZL3_STABLE_FULL_DUAL_OSCILLATORS_PROTOCOL_V9.uf2
+```
+
+This version lives alongside production rather than replacing it. It is the
+latest stable beta for the full-dual oscillator workflow.
 
 Current scope:
 
-- Requires the matching dual-pitch experimental firmware.
+- Requires the matching protocol v9 stable beta firmware.
 - Preserves the production editor and production UF2 unchanged.
-- Accepts older single-pitch envelope payloads by copying the pitch lane to both
-  oscillators.
-- Sends and reads separate oscillator pitch lanes.
-- Uses the same DCA/DCW line-selection controls as the other Import Labs.
-- Keeps direct pitch graph editing focused on the main pitch lane for now, while
-  preserving imported oscillator 2 pitch data for firmware testing.
+- Sends and reads Amp1/Amp2, PD1/PD2, Pitch1/Pitch2, CZ hold/end markers, slot
+  names, saved performance settings, and separate oscillator wave-family
+  settings.
+- Provides `Save Sound Preset` for envelope/name/settings together.
+- Provides `Save Envelope Only` for envelope/name without changing that slot's
+  saved settings.
+- Import Lab decodes separate CZ Line 1 and Line 2 amplitude, DCW, DCO pitch,
+  and oscillator wave settings.
+- Import Lab detects single-line CZ patches from the line mode byte and mirrors
+  the active line into both C1ZZL3 oscillator lanes.
 
-## Experiment: Dual Oscillator Lanes
-
-Current first-pass firmware:
-
-```text
-experimental-firmware/active-uf2s/C1ZZL3_EXPERIMENT_DUAL_OSCILLATOR_LANES_PROTOCOL_V4.uf2
-```
-
-Experiment folder:
-
-```text
-experimental-firmware/dual-oscillator-lanes/
-```
-
-Hosted web experiment:
-
-```text
-https://soveda.github.io/CozmikC1zzl3/experiments/dual-oscillator-lanes/import-lab/
-```
-
-This is the next experiment after stable dual pitch. It tests envelope protocol
-version 4 with an optional second phase-distortion envelope lane:
-
-- Oscillator 1 uses PD lane 1.
-- Oscillator 2 uses PD lane 2.
-- Older protocol v3 dual-pitch payloads still load by copying PD lane 1 to PD
-  lane 2.
-- Pitch 1 and pitch 2 behaviour is inherited from the stable dual-pitch build.
-- The matching web UI lives in `experiments/dual-oscillator-lanes/` and sends
-  PD1, pitch1, pitch2, and PD2 to the card for RAM and save testing.
-- Protocol v4 saved card slots preserve and read back PD1 and PD2 separately.
+Older beta web apps and UF2s are archived under
+`experiments/archive/superseded-20260721/` and
+`experimental-firmware/archive/superseded-20260721/`.
 
 ## How To Use The Editor
 
@@ -292,13 +242,13 @@ Button quick reference:
 - `Load Envelope + Settings`: temporarily load the selected envelope and send
   all current settings in one action.
 - `Save Envelope`: store the selected custom envelope in flash.
-- Experimental full-dual lab: `Save Envelope Only` stores the envelope/name
+- Stable beta full-dual lab: `Save Envelope Only` stores the envelope/name
   without changing that slot's saved settings, while `Save Sound Preset` stores
   envelope/name/settings together.
 - `Delete Envelope Slot`: clear the selected custom slot from card flash.
 - `Read Envelopes from Card`: load occupied card slots into the editor without
   overwriting changed local drafts.
-- Experimental full-dual lab: `Read Envelopes from Card` also restores the
+- Stable beta full-dual lab: `Read Envelopes from Card` also restores the
   saved settings for each sound-preset slot.
 - `Read Settings from Card`: pull the current performance settings into the editor.
 - `Send Settings`: send the current performance settings to the card.
@@ -371,8 +321,12 @@ FUTURE_NOTES.md
 - `C1ZZL3_LUT.cpp` / `C1ZZL3_LUT.h`: phase-distortion lookup tables
 - `FUTURE_NOTES.md`: deferred optimisation and cleanup notes
 - `web-midi/editor/`: browser editor
+- `experiments/cz-import/`: production C1ZZL3 Import Lab
+- `experiments/full-dual-oscillators/`: latest stable beta Web MIDI lab
 - `uf2/C1ZZL3.uf2`: current stable firmware
 - `uf2/archive/`: older UF2s and rollbacks
+- `experimental-firmware/active-uf2s/`: visible production, Workshop release,
+  and stable beta UF2 copies
 - `archive/`: source snapshots and experiment notes
 - `CARD_README.md`: user-facing card guide
 - `info.yaml`: Workshop Computer site metadata
