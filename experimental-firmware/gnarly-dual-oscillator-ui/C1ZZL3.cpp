@@ -425,7 +425,7 @@ private:
         uint16_t version;
         uint16_t size;
         int32_t osc2Detune;
-        int32_t osc2Level;
+        int32_t osc2IntervalControl;
         int32_t pdControl;
         int32_t pd2Control;
         int32_t waveControl;
@@ -613,7 +613,9 @@ private:
             oscCZ(phase1, freq1, pd1, wave1, noiseAmt);
 
         int32_t freq2 =
-            applyPitchEnvelopeToFrequency(applyDetune(freq, osc2Detune), pitch2EnvelopeLevel);
+            applyPitchEnvelopeToFrequency(
+                applyDetune(applyOsc2BaseInterval(freq), osc2Detune),
+                pitch2EnvelopeLevel);
 
         int32_t osc2 =
             oscCZ(phase2, freq2, pd2, wave2, noiseAmt);
@@ -621,10 +623,7 @@ private:
         int32_t osc2Raw = osc2;
         osc2 = osc2Raw;
 
-        int32_t ringDrive = osc2Level;
-        if (ringDrive < 2048)
-            ringDrive = 2048;
-        int32_t ringCarrier = (osc2Raw * ringDrive) >> 12;
+        int32_t ringCarrier = osc2Raw;
         int32_t ringSig = clip((osc1 * ringCarrier) >> 10);
         int32_t ringMix = (ring * 3840) >> 12;
         osc1 = mix(osc1, ringSig, ringMix);
@@ -879,6 +878,20 @@ private:
             ((pitchEnvelope - (int32_t)PitchEnvelopeCenter) *
              PitchEnvelopeSemitoneRange * 4096) / (int32_t)PitchEnvelopeCenter;
 
+        return applySemitoneOffsetToFrequency(freq, semitoneQ12);
+    }
+
+    int32_t applyOsc2BaseInterval(int32_t freq)
+    {
+        int32_t semitoneQ12 =
+            ((clamp12(osc2IntervalControl) - 2048) *
+             PitchEnvelopeSemitoneRange * 4096) / 2047;
+
+        return applySemitoneOffsetToFrequency(freq, semitoneQ12);
+    }
+
+    int32_t applySemitoneOffsetToFrequency(int32_t freq, int32_t semitoneQ12)
+    {
         int32_t rangeQ12 = PitchEnvelopeSemitoneRange * 4096;
         if (semitoneQ12 < -rangeQ12)
             semitoneQ12 = -rangeQ12;
@@ -2094,7 +2107,7 @@ private:
         const bool osc2Page = mode == Switch::Middle;
         LedBrightness(0, osc2Page ? pd2 : pd1);
         LedBrightness(1, osc2Page ? wave2 : wave1);
-        LedBrightness(2, osc2Level);
+        LedBrightness(2, osc2IntervalControl);
         LedBrightness(3, osc2Ring);
         LedBrightness(4, osc2Noise);
         LedBrightness(5, mode == Switch::Up ? 1365 : mode == Switch::Middle ? 2730 : 4095);
@@ -2351,9 +2364,9 @@ private:
     void updateAltControls(int32_t main, int32_t x, int32_t y)
     {
         if (altMainPickedUp ||
-            pickupAltControl(main, altMainEntry, clamp12(osc2Detune + 2048), altMainPickedUp))
+            pickupAltControl(main, altMainEntry, osc2IntervalControl, altMainPickedUp))
         {
-            setDetuneFromControl(main);
+            osc2IntervalControl = main;
         }
 
         if (altXPickedUp ||
@@ -2438,10 +2451,6 @@ private:
         osc2Detune = clamp12(control) - 2048;
         if (osc2Detune > -32 && osc2Detune < 32)
             osc2Detune = 0;
-
-        osc2Level = osc2Detune < 0 ? -osc2Detune : osc2Detune;
-        osc2Level <<= 1;
-        if (osc2Level > 4095) osc2Level = 4095;
     }
 
     void updateTuringModeControls(int32_t main, int32_t x, int32_t y)
@@ -2553,7 +2562,7 @@ private:
         state.version = SaveVersion;
         state.size = sizeof(SavedPerformanceState);
         state.osc2Detune = osc2Detune;
-        state.osc2Level = osc2Level;
+        state.osc2IntervalControl = osc2IntervalControl;
         state.pdControl = pdControl;
         state.pd2Control = pd2Control;
         state.waveControl = waveControl;
@@ -2916,7 +2925,7 @@ private:
     {
         return
             a.osc2Detune == b.osc2Detune &&
-            a.osc2Level == b.osc2Level &&
+            a.osc2IntervalControl == b.osc2IntervalControl &&
             a.pdControl == b.pdControl &&
             a.pd2Control == b.pd2Control &&
             a.waveControl == b.waveControl &&
@@ -2935,7 +2944,7 @@ private:
             return;
 
         osc2Detune = state.osc2Detune;
-        osc2Level = clamp12(state.osc2Level);
+        osc2IntervalControl = clamp12(state.osc2IntervalControl);
         pdControl = clamp12(state.pdControl);
         pd2Control = clamp12(state.pd2Control);
         waveControl = clamp12(state.waveControl);
@@ -3344,7 +3353,7 @@ private:
     uint8_t turingCvOctaveRange = DefaultTuringCvOctaveRange;
     int32_t smoothedFreq = 0;
     int32_t osc2Detune = 0;
-    int32_t osc2Level = 0;
+    int32_t osc2IntervalControl = 2048;
     int32_t osc2Ring = 0;
     int32_t osc2Noise = 0;
     int32_t synthMainEntry = 2048;

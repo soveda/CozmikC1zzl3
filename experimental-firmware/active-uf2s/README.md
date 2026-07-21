@@ -9,7 +9,7 @@ This folder collects the UF2s that should remain visible for users.
 | `C1ZZL3_WORKSHOP_RELEASE_84_V1.3.uf2` | Public Workshop Computer release 84 / version 1.3, kept as an always-available option. | Workshop release web editor |
 | `C1ZZL3_PRODUCTION_1.4.uf2` | `C1ZZL3 Core`: current stable production firmware. | `web-midi/editor/` and `experiments/cz-import/` |
 | `C1ZZL3_STABLE_FULL_DUAL_OSCILLATORS_PROTOCOL_V9.uf2` | `C1ZZL3 Rad`: latest stable beta / advanced-with-Turing version with sound presets, envelope-only save, Amp1/Amp2, PD1/PD2, Pitch1/Pitch2, CZ hold/end markers, slot names, saved performance settings, and separate oscillator wave families. | `experiments/full-dual-oscillators/` |
-| `C1ZZL3_GNARLY_DUAL_OSCILLATOR_UI_PROTOCOL_V10.uf2` | `C1ZZL3 Gnarly`: first hardware-UI experiment with switch-up for oscillator 1, switch-middle for oscillator 2, and switch-down hold for performance/save. | `experiments/full-dual-oscillators/` |
+| `C1ZZL3_GNARLY_DUAL_OSCILLATOR_UI_PROTOCOL_V10.uf2` | `C1ZZL3 Gnarly`: first hardware-UI experiment with switch-up for oscillator 1, switch-middle for oscillator 2, and switch-down hold for oscillator 2 base interval/ring/noise plus save. | `experiments/full-dual-oscillators/` |
 
 ## Notes
 

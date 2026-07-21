@@ -17,14 +17,14 @@ Core and Rad are not changed by this experiment.
   - X: oscillator 2 baseline phase distortion
   - Y: oscillator 2 wave family
 - Switch down hold: performance and save page
-  - Main: oscillator 2 detune
+  - Main: oscillator 2 base interval/spread, centred at unison
   - X: ring modulation
   - Y: noise/grit
 
 LED 1 shows the active page's PD amount, LED 2 shows the active page's wave
-position, LEDs 3-5 retain detune/ring/noise feedback, and LED 6 shows the
-current edit page brightness: low for oscillator 1, medium for oscillator 2,
-full for performance/save.
+position, LED 3 shows oscillator 2 base interval/spread, LEDs 4-5 retain
+ring/noise feedback, and LED 6 shows the current edit page brightness: low for
+oscillator 1, medium for oscillator 2, full for performance/save.
 
 ## Scope
 
@@ -35,6 +35,8 @@ full for performance/save.
 - The Web MIDI protocol remains compatible with the Rad/full-dual web UI.
 - The new oscillator 2 baseline PD control is saved in this Gnarly performance
   state, but is not yet exposed as a separate Web MIDI setting.
+- Oscillator 2 base interval/spread is also saved as a Gnarly hardware
+  performance setting.
 
 ## Build
 
