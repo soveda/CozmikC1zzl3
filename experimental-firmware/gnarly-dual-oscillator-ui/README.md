@@ -1,0 +1,52 @@
+# C1ZZL3 Gnarly Dual Oscillator UI Firmware
+
+This folder contains the first v10/Gnarly hardware-UI experiment. It starts
+from the protocol v9 Rad full-dual oscillator firmware, but changes the
+Workshop Computer switch/knob mapping so the panel exposes both oscillators.
+
+Core and Rad are not changed by this experiment.
+
+## Hardware UI
+
+- Switch up: oscillator 1 edit page
+  - Main: shared pitch
+  - X: oscillator 1 baseline phase distortion
+  - Y: oscillator 1 wave family
+- Switch middle: oscillator 2 edit page
+  - Main: oscillator 2 detune
+  - X: oscillator 2 baseline phase distortion
+  - Y: oscillator 2 wave family
+- Switch down hold: performance and save page
+  - Main: oscillator 2 detune
+  - X: ring modulation
+  - Y: noise/grit
+
+LED 1 shows the active page's PD amount, LED 2 shows the active page's wave
+position, LEDs 3-5 retain detune/ring/noise feedback, and LED 6 shows the
+current edit page brightness: low for oscillator 1, medium for oscillator 2,
+full for performance/save.
+
+## Scope
+
+- Turing mode is no longer exposed on switch up.
+- Turing internals are not removed yet; this first pass is a hardware UI test,
+  not a CPU/RAM cleanup.
+- CV and pulse outputs are held low during the synth voice in this experiment.
+- The Web MIDI protocol remains compatible with the Rad/full-dual web UI.
+- The new oscillator 2 baseline PD control is saved in this Gnarly performance
+  state, but is not yet exposed as a separate Web MIDI setting.
+
+## Build
+
+From the repository root:
+
+```sh
+cmake -S experimental-firmware/gnarly-dual-oscillator-ui -B experimental-firmware/gnarly-dual-oscillator-ui/build -DPICO_NO_PICOTOOL=1
+cmake --build experimental-firmware/gnarly-dual-oscillator-ui/build -j2
+```
+
+The CMake build creates:
+
+```text
+experimental-firmware/gnarly-dual-oscillator-ui/build/C1ZZL3_GNARLY_DUAL_OSCILLATOR_UI.uf2
+```
