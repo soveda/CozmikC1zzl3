@@ -26,11 +26,16 @@ firmware experiment passes hardware testing.
   words and maps them to oscillator 1 and oscillator 2 wave families.
 - Protocol v7/v8/v9 settings readback returns a 24-byte response with separate
   oscillator wave-family controls.
-- Envelope send/save keeps the protocol v6 lane payload shape and uses
-  protocol v9 to identify the full dual-oscillator firmware generation with
-  slot-name and per-slot performance setting readback.
+- Envelope send/save keeps the protocol v6 lane payload shape, with protocol
+  v9 adding a sound-preset payload that includes slot-name and per-slot
+  performance setting readback.
 - Card slot readback now restores the saved 16-character slot name and its
   saved settings.
+- `Save Envelope Only` updates the slot envelope/name while leaving that slot's
+  saved settings unchanged.
+- `Save Sound Preset` stores the selected envelope/name and the current
+  settings together.
+- `Read Envelopes from Card` also restores saved settings for card slots.
 
 ## Matching Firmware
 
@@ -67,5 +72,5 @@ controls, while switch down remains detune/ring/noise.
 
 Protocol v9 saves performance settings with each custom envelope slot,
 including PD, detune, ring, noise, MIDI/Turing settings, and oscillator 1/2 wave
-families. This is still labelled as an experiment until save/read/load
-behaviour passes.
+families. The UI exposes both envelope-only and sound-preset save paths so the
+two behaviours can be tested separately.

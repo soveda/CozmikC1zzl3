@@ -185,6 +185,7 @@ const el = {
   copySysex: document.querySelector("#copySysex"),
   sendSysex: document.querySelector("#sendSysex"),
   loadEnvelopeAndSettings: document.querySelector("#loadEnvelopeAndSettings"),
+  saveEnvelopeOnly: document.querySelector("#saveEnvelopeOnly"),
   flashSysex: document.querySelector("#flashSysex"),
   deleteSlot: document.querySelector("#deleteSlot"),
   requestSettings: document.querySelector("#requestSettings"),
@@ -1490,7 +1491,8 @@ function selectedMidiOutput() {
   return collectMidiPorts(midiAccess.outputs)[0] || null;
 }
 
-async function sendSysex(command = SYSEX_COMMAND_PREVIEW) {
+async function sendSysex(command = SYSEX_COMMAND_PREVIEW, options = {}) {
+  const includePerformance = options.includePerformance !== false;
   if (sendingSysex) {
     setStatus("SysEx send already in progress.");
     return;
@@ -1513,7 +1515,7 @@ async function sendSysex(command = SYSEX_COMMAND_PREVIEW) {
 
   let frame;
   try {
-    frame = buildSysex(command);
+    frame = buildSysex(command, { includePerformance });
   } catch (error) {
     logDeveloper("SysEx build failed.", {
       command,
@@ -1529,13 +1531,19 @@ async function sendSysex(command = SYSEX_COMMAND_PREVIEW) {
   const isFlash = command === SYSEX_COMMAND_SAVE;
   const slot = clampInt(el.customSlot.value, 0, CUSTOM_SLOT_COUNT - 1);
   const expectedEnvelope = isFlash
-    ? { ...structuredClone(presets[selected]), performance: normalizePerformanceSettings(performanceSettings) }
+    ? {
+        ...structuredClone(presets[selected]),
+        performance: includePerformance
+          ? normalizePerformanceSettings(performanceSettings)
+          : normalizePerformanceSettings(presets[selected].performance)
+      }
     : null;
   const sendCooldownMs = isFlash ? 1800 : 250;
   const summary = frameSummary();
   sendingSysex = true;
   el.sendSysex.disabled = true;
   el.loadEnvelopeAndSettings.disabled = true;
+  el.saveEnvelopeOnly.disabled = true;
   el.flashSysex.disabled = true;
   el.deleteSlot.disabled = true;
   try {
@@ -1551,6 +1559,7 @@ async function sendSysex(command = SYSEX_COMMAND_PREVIEW) {
     sendingSysex = false;
     el.sendSysex.disabled = false;
     el.loadEnvelopeAndSettings.disabled = false;
+    el.saveEnvelopeOnly.disabled = false;
     el.flashSysex.disabled = false;
     el.deleteSlot.disabled = false;
     setStatus("Web MIDI send failed. Open Developer tools for details.");
@@ -1558,22 +1567,30 @@ async function sendSysex(command = SYSEX_COMMAND_PREVIEW) {
   }
   const slotLabel = `Custom ${slot + 1}`;
   const status = isFlash
-    ? `Saved sound preset ${slotLabel}; after reset it appears after the factory presets. Amp max ${summary.ampMax}, ${summary.seconds}s.`
+    ? includePerformance
+      ? `Saved sound preset ${slotLabel}; after reset it appears after the factory presets. Amp max ${summary.ampMax}, ${summary.seconds}s.`
+      : `Saved envelope only ${slotLabel}; saved settings for this slot were left unchanged. Amp max ${summary.ampMax}, ${summary.seconds}s.`
     : `Loaded ${slotLabel} until reset. Amp max ${summary.ampMax}, ${summary.seconds}s.`;
   if (isFlash) {
-    presets[selected].performance = normalizePerformanceSettings(performanceSettings);
+    if (includePerformance) {
+      presets[selected].performance = normalizePerformanceSettings(performanceSettings);
+    }
     bindSelectedPresetToSlot(slot);
     if (envelopeReadSupported === true) {
       window.setTimeout(() => requestCardEnvelopes("save", slot, expectedEnvelope), SAVE_VERIFY_DELAY_MS);
     }
   }
-  pulseButton(isFlash ? el.flashSysex : el.sendSysex, isFlash ? "Saved" : "Loaded");
+  const pulseTarget = isFlash
+    ? includePerformance ? el.flashSysex : el.saveEnvelopeOnly
+    : el.sendSysex;
+  pulseButton(pulseTarget, isFlash ? "Saved" : "Loaded");
   setStatus(`${status} ${frame.length} byte SysEx to ${output.name || "MIDI output"}.`);
 
   window.setTimeout(() => {
     sendingSysex = false;
     el.sendSysex.disabled = false;
     el.loadEnvelopeAndSettings.disabled = false;
+    el.saveEnvelopeOnly.disabled = false;
     el.flashSysex.disabled = false;
     el.deleteSlot.disabled = false;
   }, sendCooldownMs);
@@ -1597,11 +1614,12 @@ async function loadEnvelopeAndSettings() {
 
   try {
     const usedStoredSettings = applyPerformanceSettings(presets[selected].performance);
-    const envelopeFrame = buildSysex(SYSEX_COMMAND_PREVIEW);
+    const envelopeFrame = buildSysex(SYSEX_COMMAND_PREVIEW, { includePerformance: true });
     sendingSysex = true;
-    el.sendSysex.disabled = true;
-    el.loadEnvelopeAndSettings.disabled = true;
-    el.flashSysex.disabled = true;
+  el.sendSysex.disabled = true;
+  el.loadEnvelopeAndSettings.disabled = true;
+  el.saveEnvelopeOnly.disabled = true;
+  el.flashSysex.disabled = true;
     el.deleteSlot.disabled = true;
     output.send(envelopeFrame);
     sendSettingsFrames(output, SYSEX_COMMAND_SETTINGS, 60);
@@ -1622,6 +1640,7 @@ async function loadEnvelopeAndSettings() {
     sendingSysex = false;
     el.sendSysex.disabled = false;
     el.loadEnvelopeAndSettings.disabled = false;
+    el.saveEnvelopeOnly.disabled = false;
     el.flashSysex.disabled = false;
     el.deleteSlot.disabled = false;
   }, 350);
@@ -1672,6 +1691,7 @@ async function deleteCustomSlot() {
     sendingSysex = false;
     el.sendSysex.disabled = false;
     el.loadEnvelopeAndSettings.disabled = false;
+    el.saveEnvelopeOnly.disabled = false;
     el.flashSysex.disabled = false;
     el.deleteSlot.disabled = false;
     setStatus("Delete failed. Open Developer tools for details.");
@@ -1698,14 +1718,17 @@ async function deleteCustomSlot() {
   }, 1800);
 }
 
-function buildSysex(command) {
+function buildSysex(command, options = {}) {
+  const includePerformance = options.includePerformance !== false;
   if (!canSendSelectedEnvelope()) {
     throw new Error("Cannot build SysEx for preset 0, a silent envelope, or a very short envelope.");
   }
 
   const slot = clampInt(el.customSlot.value, 0, CUSTOM_SLOT_COUNT - 1);
   const nameBytes = ensureArray(encodeName(presets[selected].name), "encodeName()");
-  const performanceBytes = ensureArray(encodePerformanceSettings(performanceSettings), "encodePerformanceSettings()");
+  const performanceBytes = includePerformance
+    ? ensureArray(encodePerformanceSettings(performanceSettings), "encodePerformanceSettings()")
+    : [];
   const payload = [slot & 0x7f, ...nameBytes, ...performanceBytes];
   constrainPitchToEnvelope(presets[selected]);
   appendStages(payload, presets[selected].amp);
@@ -3133,6 +3156,7 @@ el.copySysex.addEventListener("click", async () => {
 });
 el.sendSysex.addEventListener("click", () => sendSysex(SYSEX_COMMAND_PREVIEW));
 el.loadEnvelopeAndSettings.addEventListener("click", loadEnvelopeAndSettings);
+el.saveEnvelopeOnly.addEventListener("click", () => sendSysex(SYSEX_COMMAND_SAVE, { includePerformance: false }));
 el.flashSysex.addEventListener("click", () => sendSysex(SYSEX_COMMAND_SAVE));
 el.deleteSlot.addEventListener("click", deleteCustomSlot);
 el.requestEnvelopes.addEventListener("click", () => requestCardEnvelopes());

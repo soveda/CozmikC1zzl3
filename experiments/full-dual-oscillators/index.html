@@ -130,15 +130,16 @@
         <div class="output-actions editor-actions">
           <button id="sendSysex" type="button" title="Load this envelope until reset">Load RAM</button>
           <button id="loadEnvelopeAndSettings" type="button" title="Load this sound preset until reset">Load Sound Preset</button>
-          <button id="flashSysex" type="button" title="Save this envelope, name, and current settings after reset">Save Sound Preset</button>
-          <button id="deleteSlot" type="button" title="Delete the selected custom slot from card flash">Delete Envelope Slot</button>
           <button id="requestEnvelopes" type="button" title="Load saved card envelopes into the editor">Read Envelopes from Card</button>
           <button id="requestSettings" type="button" title="Load current card settings into the editor">Read Settings from Card</button>
-          <button id="sendSettings" type="button" title="Send these settings to the card">Send Settings</button>
           <button id="resetPreset" type="button">Reset Preset</button>
+          <button id="flashSysex" type="button" title="Save this envelope, name, and current settings after reset">Save Sound Preset</button>
+          <button id="saveEnvelopeOnly" type="button" title="Save only the envelope and slot name, leaving this slot's saved settings unchanged">Save Envelope Only</button>
+          <button id="sendSettings" type="button" title="Send these settings to the card">Send Settings</button>
+          <button id="deleteSlot" type="button" title="Delete the selected custom slot from card flash">Delete Envelope Slot</button>
         </div>
         <div class="volatility-warning" role="note">
-          <strong>Temporary changes:</strong> Load RAM, Load Sound Preset, and Send Settings are lost when the card restarts. Save Sound Preset stores the envelope, slot name, and current settings together for this experiment. To make the global hardware startup baseline, move the switch from middle to down and hold it until the card confirms the save.
+          <strong>Temporary changes:</strong> Load RAM, Load Sound Preset, and Send Settings are lost when the card restarts. Save Envelope Only updates the slot shape/name without changing its saved settings; Save Sound Preset stores the envelope, slot name, and current settings together. Read Envelopes from Card also restores the saved settings for each sound preset. To make the global hardware startup baseline, move the switch from middle to down and hold it until the card confirms the save.
         </div>
       </section>
 

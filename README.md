@@ -292,17 +292,23 @@ Button quick reference:
 - `Load Envelope + Settings`: temporarily load the selected envelope and send
   all current settings in one action.
 - `Save Envelope`: store the selected custom envelope in flash.
+- Experimental full-dual lab: `Save Envelope Only` stores the envelope/name
+  without changing that slot's saved settings, while `Save Sound Preset` stores
+  envelope/name/settings together.
 - `Delete Envelope Slot`: clear the selected custom slot from card flash.
 - `Read Envelopes from Card`: load occupied card slots into the editor without
   overwriting changed local drafts.
+- Experimental full-dual lab: `Read Envelopes from Card` also restores the
+  saved settings for each sound-preset slot.
 - `Read Settings from Card`: pull the current performance settings into the editor.
 - `Send Settings`: send the current performance settings to the card.
 - `Reset Preset`: restore the selected preset to its factory value.
 
 `Load RAM`, `Load Envelope + Settings`, and `Send Settings` are temporary.
-Use `Save Envelope` to retain an envelope in flash. To make the current
-performance settings the startup baseline, move the hardware switch from
-middle to down and hold it until the card confirms the save.
+Use `Save Envelope` or `Save Sound Preset` to retain slot data in flash. To
+make the current performance settings the global startup baseline, move the
+hardware switch from middle to down and hold it until the card confirms the
+save.
 
 The card can save up to eight custom envelopes. The browser can retain additional
 local drafts. Factory presets are not overwritten.

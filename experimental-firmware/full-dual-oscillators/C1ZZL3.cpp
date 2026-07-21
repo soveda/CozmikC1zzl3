@@ -1415,6 +1415,8 @@ private:
         SavedSlotPerformanceState incomingPerformance = currentSlotPerformanceState();
         if (soundPresetPayload)
             incomingPerformance = readWebMidiSlotPerformance(offset);
+        else if (customEnvelopePersist[slot])
+            incomingPerformance = customEnvelopeSavedPerformances[slot];
 
         EnvelopeProgram next = {};
         uint32_t ampTotal = 0;

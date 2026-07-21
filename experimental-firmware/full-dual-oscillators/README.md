@@ -9,7 +9,7 @@ hardware panel and Turing machine behaviour.
 
 ## Current Scope
 
-- Envelope protocol reports version 8.
+- Envelope protocol reports version 9.
 - Envelope payload remains the tested six-lane shape:
   - Amp1
   - PD1
@@ -26,7 +26,12 @@ hardware panel and Turing machine behaviour.
   separate wave-family controls.
 - Saved custom envelope slots now store and read back a compact 16-character
   ASCII slot name.
-- Protocol v9 saves per-slot performance settings with each custom envelope:
+- Protocol v9 can save either envelope-only updates or full sound presets:
+  - `Save Envelope Only` updates the envelope shape and slot name while keeping
+    the slot's previously saved settings.
+  - `Save Sound Preset` stores the envelope shape, slot name, and current
+    settings together.
+- Protocol v9 sound preset settings include:
   baseline PD, detune, oscillator 1 and 2 wave families, ring, noise, MIDI
   input channel, Turing CV range, and Turing MIDI output/channel.
 - The matching Import Lab decodes separate CZ Line 1 and Line 2 waveform/window
@@ -83,5 +88,6 @@ This first pass does not make that tradeoff.
 
 Protocol v9 is the first pass at treating saved custom slots as sound presets:
 the card slot should now read back envelope shape, slot name, and performance
-settings together. Protocol v8 remains the rollback if the performance setting
-handoff needs more work.
+settings together. `Read Envelopes from Card` also restores the saved settings
+for each slot in the editor. Protocol v8 remains the rollback if the
+performance setting handoff needs more work.

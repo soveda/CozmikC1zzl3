@@ -692,9 +692,12 @@ canvas {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.editor-actions button:nth-child(1),
-.editor-actions button:nth-child(2),
-.editor-actions button:nth-child(3) {
+#sendSysex,
+#loadEnvelopeAndSettings,
+#requestEnvelopes,
+#requestSettings,
+#sendSettings,
+#resetPreset {
   background: var(--control-bg);
 }
 
@@ -703,8 +706,8 @@ canvas {
   background: var(--control-bg);
 }
 
-.editor-actions button:nth-child(5),
-.editor-actions button:nth-child(6) {
+#saveEnvelopeOnly,
+#flashSysex {
   border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
   background:
     linear-gradient(180deg,
@@ -712,7 +715,7 @@ canvas {
       color-mix(in srgb, var(--accent) 10%, var(--panel)) 100%);
 }
 
-.editor-actions button:nth-child(4) {
+#deleteSlot {
   border-color: color-mix(in srgb, #ff735c 68%, var(--line));
   background:
     linear-gradient(180deg,
@@ -720,10 +723,10 @@ canvas {
       color-mix(in srgb, #ff735c 10%, var(--panel)) 100%);
 }
 
-.editor-actions button:nth-child(5):hover,
-.editor-actions button:nth-child(6):hover,
-.editor-actions button:nth-child(5).was-activated,
-.editor-actions button:nth-child(6).was-activated {
+#saveEnvelopeOnly:hover,
+#flashSysex:hover,
+#saveEnvelopeOnly.was-activated,
+#flashSysex.was-activated {
   border-color: var(--accent);
   color: var(--text);
   box-shadow:
@@ -731,8 +734,8 @@ canvas {
     0 0 24px color-mix(in srgb, var(--accent) 36%, transparent);
 }
 
-.editor-actions button:nth-child(4):hover,
-.editor-actions button:nth-child(4).was-activated {
+#deleteSlot:hover,
+#deleteSlot.was-activated {
   border-color: #ff735c;
   color: var(--text);
   box-shadow:
