@@ -22,6 +22,8 @@ firmware experiment passes hardware testing.
   - oscillator 1 wave family
   - oscillator 2 wave family
   - detune, ring, noise, MIDI input channel, Turing range, and Turing MIDI
+- Import Lab decodes separate CZ Line 1 and Line 2 oscillator waveform/window
+  words and maps them to oscillator 1 and oscillator 2 wave families.
 - Protocol v7 settings readback returns a 24-byte response with separate
   oscillator wave-family controls.
 - Envelope send/save keeps the protocol v6 lane payload shape and uses
@@ -63,3 +65,14 @@ controls, while switch down remains detune/ring/noise.
 After the protocol v7 full-dual-oscillator tests are complete, look at saving
 performance settings with envelope data and recalling envelope/sound preset
 names from the card.
+
+Initial implementation direction:
+
+- Save envelope names on-card so readback can show the original sound/preset
+  name instead of only `Card Envelope N`.
+- Save performance settings with each custom envelope slot, including PD,
+  detune, ring, noise, MIDI/Turing settings, and oscillator 1/2 wave families.
+- Add UI language that separates `Load Envelope`, `Load Sound Preset`, and
+  `Save Sound Preset` once a slot contains both envelope and settings.
+- Preserve compatibility with older unnamed envelope slots by keeping generated
+  browser labels as fallback.

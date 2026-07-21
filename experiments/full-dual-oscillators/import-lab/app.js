@@ -89,12 +89,14 @@ const CZ_FULL_PATCH_BYTES = 128;
 const CZ_SEND_PATCH_COMMAND = 0x20;
 const CZ_REQUEST_PATCH_COMMAND = 0x10;
 const CZ_SECTIONS = {
+  line1Wave: 14,
   dca1End: 20,
   dca1: 21,
   dcw1End: 37,
   dcw1: 38,
   dco1PitchEnd: 54,
   dco1Pitch: 55,
+  line2Wave: 71,
   dca2End: 77,
   dca2: 78,
   dcw2End: 94,
@@ -102,6 +104,28 @@ const CZ_SECTIONS = {
   dco2PitchEnd: 111,
   dco2Pitch: 112,
 };
+
+const CZ_WAVE_NAMES = [
+  "Saw",
+  "Square",
+  "Pulse",
+  "Null",
+  "Sine-pulse",
+  "Saw-pulse",
+  "Multi-sine",
+  "Pulse 2"
+];
+
+const CZ_WINDOW_NAMES = [
+  "None",
+  "Saw window",
+  "Triangle window",
+  "Trapezoid window",
+  "Pulse window",
+  "Double-saw window",
+  "Double-saw window",
+  "Double-saw window"
+];
 
 function loadThemeMode() {
   try {
@@ -538,6 +562,8 @@ function czSustainStage(stages) {
 }
 
 function parseCzPatch(decodedBytes) {
+  const line1Wave = parseCzWaveSpec(decodedBytes, CZ_SECTIONS.line1Wave);
+  const line2Wave = parseCzWaveSpec(decodedBytes, CZ_SECTIONS.line2Wave);
   const dca1 = parseCzEnvelope(decodedBytes, CZ_SECTIONS.dca1End, CZ_SECTIONS.dca1, dcaRate, dcaLevel);
   const dca2 = parseCzEnvelope(decodedBytes, CZ_SECTIONS.dca2End, CZ_SECTIONS.dca2, dcaRate, dcaLevel);
   const dcw1 = parseCzEnvelope(decodedBytes, CZ_SECTIONS.dcw1End, CZ_SECTIONS.dcw1, dcwRate, dcaLevel);
@@ -552,13 +578,60 @@ function parseCzPatch(decodedBytes) {
     dcw2,
     dco1Pitch,
     dco2Pitch,
+    line1Wave,
+    line2Wave,
     ampStages: mergeCzEnvelopes(dca1, dca2),
     pdStages: mergeCzEnvelopes(dcw1, dcw2),
     pitchStages: mergeCzEnvelopes(dco1Pitch, dco2Pitch),
   };
 }
 
-function classifyWave(bytes) {
+function czWaveFamilyFromParts(primaryWave, secondaryWave, hasSecondWave, window) {
+  if (window === 1) return WAVE_FAMILIES[5];
+  if (window === 2) return WAVE_FAMILIES[6];
+  if (window === 3) return WAVE_FAMILIES[7];
+  if (window >= 4) return WAVE_FAMILIES[5];
+
+  if (hasSecondWave) {
+    if (primaryWave === 5 || secondaryWave === 5) return WAVE_FAMILIES[4];
+    if (primaryWave === 6 || secondaryWave === 6) return WAVE_FAMILIES[3];
+    if (primaryWave === 2 || secondaryWave === 2 || primaryWave === 7 || secondaryWave === 7) return WAVE_FAMILIES[2];
+  }
+
+  if (primaryWave === 1) return WAVE_FAMILIES[1];
+  if (primaryWave === 2 || primaryWave === 7) return WAVE_FAMILIES[2];
+  if (primaryWave === 4 || primaryWave === 6) return WAVE_FAMILIES[3];
+  if (primaryWave === 5) return WAVE_FAMILIES[4];
+  return WAVE_FAMILIES[0];
+}
+
+function parseCzWaveSpec(bytes, offset) {
+  const hi = bytes[offset] ?? 0;
+  const lo = bytes[offset + 1] ?? 0;
+  const word = ((hi & 0xff) << 8) | (lo & 0xff);
+  const primaryWave = (word >> 13) & 0x07;
+  const secondaryWave = (word >> 10) & 0x07;
+  const hasSecondWave = ((word >> 9) & 0x01) !== 0;
+  const window = (word >> 6) & 0x07;
+  const family = czWaveFamilyFromParts(primaryWave, secondaryWave, hasSecondWave, window);
+
+  return {
+    raw: word,
+    bytes: [hi, lo],
+    primaryWave,
+    primaryName: CZ_WAVE_NAMES[primaryWave] || `Wave ${primaryWave}`,
+    secondaryWave,
+    secondaryName: CZ_WAVE_NAMES[secondaryWave] || `Wave ${secondaryWave}`,
+    hasSecondWave,
+    window,
+    windowName: CZ_WINDOW_NAMES[window] || `Window ${window}`,
+    family
+  };
+}
+
+function classifyWave(bytes, fallbackLine = null) {
+  if (fallbackLine?.family) return fallbackLine.family;
+
   const avg = bytes.reduce((sum, b) => sum + b, 0) / Math.max(1, bytes.length);
   const peak = Math.max(...bytes);
   const mid = bytes.slice(32, 64).reduce((sum, b) => sum + b, 0) / 32;
@@ -592,8 +665,9 @@ function buildDraftPreset(
     .replace(/\s+/g, " ")
     .trim() || "Imported CZ patch";
 
-  const wave = classifyWave(decodedBytes);
   const czPatch = parseCzPatch(decodedBytes);
+  const wave = classifyWave(decodedBytes, czPatch.line1Wave);
+  const wave2 = classifyWave(decodedBytes, czPatch.line2Wave);
   const ampPair = selectAmpEnvelopePair(czPatch, ampMode);
   const pdPair = selectPdEnvelopePair(czPatch, pdMode);
   const ampMergedEnvelope = czEnvelopeToC1Stages(mergeCzEnvelopes(czPatch.dca1, czPatch.dca2), 140, 24000);
@@ -628,6 +702,7 @@ function buildDraftPreset(
   return {
     name: `${baseName} draft`,
     wave,
+    wave2,
     amp: amp1Envelope,
     amp2: amp2Envelope,
     pd: dcwEnvelope,
@@ -659,7 +734,7 @@ function buildDraftPreset(
       sustain,
       cz: czPatch
     },
-    performance: { pd, detune, waveform: wave.value, waveform2: wave.value, ring, noise },
+    performance: { pd, detune, waveform: wave.value, waveform2: wave2.value, ring, noise },
     confidence: "medium"
   };
 }
@@ -707,6 +782,13 @@ function formatCzEnvelopeSummary(cz) {
   }).join("\n");
 }
 
+function formatCzWaveSpec(label, spec) {
+  const second = spec.hasSecondWave
+    ? ` + ${spec.secondaryName}`
+    : "";
+  return `${label}: ${spec.primaryName}${second}, ${spec.windowName} -> C1ZZL3 ${spec.family.label} (raw ${toHex(spec.bytes, 2)})`;
+}
+
 function renderDraft(draft) {
   if (!draft) {
     el.decodedPatchBox.textContent = "No decoded patch yet.";
@@ -728,12 +810,15 @@ function renderDraft(draft) {
   }
 
   el.decodedPatchBox.textContent = `${draft.name} decoded and unpacked into a draft preset.`;
-  el.mappedDraftBox.textContent = `8-wave family ${draft.wave.label}, DCA1/DCA2 -> C1ZZL3 Amp1/Amp2, ${draft.sourceEnvelopes.pdMapping.label} -> C1ZZL3 phase distortion, and ${draft.sourceEnvelopes.pitchMapping.label} -> C1ZZL3 pitch. Oscillator wave families can be split in the full dual-oscillator lab.`;
+  el.mappedDraftBox.textContent = `Line 1 wave -> ${draft.wave.label}, Line 2 wave -> ${draft.wave2.label}, DCA1/DCA2 -> C1ZZL3 Amp1/Amp2, ${draft.sourceEnvelopes.pdMapping.label} -> C1ZZL3 phase distortion, and ${draft.sourceEnvelopes.pitchMapping.label} -> C1ZZL3 pitch.`;
   el.confidenceBox.textContent = draft.confidence;
   el.supportedOutputBox.textContent = "Envelope Lab draft handoff";
   el.draftNameBox.textContent = `${draft.name} (${draft.confidence} confidence)`;
-  el.waveBox.textContent = `${draft.wave.label} -> ${draft.wave.hint}`;
-  el.perfBox.textContent = `PD ${draft.performance.pd}, osc1 wave ${draft.wave.label}, osc2 wave ${draft.wave.label}, detune ${draft.performance.detune}, ring ${draft.performance.ring}, noise ${draft.performance.noise}`;
+  el.waveBox.textContent = [
+    formatCzWaveSpec("Line 1 / Osc 1", draft.sourceEnvelopes.cz.line1Wave),
+    formatCzWaveSpec("Line 2 / Osc 2", draft.sourceEnvelopes.cz.line2Wave)
+  ].join("\n");
+  el.perfBox.textContent = `PD ${draft.performance.pd}, osc1 wave ${draft.wave.label}, osc2 wave ${draft.wave2.label}, detune ${draft.performance.detune}, ring ${draft.performance.ring}, noise ${draft.performance.noise}`;
   el.czEnvelopeSummaryBox.textContent = formatCzEnvelopeSummary(draft.sourceEnvelopes.cz);
   el.ampDraftBox.textContent = formatStages(draft.amp);
   el.amp2DraftBox.textContent = formatStages(draft.amp2 || draft.sourceEnvelopes.amp2 || draft.amp);

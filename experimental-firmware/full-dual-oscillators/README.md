@@ -24,6 +24,8 @@ hardware panel and Turing machine behaviour.
   render functions.
 - Settings protocol adds a 16-byte payload / 24-byte response that carries
   separate wave-family controls.
+- The matching Import Lab decodes separate CZ Line 1 and Line 2 waveform/window
+  words and sends them as oscillator 1 and oscillator 2 wave-family settings.
 - Existing protocol v6-style settings remain accepted and copy oscillator 1
   wave family to oscillator 2.
 - Hardware controls are unchanged in this first pass. The separate oscillator
@@ -71,3 +73,16 @@ This first pass does not make that tradeoff.
 After the protocol v7 full-dual-oscillator tests are complete, look at saving
 performance settings with envelope data and recalling envelope/sound preset
 names from the card.
+
+Initial implementation direction:
+
+- Store envelope names on-card as compact ASCII alongside each custom envelope
+  slot.
+- Store performance settings with the saved envelope so a card slot can behave
+  like a complete sound preset rather than only an envelope preset.
+- Add a protocol response that returns slot name plus saved performance
+  settings during envelope readback.
+- Keep old unnamed slots readable by generating `Card Envelope N` in the
+  browser.
+- Treat this as the next protocol bump after v7, because it changes saved slot
+  data and readback semantics.

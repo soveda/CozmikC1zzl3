@@ -1459,6 +1459,7 @@ private:
             for (uint32_t i = 0; i < 6u; ++i)
                 next.sustain[i] = sanitizeSustainStage(sysexBuffer[offset++] & 0x7Fu);
         }
+        applyDefaultSustainStages(next);
 
         if (ampMax == 0 || ampTotal < MinWebMidiEnvelopeSamples)
             return;
@@ -1538,6 +1539,34 @@ private:
         if (value > MaxWebMidiStageSamples)
             return MaxWebMidiStageSamples;
         return value;
+    }
+
+    uint8_t defaultSustainStageFor(const EnvelopeStage* stages)
+    {
+        for (int32_t i = 7; i >= 0; --i)
+        {
+            if (stages[i].level > 0)
+                return (uint8_t)i;
+        }
+
+        return NoSustainStage;
+    }
+
+    void applyDefaultSustainStages(EnvelopeProgram& program)
+    {
+        if (program.sustain[0] == NoSustainStage)
+            program.sustain[0] = defaultSustainStageFor(program.amp);
+        if (program.sustain[5] == NoSustainStage)
+            program.sustain[5] = defaultSustainStageFor(
+                pitchLaneHasData(program.amp2) ? program.amp2 : program.amp);
+        if (program.sustain[1] == NoSustainStage)
+            program.sustain[1] = program.sustain[0];
+        if (program.sustain[4] == NoSustainStage)
+            program.sustain[4] = program.sustain[5];
+        if (program.sustain[2] == NoSustainStage)
+            program.sustain[2] = program.sustain[0];
+        if (program.sustain[3] == NoSustainStage)
+            program.sustain[3] = program.sustain[5];
     }
 
     const EnvelopeProgram& envelopeProgram()
