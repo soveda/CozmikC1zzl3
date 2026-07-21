@@ -1558,7 +1558,7 @@ async function sendSysex(command = SYSEX_COMMAND_PREVIEW) {
   }
   const slotLabel = `Custom ${slot + 1}`;
   const status = isFlash
-    ? `Saved ${slotLabel}; after reset it appears after the factory presets. Amp max ${summary.ampMax}, ${summary.seconds}s.`
+    ? `Saved sound preset ${slotLabel}; after reset it appears after the factory presets. Amp max ${summary.ampMax}, ${summary.seconds}s.`
     : `Loaded ${slotLabel} until reset. Amp max ${summary.ampMax}, ${summary.seconds}s.`;
   if (isFlash) {
     presets[selected].performance = normalizePerformanceSettings(performanceSettings);
@@ -1607,7 +1607,7 @@ async function loadEnvelopeAndSettings() {
     sendSettingsFrames(output, SYSEX_COMMAND_SETTINGS, 60);
     const slot = clampInt(el.customSlot.value, 0, CUSTOM_SLOT_COUNT - 1);
     pulseButton(el.loadEnvelopeAndSettings, "Loaded");
-    setStatus(`Loaded ${presets[selected].name} into RAM slot ${slot + 1} and sent ${usedStoredSettings ? "its saved settings" : "the current settings"}. Both are temporary until saved.`);
+    setStatus(`Loaded sound preset ${presets[selected].name} into RAM slot ${slot + 1} and sent ${usedStoredSettings ? "its saved settings" : "the current settings"}. Both are temporary until saved.`);
   } catch (error) {
     logDeveloper("Combined envelope and settings load failed.", {
       preset: presets[selected]?.name,
@@ -2173,8 +2173,8 @@ function finishEnvelopeRead() {
     const verified = cardEnvelope && session.expectedEnvelope &&
       envelopesMatch(cardEnvelope, session.expectedEnvelope);
     setStatus(verified
-      ? `Verified envelope saved in card slot ${session.slot + 1}.`
-      : `The envelope in card slot ${session.slot + 1} did not match the saved draft.`);
+      ? `Verified sound preset saved in card slot ${session.slot + 1}.`
+      : `The sound preset in card slot ${session.slot + 1} did not match the saved draft.`);
     return;
   }
   if (session.reason === "delete") {
