@@ -1,6 +1,6 @@
 # C1ZZL3 Full Dual Oscillator Web Experiment
 
-This folder contains the experimental Web MIDI UI for the protocol v7
+This folder contains the experimental Web MIDI UI for the protocol v9
 full-dual-oscillator firmware. It starts from the tested dual-amplitude v6
 rollback, then adds separate oscillator wave-family settings.
 
@@ -24,17 +24,20 @@ firmware experiment passes hardware testing.
   - detune, ring, noise, MIDI input channel, Turing range, and Turing MIDI
 - Import Lab decodes separate CZ Line 1 and Line 2 oscillator waveform/window
   words and maps them to oscillator 1 and oscillator 2 wave families.
-- Protocol v7 settings readback returns a 24-byte response with separate
+- Protocol v7/v8/v9 settings readback returns a 24-byte response with separate
   oscillator wave-family controls.
 - Envelope send/save keeps the protocol v6 lane payload shape and uses
-  protocol v7 only to identify the full dual-oscillator firmware generation.
+  protocol v9 to identify the full dual-oscillator firmware generation with
+  slot-name and per-slot performance setting readback.
+- Card slot readback now restores the saved 16-character slot name and its
+  saved settings.
 
 ## Matching Firmware
 
 Use:
 
 ```text
-experimental-firmware/full-dual-oscillators/C1ZZL3_FULL_DUAL_OSCILLATORS_PROTOCOL_V7.uf2
+experimental-firmware/full-dual-oscillators/C1ZZL3_FULL_DUAL_OSCILLATORS_PROTOCOL_V9.uf2
 ```
 
 ## Local Test
@@ -60,19 +63,9 @@ If the card later trades away the Turing machine mode, switch up could become
 oscillator 1 tone controls and switch middle could become oscillator 2 tone
 controls, while switch down remains detune/ring/noise.
 
-## Post-v7 Test Reminder
+## Protocol v9 Test Focus
 
-After the protocol v7 full-dual-oscillator tests are complete, look at saving
-performance settings with envelope data and recalling envelope/sound preset
-names from the card.
-
-Initial implementation direction:
-
-- Save envelope names on-card so readback can show the original sound/preset
-  name instead of only `Card Envelope N`.
-- Save performance settings with each custom envelope slot, including PD,
-  detune, ring, noise, MIDI/Turing settings, and oscillator 1/2 wave families.
-- Add UI language that separates `Load Envelope`, `Load Sound Preset`, and
-  `Save Sound Preset` once a slot contains both envelope and settings.
-- Preserve compatibility with older unnamed envelope slots by keeping generated
-  browser labels as fallback.
+Protocol v9 saves performance settings with each custom envelope slot,
+including PD, detune, ring, noise, MIDI/Turing settings, and oscillator 1/2 wave
+families. This is still labelled as an experiment until save/read/load
+behaviour passes.

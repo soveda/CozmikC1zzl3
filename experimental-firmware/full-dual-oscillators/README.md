@@ -9,7 +9,7 @@ hardware panel and Turing machine behaviour.
 
 ## Current Scope
 
-- Envelope protocol reports version 7.
+- Envelope protocol reports version 8.
 - Envelope payload remains the tested six-lane shape:
   - Amp1
   - PD1
@@ -24,6 +24,11 @@ hardware panel and Turing machine behaviour.
   render functions.
 - Settings protocol adds a 16-byte payload / 24-byte response that carries
   separate wave-family controls.
+- Saved custom envelope slots now store and read back a compact 16-character
+  ASCII slot name.
+- Protocol v9 saves per-slot performance settings with each custom envelope:
+  baseline PD, detune, oscillator 1 and 2 wave families, ring, noise, MIDI
+  input channel, Turing CV range, and Turing MIDI output/channel.
 - The matching Import Lab decodes separate CZ Line 1 and Line 2 waveform/window
   words and sends them as oscillator 1 and oscillator 2 wave-family settings.
 - Existing protocol v6-style settings remain accepted and copy oscillator 1
@@ -49,7 +54,13 @@ experimental-firmware/full-dual-oscillators/build/C1ZZL3_FULL_DUAL_OSCILLATORS.u
 The named test UF2 is:
 
 ```text
-experimental-firmware/full-dual-oscillators/C1ZZL3_FULL_DUAL_OSCILLATORS_PROTOCOL_V7.uf2
+experimental-firmware/full-dual-oscillators/C1ZZL3_FULL_DUAL_OSCILLATORS_PROTOCOL_V8.uf2
+```
+
+The current sound-preset first pass is:
+
+```text
+experimental-firmware/full-dual-oscillators/C1ZZL3_FULL_DUAL_OSCILLATORS_PROTOCOL_V9.uf2
 ```
 
 ## Matching Web UI
@@ -68,21 +79,9 @@ oscillator 1 baseline PD/wave controls, switch middle could become oscillator
 
 This first pass does not make that tradeoff.
 
-## Post-v7 Test Reminder
+## Protocol v9 Test Focus
 
-After the protocol v7 full-dual-oscillator tests are complete, look at saving
-performance settings with envelope data and recalling envelope/sound preset
-names from the card.
-
-Initial implementation direction:
-
-- Store envelope names on-card as compact ASCII alongside each custom envelope
-  slot.
-- Store performance settings with the saved envelope so a card slot can behave
-  like a complete sound preset rather than only an envelope preset.
-- Add a protocol response that returns slot name plus saved performance
-  settings during envelope readback.
-- Keep old unnamed slots readable by generating `Card Envelope N` in the
-  browser.
-- Treat this as the next protocol bump after v7, because it changes saved slot
-  data and readback semantics.
+Protocol v9 is the first pass at treating saved custom slots as sound presets:
+the card slot should now read back envelope shape, slot name, and performance
+settings together. Protocol v8 remains the rollback if the performance setting
+handoff needs more work.

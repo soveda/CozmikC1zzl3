@@ -26,7 +26,7 @@ static constexpr uint8_t WebMidiCommandPd2EnvelopeResponse = 0x0Eu;
 static constexpr uint8_t WebMidiCommandAmp2EnvelopeResponse = 0x0Fu;
 static constexpr uint8_t WebMidiCommandRequestPd2Envelope = 0x10u;
 static constexpr uint8_t WebMidiCommandRequestAmp2Envelope = 0x11u;
-static constexpr uint8_t WebMidiEnvelopeProtocolVersion = 7u;
+static constexpr uint8_t WebMidiEnvelopeProtocolVersion = 9u;
 static constexpr uint32_t WebMidiSettingsPayloadLength = 14u;
 static constexpr uint32_t WebMidiDualOscSettingsPayloadLength = 16u;
 static constexpr uint32_t WebMidiStableSettingsPayloadLength = 8u;
@@ -38,8 +38,9 @@ static constexpr uint32_t WebMidiDualPitchEnvelopePayloadLength = 177u;
 static constexpr uint32_t WebMidiDualOscEnvelopePayloadLength = 217u;
 static constexpr uint32_t WebMidiDualAmpEnvelopePayloadLength = 257u;
 static constexpr uint32_t WebMidiDualAmpSustainEnvelopePayloadLength = 263u;
+static constexpr uint32_t WebMidiSoundPresetEnvelopePayloadLength = 279u;
 static constexpr uint32_t WebMidiDeleteEnvelopePayloadLength = 1u;
-static constexpr uint32_t WebMidiMaxSysexLength = 282u;
+static constexpr uint32_t WebMidiMaxSysexLength = 300u;
 
 class C1ZZL3 : public ComputerCard
 {
@@ -428,7 +429,9 @@ private:
     static constexpr uint16_t LegacyCustomEnvelopeSaveVersion = 3;
     static constexpr uint16_t DualPdCustomEnvelopeSaveVersion = 4;
     static constexpr uint16_t DualAmpCustomEnvelopeSaveVersion = 5;
-    static constexpr uint16_t CustomEnvelopeSaveVersion = 6;
+    static constexpr uint16_t NamedCustomEnvelopeSaveVersion = 7;
+    static constexpr uint16_t SoundPresetCustomEnvelopeSaveVersion = 8;
+    static constexpr uint16_t CustomEnvelopeSaveVersion = 8;
     static constexpr uint32_t CustomEnvelopeFlashOffset =
         SaveFlashOffset - FLASH_SECTOR_SIZE;
     static constexpr uint32_t SaveHoldSamples = 384000u;
@@ -450,6 +453,21 @@ private:
         uint32_t checksum;
     };
 
+    struct SavedSlotPerformanceState
+    {
+        uint16_t pdControl;
+        uint16_t detuneControl;
+        uint16_t waveControl;
+        uint16_t wave2Control;
+        uint16_t ring;
+        uint16_t noise;
+        uint8_t midiInChannel;
+        uint8_t turingRange;
+        uint8_t turingMidiEnabled;
+        uint8_t turingMidiChannel;
+        uint8_t reserved[2];
+    };
+
     struct SavedCustomEnvelopeState
     {
         uint32_t magic;
@@ -457,6 +475,8 @@ private:
         uint16_t size;
         uint8_t loadedMask;
         uint8_t reserved[7];
+        uint8_t names[CustomEnvelopeSlotCount][16];
+        SavedSlotPerformanceState performances[CustomEnvelopeSlotCount];
         SavedEnvelopeProgram slots[CustomEnvelopeSlotCount];
         uint32_t checksum;
     };
@@ -491,6 +511,18 @@ private:
         uint8_t loadedMask;
         uint8_t reserved[7];
         SavedEnvelopeProgramV5 slots[CustomEnvelopeSlotCount];
+        uint32_t checksum;
+    };
+
+    struct SavedCustomEnvelopeStateV7
+    {
+        uint32_t magic;
+        uint16_t version;
+        uint16_t size;
+        uint8_t loadedMask;
+        uint8_t reserved[7];
+        uint8_t names[CustomEnvelopeSlotCount][16];
+        SavedEnvelopeProgram slots[CustomEnvelopeSlotCount];
         uint32_t checksum;
     };
 
@@ -1226,7 +1258,7 @@ private:
         if (!customEnvelopePersist[slot])
             return;
 
-        uint8_t frame[95] = {
+        uint8_t frame[121] = {
             0xF0u,
             WebMidiManufacturer,
             WebMidiId[0],
@@ -1237,6 +1269,8 @@ private:
             slot
         };
         uint32_t offset = 8;
+        appendWebMidiName(frame, offset, customEnvelopeNames[slot]);
+        appendWebMidiSlotPerformance(frame, offset, customEnvelopePerformances[slot]);
         const EnvelopeProgram& envelope = customEnvelopeSaved[slot];
         for (uint32_t i = 0; i < 8u; ++i)
         {
@@ -1370,12 +1404,17 @@ private:
         bool dualOscPayload = sysexLength == WebMidiDualOscEnvelopePayloadLength + 6u;
         bool dualAmpPayload = sysexLength == WebMidiDualAmpEnvelopePayloadLength + 6u;
         bool dualAmpSustainPayload = sysexLength == WebMidiDualAmpSustainEnvelopePayloadLength + 6u;
-        if (!legacyPayload && !singlePitchPayload && !dualPitchPayload && !dualOscPayload && !dualAmpPayload && !dualAmpSustainPayload)
+        bool soundPresetPayload = sysexLength == WebMidiSoundPresetEnvelopePayloadLength + 6u;
+        if (!legacyPayload && !singlePitchPayload && !dualPitchPayload && !dualOscPayload && !dualAmpPayload && !dualAmpSustainPayload && !soundPresetPayload)
             return;
 
         uint32_t offset = 6;
         uint8_t slot = sysexBuffer[offset++] & 0x07u;
-        offset += 16; // Names stay in the browser; firmware stores shape only.
+        uint8_t incomingName[16] = {};
+        readWebMidiName(offset, incomingName);
+        SavedSlotPerformanceState incomingPerformance = currentSlotPerformanceState();
+        if (soundPresetPayload)
+            incomingPerformance = readWebMidiSlotPerformance(offset);
 
         EnvelopeProgram next = {};
         uint32_t ampTotal = 0;
@@ -1417,7 +1456,7 @@ private:
                 next.pitch[i] = {level, time};
             }
 
-            if (dualPitchPayload || dualOscPayload || dualAmpPayload || dualAmpSustainPayload)
+            if (dualPitchPayload || dualOscPayload || dualAmpPayload || dualAmpSustainPayload || soundPresetPayload)
             {
                 for (uint32_t i = 0; i < 8u; ++i)
                 {
@@ -1433,7 +1472,7 @@ private:
             }
         }
 
-        if (dualOscPayload || dualAmpPayload || dualAmpSustainPayload)
+        if (dualOscPayload || dualAmpPayload || dualAmpSustainPayload || soundPresetPayload)
         {
             for (uint32_t i = 0; i < 8u; ++i)
             {
@@ -1443,7 +1482,7 @@ private:
             }
         }
 
-        if (dualAmpPayload || dualAmpSustainPayload)
+        if (dualAmpPayload || dualAmpSustainPayload || soundPresetPayload)
         {
             for (uint32_t i = 0; i < 8u; ++i)
             {
@@ -1454,7 +1493,7 @@ private:
         }
 
         clearSustainStages(next);
-        if (dualAmpSustainPayload)
+        if (dualAmpSustainPayload || soundPresetPayload)
         {
             for (uint32_t i = 0; i < 6u; ++i)
                 next.sustain[i] = sanitizeSustainStage(sysexBuffer[offset++] & 0x7Fu);
@@ -1466,9 +1505,13 @@ private:
 
         customEnvelopes[slot] = next;
         customEnvelopeLoaded[slot] = true;
+        customEnvelopePerformances[slot] = incomingPerformance;
+        applySlotPerformanceState(incomingPerformance);
         if (persist)
         {
             customEnvelopeSaved[slot] = next;
+            copyEnvelopeName(customEnvelopeNames[slot], incomingName);
+            customEnvelopeSavedPerformances[slot] = incomingPerformance;
             customEnvelopePersist[slot] = true;
         }
         envelopePreset = CustomEnvelopePreset + slot;
@@ -1486,6 +1529,9 @@ private:
         uint8_t slot = sysexBuffer[6] & 0x07u;
         customEnvelopes[slot] = {};
         customEnvelopeSaved[slot] = {};
+        clearEnvelopeName(customEnvelopeNames[slot]);
+        customEnvelopePerformances[slot] = {};
+        customEnvelopeSavedPerformances[slot] = {};
         customEnvelopeLoaded[slot] = false;
         customEnvelopePersist[slot] = false;
 
@@ -1524,6 +1570,105 @@ private:
         buffer[offset++] = packed & 0x7Fu;
         buffer[offset++] = (packed >> 7) & 0x7Fu;
         buffer[offset++] = (packed >> 14) & 0x7Fu;
+    }
+
+    void readWebMidiName(uint32_t& offset, uint8_t* name)
+    {
+        for (uint32_t i = 0; i < 16u; ++i)
+        {
+            uint8_t c = sysexBuffer[offset++] & 0x7Fu;
+            name[i] = (c >= 32u && c <= 126u) ? c : 32u;
+        }
+    }
+
+    void appendWebMidiName(uint8_t* buffer, uint32_t& offset, const uint8_t* name)
+    {
+        for (uint32_t i = 0; i < 16u; ++i)
+        {
+            uint8_t c = name[i] & 0x7Fu;
+            buffer[offset++] = (c >= 32u && c <= 126u) ? c : 32u;
+        }
+    }
+
+    void copyEnvelopeName(uint8_t* destination, const uint8_t* source)
+    {
+        for (uint32_t i = 0; i < 16u; ++i)
+            destination[i] = source[i];
+    }
+
+    void clearEnvelopeName(uint8_t* name)
+    {
+        for (uint32_t i = 0; i < 16u; ++i)
+            name[i] = 32u;
+    }
+
+    SavedSlotPerformanceState currentSlotPerformanceState()
+    {
+        SavedSlotPerformanceState state = {};
+        state.pdControl = (uint16_t)clamp12(pdControl);
+        state.detuneControl = (uint16_t)clamp12(osc2Detune + 2048);
+        state.waveControl = (uint16_t)clamp12(waveControl);
+        state.wave2Control = (uint16_t)clamp12(wave2Control);
+        state.ring = (uint16_t)clamp12(osc2Ring);
+        state.noise = (uint16_t)clamp12(osc2Noise);
+        state.midiInChannel = midiInChannel & 0x0Fu;
+        state.turingRange = clampTuringCvOctaveRange(turingCvOctaveRange);
+        state.turingMidiEnabled = turingMidiOutputEnabled ? 1u : 0u;
+        state.turingMidiChannel = turingMidiOutputChannel & 0x0Fu;
+        return state;
+    }
+
+    SavedSlotPerformanceState readWebMidiSlotPerformance(uint32_t& offset)
+    {
+        SavedSlotPerformanceState state = {};
+        state.pdControl = (uint16_t)decodeWebMidiUint14(offset);
+        state.detuneControl = (uint16_t)decodeWebMidiUint14(offset);
+        state.waveControl = (uint16_t)decodeWebMidiUint14(offset);
+        state.wave2Control = (uint16_t)decodeWebMidiUint14(offset);
+        state.ring = (uint16_t)decodeWebMidiUint14(offset);
+        state.noise = (uint16_t)decodeWebMidiUint14(offset);
+        state.midiInChannel = sysexBuffer[offset++] & 0x0Fu;
+        state.turingRange = clampTuringCvOctaveRange(sysexBuffer[offset++]);
+        state.turingMidiEnabled = (sysexBuffer[offset++] & 0x01u) != 0 ? 1u : 0u;
+        state.turingMidiChannel = sysexBuffer[offset++] & 0x0Fu;
+        return state;
+    }
+
+    void appendWebMidiSlotPerformance(
+        uint8_t* buffer,
+        uint32_t& offset,
+        const SavedSlotPerformanceState& state)
+    {
+        appendWebMidiUint14(buffer, offset, state.pdControl);
+        appendWebMidiUint14(buffer, offset, state.detuneControl);
+        appendWebMidiUint14(buffer, offset, state.waveControl);
+        appendWebMidiUint14(buffer, offset, state.wave2Control);
+        appendWebMidiUint14(buffer, offset, state.ring);
+        appendWebMidiUint14(buffer, offset, state.noise);
+        buffer[offset++] = state.midiInChannel & 0x0Fu;
+        buffer[offset++] = clampTuringCvOctaveRange(state.turingRange);
+        buffer[offset++] = state.turingMidiEnabled ? 1u : 0u;
+        buffer[offset++] = state.turingMidiChannel & 0x0Fu;
+    }
+
+    void applySlotPerformanceState(const SavedSlotPerformanceState& state)
+    {
+        pdControl = clamp12(state.pdControl);
+        setDetuneFromControl(state.detuneControl);
+        waveControl = clamp12(state.waveControl);
+        wave2Control = clamp12(state.wave2Control);
+        osc2Ring = clamp12(state.ring);
+        osc2Noise = clamp12(state.noise);
+        midiInChannel = state.midiInChannel & 0x0Fu;
+        turingCvOctaveRange = clampTuringCvOctaveRange(state.turingRange);
+        turingMidiOutputEnabled = state.turingMidiEnabled != 0u;
+        turingMidiOutputChannel = state.turingMidiChannel & 0x0Fu;
+
+        midiResetSynthXPickup = true;
+        midiResetSynthYPickup = true;
+        midiResetAltMainPickup = true;
+        midiResetAltXPickup = true;
+        midiResetAltYPickup = true;
     }
 
     uint32_t decodeWebMidiUint21(uint32_t& offset)
@@ -2444,7 +2589,11 @@ private:
         state.loadedMask = customEnvelopeMask();
 
         for (uint32_t i = 0; i < CustomEnvelopeSlotCount; ++i)
+        {
+            copyEnvelopeName(state.names[i], customEnvelopeNames[i]);
+            state.performances[i] = customEnvelopeSavedPerformances[i];
             state.slots[i] = savedEnvelopeFromRuntime(customEnvelopeSaved[i]);
+        }
 
         state.checksum = 0;
         state.checksum = checksumCustomEnvelopeState(state);
@@ -2616,6 +2765,20 @@ private:
         return checksum;
     }
 
+    uint32_t checksumCustomEnvelopeStateV7(const SavedCustomEnvelopeStateV7& state)
+    {
+        const uint8_t* bytes = reinterpret_cast<const uint8_t*>(&state);
+        uint32_t checksum = 2166136261u;
+
+        for (uint32_t i = 0; i < sizeof(SavedCustomEnvelopeStateV7) - sizeof(uint32_t); ++i)
+        {
+            checksum ^= bytes[i];
+            checksum *= 16777619u;
+        }
+
+        return checksum;
+    }
+
     const SavedPerformanceState& flashPerformanceState()
     {
         return *reinterpret_cast<const SavedPerformanceState*>(
@@ -2643,6 +2806,12 @@ private:
     const SavedCustomEnvelopeStateV5& flashCustomEnvelopeStateV5()
     {
         return *reinterpret_cast<const SavedCustomEnvelopeStateV5*>(
+            XIP_BASE + CustomEnvelopeFlashOffset);
+    }
+
+    const SavedCustomEnvelopeStateV7& flashCustomEnvelopeStateV7()
+    {
+        return *reinterpret_cast<const SavedCustomEnvelopeStateV7*>(
             XIP_BASE + CustomEnvelopeFlashOffset);
     }
 
@@ -2691,12 +2860,37 @@ private:
             state.checksum == checksumCustomEnvelopeStateV5(state);
     }
 
+    bool isValidCustomEnvelopeStateV7(const SavedCustomEnvelopeStateV7& state)
+    {
+        return
+            state.magic == CustomEnvelopeMagic &&
+            state.version == NamedCustomEnvelopeSaveVersion &&
+            state.size == sizeof(SavedCustomEnvelopeStateV7) &&
+            state.checksum == checksumCustomEnvelopeStateV7(state);
+    }
+
     bool customEnvelopeStateMatches(
         const SavedCustomEnvelopeState& a,
         const SavedCustomEnvelopeState& b)
     {
         if (a.loadedMask != b.loadedMask)
             return false;
+
+        const uint8_t* aNameBytes = reinterpret_cast<const uint8_t*>(a.names);
+        const uint8_t* bNameBytes = reinterpret_cast<const uint8_t*>(b.names);
+        for (uint32_t i = 0; i < sizeof(a.names); ++i)
+        {
+            if (aNameBytes[i] != bNameBytes[i])
+                return false;
+        }
+
+        const uint8_t* aPerformanceBytes = reinterpret_cast<const uint8_t*>(a.performances);
+        const uint8_t* bPerformanceBytes = reinterpret_cast<const uint8_t*>(b.performances);
+        for (uint32_t i = 0; i < sizeof(a.performances); ++i)
+        {
+            if (aPerformanceBytes[i] != bPerformanceBytes[i])
+                return false;
+        }
 
         const uint8_t* aBytes = reinterpret_cast<const uint8_t*>(a.slots);
         const uint8_t* bBytes = reinterpret_cast<const uint8_t*>(b.slots);
@@ -2764,7 +2958,27 @@ private:
             {
                 customEnvelopeSaved[i] = runtimeEnvelopeFromSaved(state.slots[i]);
                 customEnvelopes[i] = customEnvelopeSaved[i];
+                copyEnvelopeName(customEnvelopeNames[i], state.names[i]);
+                customEnvelopeSavedPerformances[i] = state.performances[i];
+                customEnvelopePerformances[i] = customEnvelopeSavedPerformances[i];
                 customEnvelopeLoaded[i] = (state.loadedMask & (1u << i)) != 0;
+                customEnvelopePersist[i] = customEnvelopeLoaded[i];
+            }
+
+            return;
+        }
+
+        const SavedCustomEnvelopeStateV7& namedState = flashCustomEnvelopeStateV7();
+        if (isValidCustomEnvelopeStateV7(namedState))
+        {
+            for (uint32_t i = 0; i < CustomEnvelopeSlotCount; ++i)
+            {
+                customEnvelopeSaved[i] = runtimeEnvelopeFromSaved(namedState.slots[i]);
+                customEnvelopes[i] = customEnvelopeSaved[i];
+                copyEnvelopeName(customEnvelopeNames[i], namedState.names[i]);
+                customEnvelopeSavedPerformances[i] = currentSlotPerformanceState();
+                customEnvelopePerformances[i] = customEnvelopeSavedPerformances[i];
+                customEnvelopeLoaded[i] = (namedState.loadedMask & (1u << i)) != 0;
                 customEnvelopePersist[i] = customEnvelopeLoaded[i];
             }
 
@@ -2778,6 +2992,9 @@ private:
             {
                 customEnvelopeSaved[i] = runtimeEnvelopeFromSavedV5(dualAmpState.slots[i]);
                 customEnvelopes[i] = customEnvelopeSaved[i];
+                clearEnvelopeName(customEnvelopeNames[i]);
+                customEnvelopeSavedPerformances[i] = currentSlotPerformanceState();
+                customEnvelopePerformances[i] = customEnvelopeSavedPerformances[i];
                 customEnvelopeLoaded[i] = (dualAmpState.loadedMask & (1u << i)) != 0;
                 customEnvelopePersist[i] = customEnvelopeLoaded[i];
             }
@@ -2792,6 +3009,9 @@ private:
             {
                 customEnvelopeSaved[i] = runtimeEnvelopeFromSavedV4(dualPdState.slots[i]);
                 customEnvelopes[i] = customEnvelopeSaved[i];
+                clearEnvelopeName(customEnvelopeNames[i]);
+                customEnvelopeSavedPerformances[i] = currentSlotPerformanceState();
+                customEnvelopePerformances[i] = customEnvelopeSavedPerformances[i];
                 customEnvelopeLoaded[i] = (dualPdState.loadedMask & (1u << i)) != 0;
                 customEnvelopePersist[i] = customEnvelopeLoaded[i];
             }
@@ -2807,6 +3027,9 @@ private:
         {
             customEnvelopeSaved[i] = runtimeEnvelopeFromSavedV3(legacyState.slots[i]);
             customEnvelopes[i] = customEnvelopeSaved[i];
+            clearEnvelopeName(customEnvelopeNames[i]);
+            customEnvelopeSavedPerformances[i] = currentSlotPerformanceState();
+            customEnvelopePerformances[i] = customEnvelopeSavedPerformances[i];
             customEnvelopeLoaded[i] = (legacyState.loadedMask & (1u << i)) != 0;
             customEnvelopePersist[i] = customEnvelopeLoaded[i];
         }
@@ -3165,6 +3388,9 @@ private:
     volatile bool midiResetAltYPickup = false;
     EnvelopeProgram customEnvelopes[CustomEnvelopeSlotCount] = {};
     EnvelopeProgram customEnvelopeSaved[CustomEnvelopeSlotCount] = {};
+    uint8_t customEnvelopeNames[CustomEnvelopeSlotCount][16] = {};
+    SavedSlotPerformanceState customEnvelopePerformances[CustomEnvelopeSlotCount] = {};
+    SavedSlotPerformanceState customEnvelopeSavedPerformances[CustomEnvelopeSlotCount] = {};
     bool customEnvelopeLoaded[CustomEnvelopeSlotCount] = {};
     bool customEnvelopePersist[CustomEnvelopeSlotCount] = {};
     uint8_t sysexBuffer[WebMidiMaxSysexLength] = {};

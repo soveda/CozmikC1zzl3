@@ -31,8 +31,8 @@ const SYSEX_COMMAND_PD2_ENVELOPE_RESPONSE = 0x0e;
 const SYSEX_COMMAND_AMP2_ENVELOPE_RESPONSE = 0x0f;
 const SYSEX_COMMAND_REQUEST_PD2_ENVELOPE = 0x10;
 const SYSEX_COMMAND_REQUEST_AMP2_ENVELOPE = 0x11;
-const ENVELOPE_PROTOCOL_VERSION = 7;
-const MAX_READABLE_ENVELOPE_PROTOCOL_VERSION = 7;
+const ENVELOPE_PROTOCOL_VERSION = 9;
+const MAX_READABLE_ENVELOPE_PROTOCOL_VERSION = 9;
 
 const factoryPresets = [
   preset("Off", fill(0, 1), fill(0, 1)),
@@ -200,7 +200,7 @@ const el = {
   turingMidiChannel: document.querySelector("#turingMidiChannel")
 };
 
-function preset(name, amp, pd, slot = null, cardDirty = false, pitch = null, pitchSource = null, pitch2 = null, pd2 = null, amp2 = null, sustain = null) {
+function preset(name, amp, pd, slot = null, cardDirty = false, pitch = null, pitchSource = null, pitch2 = null, pd2 = null, amp2 = null, sustain = null, performance = null) {
   const pitchLane = normalizePitchStages(pitch);
   const ampLane = normalizeStages(amp);
   const pdLane = normalizeStages(pd);
@@ -213,6 +213,7 @@ function preset(name, amp, pd, slot = null, cardDirty = false, pitch = null, pit
     pitch: pitchLane,
     pitch2: normalizePitchStages(pitch2 || pitchLane),
     sustain: normalizeSustainStages(sustain),
+    performance: normalizePerformanceSettings(performance),
     pitchSource: pitchSource || null,
     slot: Number.isInteger(slot) ? clampInt(slot, 0, CUSTOM_SLOT_COUNT - 1) : null,
     cardDirty: Boolean(cardDirty)
@@ -326,13 +327,13 @@ function loadPresets() {
     if (Array.isArray(saved)) {
       const custom = saved
         .slice(FACTORY_PRESET_COUNT)
-        .map((item) => constrainPitchToEnvelope(preset(item.name || "Custom preset", item.amp, item.pd, item.slot, item.cardDirty, item.pitch, item.pitchSource, item.pitch2, item.pd2, item.amp2, item.sustain)))
+        .map((item) => constrainPitchToEnvelope(preset(item.name || "Custom preset", item.amp, item.pd, item.slot, item.cardDirty, item.pitch, item.pitchSource, item.pitch2, item.pd2, item.amp2, item.sustain, item.performance)))
         .slice(0, MAX_BROWSER_CUSTOM_PRESETS);
       return [...structuredClone(factoryPresets), ...custom];
     }
     if (Array.isArray(saved?.customPresets)) {
       const custom = saved.customPresets
-        .map((item) => constrainPitchToEnvelope(preset(item.name || "Custom preset", item.amp, item.pd, item.slot, item.cardDirty, item.pitch, item.pitchSource, item.pitch2, item.pd2, item.amp2, item.sustain)))
+        .map((item) => constrainPitchToEnvelope(preset(item.name || "Custom preset", item.amp, item.pd, item.slot, item.cardDirty, item.pitch, item.pitchSource, item.pitch2, item.pd2, item.amp2, item.sustain, item.performance)))
         .slice(0, MAX_BROWSER_CUSTOM_PRESETS);
       return [...structuredClone(factoryPresets), ...custom];
     }
@@ -355,6 +356,7 @@ function savePresets() {
         pitch: item.pitch,
         pitch2: item.pitch2,
         sustain: normalizeSustainStages(item.sustain),
+        performance: normalizePerformanceSettings(item.performance),
         pitchSource: item.pitchSource || null,
         slot: Number.isInteger(item.slot) ? item.slot : null,
         cardDirty: Boolean(item.cardDirty)
@@ -395,6 +397,31 @@ function loadPerformanceSettings() {
     turingMidiOut: false,
     turingMidiChannel: 1
   };
+}
+
+function normalizePerformanceSettings(settings = null) {
+  if (!settings || typeof settings !== "object") return null;
+  return {
+    pd: clampInt(settings.pd ?? 0, 0, MAX_LEVEL),
+    detune: clampInt(settings.detune ?? 2048, 0, MAX_LEVEL),
+    waveform: clampInt(settings.waveform ?? 0, 0, 7),
+    waveform2: clampInt(settings.waveform2 ?? settings.waveform ?? 0, 0, 7),
+    ring: clampInt(settings.ring ?? 0, 0, MAX_LEVEL),
+    noise: clampInt(settings.noise ?? 0, 0, MAX_LEVEL),
+    midiInChannel: clampInt(settings.midiInChannel ?? 1, 1, 16),
+    turingRange: clampInt(settings.turingRange ?? 2, 1, 8),
+    turingMidiOut: settings.turingMidiOut === true,
+    turingMidiChannel: clampInt(settings.turingMidiChannel ?? 1, 1, 16)
+  };
+}
+
+function applyPerformanceSettings(settings) {
+  const next = normalizePerformanceSettings(settings);
+  if (!next) return false;
+  performanceSettings = next;
+  savePerformanceSettings();
+  renderPerformanceSettings();
+  return true;
 }
 
 function savePerformanceSettings() {
@@ -818,7 +845,7 @@ function duplicateFactoryPreset() {
   }
 
   const source = presets[selected];
-  presets.push(preset(`${source.name} copy`, source.amp, source.pd, null, false, source.pitch, source.pitchSource, source.pitch2, source.pd2, source.amp2, source.sustain));
+  presets.push(preset(`${source.name} copy`, source.amp, source.pd, null, false, source.pitch, source.pitchSource, source.pitch2, source.pd2, source.amp2, source.sustain, source.performance));
   selected = presets.length - 1;
   savePresets();
   render();
@@ -1501,7 +1528,9 @@ async function sendSysex(command = SYSEX_COMMAND_PREVIEW) {
   }
   const isFlash = command === SYSEX_COMMAND_SAVE;
   const slot = clampInt(el.customSlot.value, 0, CUSTOM_SLOT_COUNT - 1);
-  const expectedEnvelope = isFlash ? structuredClone(presets[selected]) : null;
+  const expectedEnvelope = isFlash
+    ? { ...structuredClone(presets[selected]), performance: normalizePerformanceSettings(performanceSettings) }
+    : null;
   const sendCooldownMs = isFlash ? 1800 : 250;
   const summary = frameSummary();
   sendingSysex = true;
@@ -1532,6 +1561,7 @@ async function sendSysex(command = SYSEX_COMMAND_PREVIEW) {
     ? `Saved ${slotLabel}; after reset it appears after the factory presets. Amp max ${summary.ampMax}, ${summary.seconds}s.`
     : `Loaded ${slotLabel} until reset. Amp max ${summary.ampMax}, ${summary.seconds}s.`;
   if (isFlash) {
+    presets[selected].performance = normalizePerformanceSettings(performanceSettings);
     bindSelectedPresetToSlot(slot);
     if (envelopeReadSupported === true) {
       window.setTimeout(() => requestCardEnvelopes("save", slot, expectedEnvelope), SAVE_VERIFY_DELAY_MS);
@@ -1566,6 +1596,7 @@ async function loadEnvelopeAndSettings() {
   }
 
   try {
+    const usedStoredSettings = applyPerformanceSettings(presets[selected].performance);
     const envelopeFrame = buildSysex(SYSEX_COMMAND_PREVIEW);
     sendingSysex = true;
     el.sendSysex.disabled = true;
@@ -1576,7 +1607,7 @@ async function loadEnvelopeAndSettings() {
     sendSettingsFrames(output, SYSEX_COMMAND_SETTINGS, 60);
     const slot = clampInt(el.customSlot.value, 0, CUSTOM_SLOT_COUNT - 1);
     pulseButton(el.loadEnvelopeAndSettings, "Loaded");
-    setStatus(`Loaded ${presets[selected].name} into RAM slot ${slot + 1} and sent the current settings. Both are temporary until saved.`);
+    setStatus(`Loaded ${presets[selected].name} into RAM slot ${slot + 1} and sent ${usedStoredSettings ? "its saved settings" : "the current settings"}. Both are temporary until saved.`);
   } catch (error) {
     logDeveloper("Combined envelope and settings load failed.", {
       preset: presets[selected]?.name,
@@ -1674,7 +1705,8 @@ function buildSysex(command) {
 
   const slot = clampInt(el.customSlot.value, 0, CUSTOM_SLOT_COUNT - 1);
   const nameBytes = ensureArray(encodeName(presets[selected].name), "encodeName()");
-  const payload = [slot & 0x7f, ...nameBytes];
+  const performanceBytes = ensureArray(encodePerformanceSettings(performanceSettings), "encodePerformanceSettings()");
+  const payload = [slot & 0x7f, ...nameBytes, ...performanceBytes];
   constrainPitchToEnvelope(presets[selected]);
   appendStages(payload, presets[selected].amp);
   appendStages(payload, presets[selected].pd);
@@ -1821,6 +1853,44 @@ function encodeName(name) {
   });
 }
 
+function decodeNameBytes(data, offset) {
+  return Array.from({ length: 16 }, (_, index) => {
+    const code = data[offset + index] & 0x7f;
+    return code >= 32 && code <= 126 ? String.fromCharCode(code) : " ";
+  }).join("").trim();
+}
+
+function encodePerformanceSettings(settings = performanceSettings) {
+  const normalized = normalizePerformanceSettings(settings) || normalizePerformanceSettings(performanceSettings);
+  return [
+    ...packUint14(normalized.pd),
+    ...packUint14(normalized.detune),
+    ...packUint14(waveFamilyToControl(normalized.waveform)),
+    ...packUint14(waveFamilyToControl(normalized.waveform2)),
+    ...packUint14(normalized.ring),
+    ...packUint14(normalized.noise),
+    clampInt(normalized.midiInChannel, 1, 16) - 1,
+    clampInt(normalized.turingRange, 1, 8),
+    normalized.turingMidiOut ? 1 : 0,
+    clampInt(normalized.turingMidiChannel, 1, 16) - 1
+  ];
+}
+
+function decodePerformanceSettingsBytes(data, offset) {
+  return normalizePerformanceSettings({
+    pd: unpackUint14(data, offset),
+    detune: unpackUint14(data, offset + 2),
+    waveform: waveControlToFamily(unpackUint14(data, offset + 4)),
+    waveform2: waveControlToFamily(unpackUint14(data, offset + 6)),
+    ring: unpackUint14(data, offset + 8),
+    noise: unpackUint14(data, offset + 10),
+    midiInChannel: (data[offset + 12] & 0x0f) + 1,
+    turingRange: data[offset + 13],
+    turingMidiOut: (data[offset + 14] & 0x01) !== 0,
+    turingMidiChannel: (data[offset + 15] & 0x0f) + 1
+  });
+}
+
 function sysexHex() {
   return Array.from(ensureArray(buildSysex(SYSEX_COMMAND_PREVIEW), "buildSysex()"))
     .map((byte) => byte.toString(16).toUpperCase().padStart(2, "0"))
@@ -1890,6 +1960,7 @@ function reconcileCardEnvelopes(mask, cardEnvelopes) {
         existing.cardDirty = false;
         preservedChanges++;
       } else {
+        existing.name = cardEnvelope.name || existing.name || `Card Envelope ${slot + 1}`;
         existing.amp = normalizeStages(cardEnvelope.amp);
         existing.amp2 = normalizeStages(cardEnvelope.amp2 || cardEnvelope.amp);
         existing.pd = normalizeStages(cardEnvelope.pd);
@@ -1897,13 +1968,14 @@ function reconcileCardEnvelopes(mask, cardEnvelopes) {
         existing.pitch = normalizePitchStages(cardEnvelope.pitch);
         existing.pitch2 = normalizePitchStages(cardEnvelope.pitch2 || cardEnvelope.pitch);
         existing.sustain = normalizeSustainStages(cardEnvelope.sustain);
+        existing.performance = normalizePerformanceSettings(cardEnvelope.performance);
         constrainPitchToEnvelope(existing);
         existing.cardDirty = false;
         return;
       }
     }
 
-    const cardPreset = constrainPitchToEnvelope(preset(`Card Envelope ${slot + 1}`, cardEnvelope.amp, cardEnvelope.pd, slot, false, cardEnvelope.pitch, null, cardEnvelope.pitch2, cardEnvelope.pd2 || cardEnvelope.pd, cardEnvelope.amp2 || cardEnvelope.amp, cardEnvelope.sustain));
+    const cardPreset = constrainPitchToEnvelope(preset(cardEnvelope.name || `Card Envelope ${slot + 1}`, cardEnvelope.amp, cardEnvelope.pd, slot, false, cardEnvelope.pitch, null, cardEnvelope.pitch2, cardEnvelope.pd2 || cardEnvelope.pd, cardEnvelope.amp2 || cardEnvelope.amp, cardEnvelope.sustain, cardEnvelope.performance));
     if (customPresetCount() >= MAX_BROWSER_CUSTOM_PRESETS) {
       const replacementIndex = presets.findIndex((item, index) =>
         index >= FACTORY_PRESET_COUNT && item.slot === null);
@@ -2092,6 +2164,7 @@ function finishEnvelopeRead() {
       index >= FACTORY_PRESET_COUNT && item.slot === firstSlot);
     if (loadedIndex >= FACTORY_PRESET_COUNT) {
       selected = loadedIndex;
+      applyPerformanceSettings(presets[loadedIndex].performance);
       render();
     }
   }
@@ -2207,12 +2280,22 @@ function handleEnvelopeSlotsResponse(data) {
 }
 
 function handleEnvelopeResponse(data) {
-  if (!envelopeReadSession || (data.length !== 89 && data.length !== 129)) return;
+  if (!envelopeReadSession || (data.length !== 89 && data.length !== 105 && data.length !== 121 && data.length !== 129 && data.length !== 145 && data.length !== 161)) return;
   const slot = data[7] & 0x07;
   if (!envelopeReadSession.pendingSlots.includes(slot)) return;
   const protocolVersion = envelopeReadSession.protocolVersion || 1;
 
   let offset = 8;
+  const hasNameFrame = protocolVersion >= 8 && (data.length === 105 || data.length === 121 || data.length === 145 || data.length === 161);
+  const name = hasNameFrame
+    ? decodeNameBytes(data, offset)
+    : "";
+  if (hasNameFrame) offset += 16;
+  const hasPerformanceFrame = protocolVersion >= 9 && (data.length === 121 || data.length === 161);
+  const performance = hasPerformanceFrame
+    ? decodePerformanceSettingsBytes(data, offset)
+    : null;
+  if (hasPerformanceFrame) offset += 16;
   const readStages = () => Array.from({ length: STAGES }, () => {
     const stage = {
       level: clampInt(unpackUint14(data, offset), 0, MAX_LEVEL),
@@ -2223,11 +2306,13 @@ function handleEnvelopeResponse(data) {
   });
   const amp = readStages();
   const pd = readStages();
-  const thirdLane = data.length === 129 ? readStages() : null;
+  const thirdLane = data.length === 129 || data.length === 145 || data.length === 161 ? readStages() : null;
   const pd2 = protocolVersion >= 4 && thirdLane ? thirdLane : pd;
   const amp2 = amp;
   const pitch = protocolVersion >= 4 ? normalizePitchStages(null) : (thirdLane || normalizePitchStages(null));
   envelopeReadSession.cardEnvelopes.set(slot, {
+    name,
+    performance,
     amp,
     amp2,
     pd,
@@ -2244,11 +2329,15 @@ function handleEnvelopeResponse(data) {
     slot: slot + 1,
     length: data.length,
     protocolVersion,
-    responseType: data.length === 129 && protocolVersion >= 4
+    responseType: (data.length === 129 || data.length === 145 || data.length === 161) && protocolVersion >= 4
       ? "amp/pd1/pd2; pitch follows separately"
-      : data.length === 129
+      : data.length === 129 || data.length === 145 || data.length === 161
         ? "amp/pd/pitch"
-        : "amp/pd standard; pitch may follow separately"
+        : performance
+          ? "name/settings/amp/pd standard; pitch may follow separately"
+        : name
+          ? "name/amp/pd standard; pitch may follow separately"
+          : "amp/pd standard; pitch may follow separately"
   });
   if (protocolVersion >= 5) {
     requestAmp2EnvelopeForSlot(slot);
@@ -2806,6 +2895,12 @@ function updatePerformanceSetting(key, value) {
     performanceSettings.waveform2 = clampInt(value, 0, 7);
   }
 
+  if (selected >= FACTORY_PRESET_COUNT) {
+    presets[selected].performance = normalizePerformanceSettings(performanceSettings);
+    if (presets[selected].slot !== null) presets[selected].cardDirty = true;
+    savePresets();
+    renderPresetList();
+  }
   savePerformanceSettings();
 }
 
