@@ -39,6 +39,12 @@ stable full-dual workflow deliberately.
 - `Save Sound Preset` stores the selected envelope/name and the current
   settings together.
 - `Read Envelopes from Card` also restores saved settings for card slots.
+- Compatibility send paths support `C1ZZL3 Core`, `C1ZZL3 Rad`, and future
+  `C1ZZL3 Gnarly`-style firmware:
+  - Core/older cards receive a collapsed Amp/PD/Pitch payload.
+  - Rad/Gnarly-capable cards receive the full dual-oscillator payload.
+  - Developer diagnostics show the detected settings protocol, envelope
+    protocol, and current envelope send mode.
 
 ## Matching Firmware
 
@@ -61,6 +67,10 @@ Then open:
 ```text
 http://localhost:5177/
 ```
+
+After connecting MIDI, use `Read Settings from Card` and `Read Envelopes from
+Card` once so the editor can detect whether the card is Core, Rad, or a future
+Gnarly-compatible build.
 
 ## Hardware-Control Note
 

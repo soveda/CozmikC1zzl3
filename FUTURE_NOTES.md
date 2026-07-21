@@ -71,18 +71,19 @@ oscillator paths.
 Future releases should avoid forcing every user onto the most complex version.
 The clearer product shape is three maintained choices:
 
-- `Simple / Workshop Computer`: the current Workshop Computer release style,
+- `C1ZZL3 Core`: the current Workshop Computer release style,
   with the simpler physical interface and the least cognitive load.
-- `Advanced With Turing`: the current protocol v9 stable beta direction, using
-  the current full-dual Web UI while preserving the Turing machine mode on the
+- `C1ZZL3 Rad`: the current protocol v9 stable beta direction, using the
+  current full-dual Web UI while preserving the Turing machine mode on the
   hardware switch.
-- `Advanced Dual Oscillator`: a future v10-style build that removes or greatly
-  reduces the Turing machine role so the physical switch/knob UI can expose
-  more direct oscillator 1 and oscillator 2 controls.
+- `C1ZZL3 Gnarly`: a future v10-style build that removes or greatly reduces
+  the Turing machine role so the physical switch/knob UI can expose more direct
+  oscillator 1 and oscillator 2 controls.
 
-The v10 no-Turing branch should be developed as a separate experiment, not as a
-replacement for production or the v9 stable beta. It should answer whether the
-extra physical dual-oscillator control is worth losing the Turing mode.
+The v10 no-Turing `C1ZZL3 Gnarly` branch should be developed as a separate
+experiment, not as a replacement for `C1ZZL3 Core` or the v9 `C1ZZL3 Rad`
+stable beta. It should answer whether the extra physical dual-oscillator
+control is worth losing the Turing mode.
 
 Candidate v10 hardware UI:
 

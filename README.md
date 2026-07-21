@@ -221,6 +221,10 @@ Current scope:
   and oscillator wave settings.
 - Import Lab detects single-line CZ patches from the line mode byte and mirrors
   the active line into both C1ZZL3 oscillator lanes.
+- The v9 lab can also talk to C1ZZL3 Core by collapsing the extra dual lanes
+  into a Core-compatible Amp/PD/Pitch payload. Use `Read Settings from Card` and
+  `Read Envelopes from Card` after connecting so the lab can detect the card
+  version and choose the best send mode.
 
 Older beta web apps and UF2s are archived under
 `experiments/archive/superseded-20260721/` and

@@ -71,6 +71,12 @@ Use:
 experiments/full-dual-oscillators/
 ```
 
+The matching Web UI includes compatibility send paths for Core, Rad, and future
+Gnarly-style firmware. Older/Core cards receive a collapsed Amp/PD/Pitch
+payload, while Rad/Gnarly-capable cards receive the full dual-oscillator payload.
+Use `Read Settings from Card` and `Read Envelopes from Card` after connecting
+so the editor can choose the best send mode.
+
 ## Hardware-Control Note
 
 If a later experiment removes the Turing machine mode, switch up could become

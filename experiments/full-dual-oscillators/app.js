@@ -96,6 +96,7 @@ let settingsRequestTimer = null;
 let envelopeReadSession = null;
 let envelopeReadTimer = null;
 let envelopeReadSupported = null;
+let detectedEnvelopeProtocol = null;
 let auxiliaryEnvelopeRequestTimer = null;
 let lastLoggedSysexAt = 0;
 let messageImportedDraft = null;
@@ -1290,6 +1291,7 @@ function renderDeveloperMidiRaw() {
     `MIDIAccess: ${constructorName(midiAccess)}`,
     `Settings protocol: ${describeSettingsProtocol()}`,
     `Envelope readback: ${describeEnvelopeReadback()}`,
+    `Envelope send mode: ${envelopePayloadModeLabel()}`,
     "",
     "Inputs map",
     inspectPortMap(midiAccess.inputs),
@@ -1324,7 +1326,7 @@ function renderDeveloperPorts() {
     ? outputs.map((port, index) => formatPort(port, index, "Output")).join("\n\n")
     : "None detected";
 
-  el.developerPorts.textContent = `Settings protocol: ${describeSettingsProtocol()}\nEnvelope readback: ${describeEnvelopeReadback()}\n\nInputs (${inputs.length})\n${inputText}\n\nOutputs (${outputs.length})\n${outputText}`;
+  el.developerPorts.textContent = `Settings protocol: ${describeSettingsProtocol()}\nEnvelope readback: ${describeEnvelopeReadback()}\nEnvelope send mode: ${envelopePayloadModeLabel()}\n\nInputs (${inputs.length})\n${inputText}\n\nOutputs (${outputs.length})\n${outputText}`;
   renderDeveloperMidiRaw();
 }
 
@@ -1336,9 +1338,40 @@ function describeSettingsProtocol() {
 }
 
 function describeEnvelopeReadback() {
-  if (envelopeReadSupported === true) return "Supported";
+  if (envelopeReadSupported === true) {
+    return detectedEnvelopeProtocol
+      ? `Supported, protocol v${detectedEnvelopeProtocol}`
+      : "Supported";
+  }
   if (envelopeReadSupported === false) return "No response";
   return "Not checked yet";
+}
+
+function cardCapabilityLabel() {
+  if (settingsProtocol === "dual-oscillator") return "Rad/Gnarly dual-oscillator";
+  if (settingsProtocol === "extended") return "Core extended";
+  if (settingsProtocol === "stable") return "Core stable";
+  return "undetected";
+}
+
+function supportsDualOscillatorEnvelopePayload() {
+  return settingsProtocol === "dual-oscillator" || (detectedEnvelopeProtocol !== null && detectedEnvelopeProtocol >= 5);
+}
+
+function supportsSoundPresetPayload() {
+  return settingsProtocol === "dual-oscillator" && (detectedEnvelopeProtocol === null || detectedEnvelopeProtocol >= 9);
+}
+
+function envelopePayloadMode() {
+  if (supportsDualOscillatorEnvelopePayload()) return "dual";
+  if (detectedEnvelopeProtocol === 1) return "legacy";
+  return "core";
+}
+
+function envelopePayloadModeLabel(mode = envelopePayloadMode()) {
+  if (mode === "dual") return "full-dual";
+  if (mode === "legacy") return "legacy Amp/PD";
+  return "Core Amp/PD/Pitch";
 }
 
 function clearDeveloperLog() {
@@ -1478,6 +1511,7 @@ function refreshMidiPorts() {
   });
   if (outputs.length === 0) {
     settingsProtocol = "unknown";
+    detectedEnvelopeProtocol = null;
   }
   setStatus(`MIDI ready: ${inputs.length} input${inputs.length === 1 ? "" : "s"}, ${outputs.length} output${outputs.length === 1 ? "" : "s"}.`);
 }
@@ -1530,13 +1564,9 @@ async function sendSysex(command = SYSEX_COMMAND_PREVIEW, options = {}) {
   }
   const isFlash = command === SYSEX_COMMAND_SAVE;
   const slot = clampInt(el.customSlot.value, 0, CUSTOM_SLOT_COUNT - 1);
+  const payloadMode = envelopePayloadMode();
   const expectedEnvelope = isFlash
-    ? {
-        ...structuredClone(presets[selected]),
-        performance: includePerformance
-          ? normalizePerformanceSettings(performanceSettings)
-          : normalizePerformanceSettings(presets[selected].performance)
-      }
+    ? expectedEnvelopeForPayloadMode(payloadMode, includePerformance)
     : null;
   const sendCooldownMs = isFlash ? 1800 : 250;
   const summary = frameSummary();
@@ -1566,10 +1596,13 @@ async function sendSysex(command = SYSEX_COMMAND_PREVIEW, options = {}) {
     return;
   }
   const slotLabel = `Custom ${slot + 1}`;
+  const compatibilityNote = compatibilityStatusNote(payloadMode, includePerformance);
   const status = isFlash
-    ? includePerformance
+    ? includePerformance && supportsSoundPresetPayload()
       ? `Saved sound preset ${slotLabel}; after reset it appears after the factory presets. Amp max ${summary.ampMax}, ${summary.seconds}s.`
-      : `Saved envelope only ${slotLabel}; saved settings for this slot were left unchanged. Amp max ${summary.ampMax}, ${summary.seconds}s.`
+      : includePerformance
+        ? `Saved envelope ${slotLabel}; this card does not expose v9 sound-preset settings, so settings were not stored in the slot. Amp max ${summary.ampMax}, ${summary.seconds}s.`
+        : `Saved envelope only ${slotLabel}; saved settings for this slot were left unchanged when the card supports sound presets. Amp max ${summary.ampMax}, ${summary.seconds}s.`
     : `Loaded ${slotLabel} until reset. Amp max ${summary.ampMax}, ${summary.seconds}s.`;
   if (isFlash) {
     if (includePerformance) {
@@ -1584,7 +1617,7 @@ async function sendSysex(command = SYSEX_COMMAND_PREVIEW, options = {}) {
     ? includePerformance ? el.flashSysex : el.saveEnvelopeOnly
     : el.sendSysex;
   pulseButton(pulseTarget, isFlash ? "Saved" : "Loaded");
-  setStatus(`${status} ${frame.length} byte SysEx to ${output.name || "MIDI output"}.`);
+  setStatus(`${status} ${frame.length} byte ${envelopePayloadModeLabel(payloadMode)} SysEx to ${output.name || "MIDI output"}.${compatibilityNote}`);
 
   window.setTimeout(() => {
     sendingSysex = false;
@@ -1614,6 +1647,7 @@ async function loadEnvelopeAndSettings() {
 
   try {
     const usedStoredSettings = applyPerformanceSettings(presets[selected].performance);
+    const payloadMode = envelopePayloadMode();
     const envelopeFrame = buildSysex(SYSEX_COMMAND_PREVIEW, { includePerformance: true });
     sendingSysex = true;
   el.sendSysex.disabled = true;
@@ -1625,7 +1659,7 @@ async function loadEnvelopeAndSettings() {
     sendSettingsFrames(output, SYSEX_COMMAND_SETTINGS, 60);
     const slot = clampInt(el.customSlot.value, 0, CUSTOM_SLOT_COUNT - 1);
     pulseButton(el.loadEnvelopeAndSettings, "Loaded");
-    setStatus(`Loaded sound preset ${presets[selected].name} into RAM slot ${slot + 1} and sent ${usedStoredSettings ? "its saved settings" : "the current settings"}. Both are temporary until saved.`);
+    setStatus(`Loaded sound preset ${presets[selected].name} into RAM slot ${slot + 1} with a ${envelopePayloadModeLabel(payloadMode)} envelope payload and sent ${usedStoredSettings ? "its saved settings" : "the current settings"}. Both are temporary until saved.${compatibilityStatusNote(payloadMode, true)}`);
   } catch (error) {
     logDeveloper("Combined envelope and settings load failed.", {
       preset: presets[selected]?.name,
@@ -1725,8 +1759,33 @@ function buildSysex(command, options = {}) {
   }
 
   const slot = clampInt(el.customSlot.value, 0, CUSTOM_SLOT_COUNT - 1);
+  const mode = envelopePayloadMode();
+  if (mode === "legacy") return buildLegacyEnvelopeSysex(command, slot);
+  if (mode === "core") return buildCoreEnvelopeSysex(command, slot);
+  return buildDualEnvelopeSysex(command, slot, includePerformance);
+}
+
+function buildLegacyEnvelopeSysex(command, slot) {
+  const payload = [slot & 0x7f];
+  appendStages(payload, presets[selected].amp);
+  appendStages(payload, presets[selected].pd);
+  return [0xf0, SYSEX_MANUFACTURER, ...ensureArray(SYSEX_ID, "SYSEX_ID"), command, ...ensureArray(payload, "legacy envelope payload"), 0xf7];
+}
+
+function buildCoreEnvelopeSysex(command, slot) {
   const nameBytes = ensureArray(encodeName(presets[selected].name), "encodeName()");
-  const performanceBytes = includePerformance
+  const payload = [slot & 0x7f, ...nameBytes];
+  constrainPitchToEnvelope(presets[selected]);
+  appendStages(payload, presets[selected].amp);
+  appendStages(payload, presets[selected].pd);
+  appendStages(payload, presets[selected].pitch);
+  return [0xf0, SYSEX_MANUFACTURER, ...ensureArray(SYSEX_ID, "SYSEX_ID"), command, ...ensureArray(payload, "Core envelope payload"), 0xf7];
+}
+
+function buildDualEnvelopeSysex(command, slot, includePerformance) {
+  const nameBytes = ensureArray(encodeName(presets[selected].name), "encodeName()");
+  const shouldIncludePerformance = includePerformance && supportsSoundPresetPayload();
+  const performanceBytes = shouldIncludePerformance
     ? ensureArray(encodePerformanceSettings(performanceSettings), "encodePerformanceSettings()")
     : [];
   const payload = [slot & 0x7f, ...nameBytes, ...performanceBytes];
@@ -1739,6 +1798,49 @@ function buildSysex(command, options = {}) {
   appendStages(payload, presets[selected].amp2 || presets[selected].amp);
   payload.push(...normalizeSustainStages(presets[selected].sustain));
   return [0xf0, SYSEX_MANUFACTURER, ...ensureArray(SYSEX_ID, "SYSEX_ID"), command, ...ensureArray(payload, "payload"), 0xf7];
+}
+
+function expectedEnvelopeForPayloadMode(mode, includePerformance) {
+  const source = structuredClone(presets[selected]);
+  if (mode === "legacy") {
+    return {
+      ...source,
+      name: "",
+      amp2: source.amp,
+      pd2: source.pd,
+      pitch: normalizePitchStages(null),
+      pitch2: normalizePitchStages(null),
+      sustain: normalizeSustainStages(null),
+      performance: null
+    };
+  }
+  if (mode === "core") {
+    return {
+      ...source,
+      amp2: source.amp,
+      pd2: source.pd,
+      pitch2: source.pitch,
+      sustain: normalizeSustainStages(null),
+      performance: null
+    };
+  }
+  return {
+    ...source,
+    performance: includePerformance && supportsSoundPresetPayload()
+      ? normalizePerformanceSettings(performanceSettings)
+      : normalizePerformanceSettings(source.performance)
+  };
+}
+
+function compatibilityStatusNote(mode, includePerformance) {
+  const capability = cardCapabilityLabel();
+  if (mode === "dual") {
+    return ` Card capability: ${capability}.`;
+  }
+  if (includePerformance && !supportsSoundPresetPayload()) {
+    return ` Card capability: ${capability}; dual lanes/settings are collapsed for compatibility. Use Read Settings from Card with C1ZZL3 Rad/Gnarly firmware to unlock full-dual sound preset saves.`;
+  }
+  return ` Card capability: ${capability}; dual lanes are collapsed for compatibility.`;
 }
 
 function buildSettingsSysex(command) {
@@ -2289,12 +2391,14 @@ function handleEnvelopeSlotsResponse(data) {
   }
 
   envelopeReadSupported = true;
+  detectedEnvelopeProtocol = version;
   renderDeveloperPorts();
   envelopeReadSession.protocolVersion = version;
   envelopeReadSession.mask = unpackUint14(data, 8) & 0xff;
   envelopeReadSession.pendingSlots = Array.from({ length: CUSTOM_SLOT_COUNT }, (_, slot) => slot)
     .filter((slot) => (envelopeReadSession.mask & (1 << slot)) !== 0);
   logDeveloper("Envelope slot list received.", {
+    protocolVersion: version,
     mask: envelopeReadSession.mask,
     pendingSlots: envelopeReadSession.pendingSlots.map((slot) => slot + 1)
   });

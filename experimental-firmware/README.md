@@ -15,8 +15,8 @@ Current visible choices:
 | UF2 | Use when |
 | --- | --- |
 | `C1ZZL3_WORKSHOP_RELEASE_84_V1.3.uf2` | You want the Workshop Computer release 84 / version 1.3 exactly as published. |
-| `C1ZZL3_PRODUCTION_1.4.uf2` | You want the current stable production build, mirrored here for convenience. |
-| `C1ZZL3_STABLE_FULL_DUAL_OSCILLATORS_PROTOCOL_V9.uf2` | You want the latest stable beta / advanced-with-Turing version with sound presets, envelope-only save, separate Amp/PD/Pitch lanes, and separate oscillator wave families. |
+| `C1ZZL3_PRODUCTION_1.4.uf2` | You want `C1ZZL3 Core`, the current stable production build, mirrored here for convenience. |
+| `C1ZZL3_STABLE_FULL_DUAL_OSCILLATORS_PROTOCOL_V9.uf2` | You want `C1ZZL3 Rad`, the latest stable beta / advanced-with-Turing version with sound presets, envelope-only save, separate Amp/PD/Pitch lanes, and separate oscillator wave families. |
 
 Production remains authoritative at:
 
