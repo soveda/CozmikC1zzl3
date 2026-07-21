@@ -1,11 +1,11 @@
 # C1ZZL3 Full Dual Oscillator Web Experiment
 
-This folder contains the experimental Web MIDI UI for the protocol v9
+This folder contains the Web MIDI UI for the stable protocol v9
 full-dual-oscillator firmware. It starts from the tested dual-amplitude v6
 rollback, then adds separate oscillator wave-family settings.
 
-Do not replace the production Envelope Lab with this page unless the matching
-firmware experiment passes hardware testing.
+This remains separate from the production Envelope Lab so users can choose the
+stable full-dual workflow deliberately.
 
 ## Current Scope
 
@@ -68,9 +68,9 @@ If the card later trades away the Turing machine mode, switch up could become
 oscillator 1 tone controls and switch middle could become oscillator 2 tone
 controls, while switch down remains detune/ring/noise.
 
-## Protocol v9 Test Focus
+## Protocol v9 Behaviour
 
 Protocol v9 saves performance settings with each custom envelope slot,
 including PD, detune, ring, noise, MIDI/Turing settings, and oscillator 1/2 wave
 families. The UI exposes both envelope-only and sound-preset save paths so the
-two behaviours can be tested separately.
+two behaviours remain clear.

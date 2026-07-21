@@ -453,14 +453,16 @@ function mergeCzEnvelopes(a, b) {
 }
 
 function cloneCzEnvelopeStages(envelope) {
-  const cloned = envelope.stages.map((stage, index) => ({
+  const sourceStages = Array.isArray(envelope) ? envelope : envelope.stages;
+  const endStep = envelope.endStep || 8;
+  const cloned = sourceStages.map((stage, index) => ({
     rate: stage.rate,
     level: stage.level,
     sustain: stage.sustain,
     down: stage.down,
-    inactive: index >= (envelope.endStep || 8)
+    inactive: index >= endStep
   }));
-  cloned.endStep = envelope.endStep || 8;
+  cloned.endStep = endStep;
   return cloned;
 }
 
@@ -487,6 +489,34 @@ function selectPitchStages(czPatch, mode) {
   return mergeCzEnvelopes(czPatch.dco1Pitch, czPatch.dco2Pitch);
 }
 
+function singleActiveLine(czPatch) {
+  if (czPatch.line1Enabled && !czPatch.line2Enabled) return "line1";
+  if (czPatch.line2Enabled && !czPatch.line1Enabled) return "line2";
+  return null;
+}
+
+function selectPitchEnvelopePair(czPatch, mode) {
+  if (mode === "dual") {
+    const activeLine = singleActiveLine(czPatch);
+    if (activeLine === "line1") {
+      const selected = cloneCzEnvelopeStages(czPatch.dco1Pitch);
+      return { pitch1: selected, pitch2: cloneCzEnvelopeStages(selected), selected };
+    }
+    if (activeLine === "line2") {
+      const selected = cloneCzEnvelopeStages(czPatch.dco2Pitch);
+      return { pitch1: selected, pitch2: cloneCzEnvelopeStages(selected), selected };
+    }
+    return {
+      pitch1: cloneCzEnvelopeStages(czPatch.dco1Pitch),
+      pitch2: cloneCzEnvelopeStages(czPatch.dco2Pitch),
+      selected: cloneCzEnvelopeStages(czPatch.dco1Pitch)
+    };
+  }
+
+  const selected = selectPitchStages(czPatch, mode);
+  return { pitch1: selected, pitch2: cloneCzEnvelopeStages(selected), selected };
+}
+
 function selectLineEnvelopeStages(line1Envelope, line2Envelope, mode) {
   if (mode === "line1") return cloneCzEnvelopeStages(line1Envelope);
   if (mode === "line2") return cloneCzEnvelopeStages(line2Envelope);
@@ -495,6 +525,15 @@ function selectLineEnvelopeStages(line1Envelope, line2Envelope, mode) {
 
 function selectPdEnvelopePair(czPatch, mode) {
   if (mode === "dual") {
+    const activeLine = singleActiveLine(czPatch);
+    if (activeLine === "line1") {
+      const selected = cloneCzEnvelopeStages(czPatch.dcw1);
+      return { pd1: selected, pd2: cloneCzEnvelopeStages(selected) };
+    }
+    if (activeLine === "line2") {
+      const selected = cloneCzEnvelopeStages(czPatch.dcw2);
+      return { pd1: selected, pd2: cloneCzEnvelopeStages(selected) };
+    }
     return {
       pd1: cloneCzEnvelopeStages(czPatch.dcw1),
       pd2: cloneCzEnvelopeStages(czPatch.dcw2)
@@ -507,6 +546,15 @@ function selectPdEnvelopePair(czPatch, mode) {
 
 function selectAmpEnvelopePair(czPatch, mode) {
   if (mode === "dual") {
+    const activeLine = singleActiveLine(czPatch);
+    if (activeLine === "line1") {
+      const selected = cloneCzEnvelopeStages(czPatch.dca1);
+      return { amp1: selected, amp2: cloneCzEnvelopeStages(selected) };
+    }
+    if (activeLine === "line2") {
+      const selected = cloneCzEnvelopeStages(czPatch.dca2);
+      return { amp1: selected, amp2: cloneCzEnvelopeStages(selected) };
+    }
     return {
       amp1: cloneCzEnvelopeStages(czPatch.dca1),
       amp2: cloneCzEnvelopeStages(czPatch.dca2)
@@ -562,6 +610,7 @@ function czSustainStage(stages) {
 }
 
 function parseCzPatch(decodedBytes) {
+  const lineMode = decodedBytes[0] ?? 0;
   const line1Wave = parseCzWaveSpec(decodedBytes, CZ_SECTIONS.line1Wave);
   const line2Wave = parseCzWaveSpec(decodedBytes, CZ_SECTIONS.line2Wave);
   const dca1 = parseCzEnvelope(decodedBytes, CZ_SECTIONS.dca1End, CZ_SECTIONS.dca1, dcaRate, dcaLevel);
@@ -580,6 +629,9 @@ function parseCzPatch(decodedBytes) {
     dco2Pitch,
     line1Wave,
     line2Wave,
+    lineMode,
+    line1Enabled: (lineMode & 0x02) !== 0,
+    line2Enabled: (lineMode & 0x01) !== 0,
     ampStages: mergeCzEnvelopes(dca1, dca2),
     pdStages: mergeCzEnvelopes(dcw1, dcw2),
     pitchStages: mergeCzEnvelopes(dco1Pitch, dco2Pitch),
@@ -666,8 +718,11 @@ function buildDraftPreset(
     .trim() || "Imported CZ patch";
 
   const czPatch = parseCzPatch(decodedBytes);
-  const wave = classifyWave(decodedBytes, czPatch.line1Wave);
-  const wave2 = classifyWave(decodedBytes, czPatch.line2Wave);
+  const activeLine = singleActiveLine(czPatch);
+  const line1Wave = classifyWave(decodedBytes, czPatch.line1Wave);
+  const line2Wave = classifyWave(decodedBytes, czPatch.line2Wave);
+  const wave = activeLine === "line2" ? line2Wave : line1Wave;
+  const wave2 = activeLine ? wave : line2Wave;
   const ampPair = selectAmpEnvelopePair(czPatch, ampMode);
   const pdPair = selectPdEnvelopePair(czPatch, pdMode);
   const ampMergedEnvelope = czEnvelopeToC1Stages(mergeCzEnvelopes(czPatch.dca1, czPatch.dca2), 140, 24000);
@@ -675,16 +730,16 @@ function buildDraftPreset(
   const amp2Envelope = czEnvelopeToC1Stages(ampPair.amp2, 140, 24000);
   const dcwEnvelope = czEnvelopeToC1Stages(pdPair.pd1, 120, 30000);
   const dcw2Envelope = czEnvelopeToC1Stages(pdPair.pd2, 120, 30000);
-  const pitchStages = selectPitchStages(czPatch, pitchMode);
-  const pitchEnvelope = czPitchEnvelopeToC1Stages(pitchStages, 240, 48000);
+  const pitchPair = selectPitchEnvelopePair(czPatch, pitchMode);
   const dco1PitchEnvelope = czPitchEnvelopeToC1Stages(cloneCzEnvelopeStages(czPatch.dco1Pitch), 240, 48000);
   const dco2PitchEnvelope = czPitchEnvelopeToC1Stages(cloneCzEnvelopeStages(czPatch.dco2Pitch), 240, 48000);
-  const pitch2Envelope = pitchMode === "dual" ? dco2PitchEnvelope : pitchEnvelope;
+  const pitch1Envelope = czPitchEnvelopeToC1Stages(pitchPair.pitch1, 240, 48000);
+  const pitch2Envelope = czPitchEnvelopeToC1Stages(pitchPair.pitch2, 240, 48000);
   const sustain = [
     czSustainStage(ampPair.amp1),
     czSustainStage(pdPair.pd1),
-    czSustainStage(pitchMode === "dual" ? cloneCzEnvelopeStages(czPatch.dco1Pitch) : pitchStages),
-    czSustainStage(pitchMode === "dual" ? cloneCzEnvelopeStages(czPatch.dco2Pitch) : pitchStages),
+    czSustainStage(pitchPair.pitch1),
+    czSustainStage(pitchPair.pitch2),
     czSustainStage(pdPair.pd2),
     czSustainStage(ampPair.amp2)
   ];
@@ -707,11 +762,11 @@ function buildDraftPreset(
     amp2: amp2Envelope,
     pd: dcwEnvelope,
     pd2: dcw2Envelope,
-    pitch: pitchMode === "dual" ? dco1PitchEnvelope : pitchEnvelope,
+    pitch: pitch1Envelope,
     pitch2: pitch2Envelope,
     sustain,
     sourceEnvelopes: {
-      pitch: pitchMode === "dual" ? dco1PitchEnvelope : pitchEnvelope,
+      pitch: pitch1Envelope,
       pitch2: pitch2Envelope,
       pitchAlternatives,
       pitchMapping: {
@@ -789,6 +844,13 @@ function formatCzWaveSpec(label, spec) {
   return `${label}: ${spec.primaryName}${second}, ${spec.windowName} -> C1ZZL3 ${spec.family.label} (raw ${toHex(spec.bytes, 2)})`;
 }
 
+function formatLineMode(cz) {
+  if (cz.line1Enabled && cz.line2Enabled) return `CZ line mode 0x${cz.lineMode.toString(16)}: lines 1 and 2 active.`;
+  if (cz.line1Enabled) return `CZ line mode 0x${cz.lineMode.toString(16)}: line 1 active; C1ZZL3 oscillator 2 mirrors oscillator 1.`;
+  if (cz.line2Enabled) return `CZ line mode 0x${cz.lineMode.toString(16)}: line 2 active; C1ZZL3 oscillator 1 mirrors oscillator 2.`;
+  return `CZ line mode 0x${cz.lineMode.toString(16)}: active line unclear; decoded lanes are preserved.`;
+}
+
 function renderDraft(draft) {
   if (!draft) {
     el.decodedPatchBox.textContent = "No decoded patch yet.";
@@ -815,6 +877,7 @@ function renderDraft(draft) {
   el.supportedOutputBox.textContent = "Envelope Lab draft handoff";
   el.draftNameBox.textContent = `${draft.name} (${draft.confidence} confidence)`;
   el.waveBox.textContent = [
+    formatLineMode(draft.sourceEnvelopes.cz),
     formatCzWaveSpec("Line 1 / Osc 1", draft.sourceEnvelopes.cz.line1Wave),
     formatCzWaveSpec("Line 2 / Osc 2", draft.sourceEnvelopes.cz.line2Wave)
   ].join("\n");

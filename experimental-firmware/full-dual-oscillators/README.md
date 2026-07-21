@@ -1,6 +1,6 @@
-# C1ZZL3 Full Dual Oscillator Firmware Experiment
+# C1ZZL3 Full Dual Oscillator Firmware
 
-This folder contains the first full-dual-oscillator firmware draft.
+This folder contains the stable protocol v9 full-dual-oscillator firmware.
 
 It starts from the tested protocol v6 dual-amplitude rollback and keeps the
 same oscillator lookup tables. The new experiment adds independent oscillator
@@ -62,7 +62,7 @@ The named test UF2 is:
 experimental-firmware/full-dual-oscillators/C1ZZL3_FULL_DUAL_OSCILLATORS_PROTOCOL_V8.uf2
 ```
 
-The current sound-preset first pass is:
+The current stable full-dual build is:
 
 ```text
 experimental-firmware/full-dual-oscillators/C1ZZL3_FULL_DUAL_OSCILLATORS_PROTOCOL_V9.uf2
@@ -84,9 +84,9 @@ oscillator 1 baseline PD/wave controls, switch middle could become oscillator
 
 This first pass does not make that tradeoff.
 
-## Protocol v9 Test Focus
+## Protocol v9 Behaviour
 
-Protocol v9 is the first pass at treating saved custom slots as sound presets:
+Protocol v9 treats saved custom slots as sound presets:
 the card slot should now read back envelope shape, slot name, and performance
 settings together. `Read Envelopes from Card` also restores the saved settings
 for each slot in the editor. Protocol v8 remains the rollback if the
