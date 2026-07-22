@@ -26,9 +26,10 @@ static constexpr uint8_t WebMidiCommandPd2EnvelopeResponse = 0x0Eu;
 static constexpr uint8_t WebMidiCommandAmp2EnvelopeResponse = 0x0Fu;
 static constexpr uint8_t WebMidiCommandRequestPd2Envelope = 0x10u;
 static constexpr uint8_t WebMidiCommandRequestAmp2Envelope = 0x11u;
-static constexpr uint8_t WebMidiEnvelopeProtocolVersion = 9u;
+static constexpr uint8_t WebMidiEnvelopeProtocolVersion = 11u;
 static constexpr uint32_t WebMidiSettingsPayloadLength = 14u;
 static constexpr uint32_t WebMidiDualOscSettingsPayloadLength = 16u;
+static constexpr uint32_t WebMidiRecipeBankSettingsPayloadLength = 17u;
 static constexpr uint32_t WebMidiStableSettingsPayloadLength = 8u;
 static constexpr uint32_t WebMidiRangeSettingsPayloadLength = 6u;
 static constexpr uint32_t WebMidiLegacySettingsPayloadLength = 5u;
@@ -360,6 +361,7 @@ private:
     static constexpr uint32_t TriggerDeClickSamples = 384u;
     static constexpr uint32_t LoopDeClickSamples = 384u;
     static constexpr int32_t LoopDeClickFloorQ12 = 3584;
+    static constexpr uint8_t RecipeBankCount = 4u;
     static constexpr uint32_t SaveFlashOffset =
         (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE) &
         ~(FLASH_SECTOR_SIZE - 1u);
@@ -404,7 +406,8 @@ private:
         uint8_t turingRange;
         uint8_t turingMidiEnabled;
         uint8_t turingMidiChannel;
-        uint8_t reserved[2];
+        uint8_t recipeBank;
+        uint8_t reserved;
     };
 
     struct SavedCustomEnvelopeState
@@ -553,7 +556,7 @@ private:
         int32_t pd2 = applyEnvelopeToPd(pd2Base, pd2EnvelopeLevel);
 
         int32_t osc1 =
-            oscCZ(phase1, freq1, pd1, wave1, noiseAmt);
+            oscCZ(phase1, freq1, pd1, wave1, recipeBankControl, noiseAmt);
 
         int32_t freq2 =
             applyPitchEnvelopeToFrequency(
@@ -561,7 +564,7 @@ private:
                 pitch2EnvelopeLevel);
 
         int32_t osc2 =
-            oscCZ(phase2, freq2, pd2, wave2, noiseAmt);
+            oscCZ(phase2, freq2, pd2, wave2, recipeBankControl, noiseAmt);
 
         int32_t osc2Raw = osc2;
         osc2 = osc2Raw;
@@ -616,6 +619,7 @@ private:
         int32_t freq,
         int32_t pd,
         int32_t wave,
+        int32_t bank,
         int32_t noiseAmt)
     {
         phase += (uint32_t)freq;
@@ -629,7 +633,7 @@ private:
         int32_t pdCurve = responseCurve(noisyPd);
 
         int32_t sine = getSine(renderPhase);
-        int32_t target = morphWave(renderPhase, wave);
+        int32_t target = morphRecipeWave(renderPhase, wave, bank);
         target = softenHighPitchTarget(sine, target, freq, pdCurve);
 
         return mix(sine, target, pdCurve);
@@ -1067,7 +1071,8 @@ private:
 
     void handleWebMidiSettings(bool persist)
     {
-        if (sysexLength != WebMidiDualOscSettingsPayloadLength + 6u &&
+        if (sysexLength != WebMidiRecipeBankSettingsPayloadLength + 6u &&
+            sysexLength != WebMidiDualOscSettingsPayloadLength + 6u &&
             sysexLength != WebMidiSettingsPayloadLength + 6u &&
             sysexLength != WebMidiStableSettingsPayloadLength + 6u &&
             sysexLength != WebMidiRangeSettingsPayloadLength + 6u &&
@@ -1081,17 +1086,22 @@ private:
         int32_t detune = osc2Detune + 2048;
         int32_t wave = waveControl;
         int32_t wave2 = wave2Control;
+        int32_t recipeBank = recipeBankControl;
         bool extendedSettings =
             sysexLength == WebMidiSettingsPayloadLength + 6u ||
-            sysexLength == WebMidiDualOscSettingsPayloadLength + 6u;
+            sysexLength == WebMidiDualOscSettingsPayloadLength + 6u ||
+            sysexLength == WebMidiRecipeBankSettingsPayloadLength + 6u;
         if (extendedSettings)
         {
             pd = decodeWebMidiUint14(offset);
             detune = decodeWebMidiUint14(offset);
             wave = decodeWebMidiUint14(offset);
             wave2 = wave;
-            if (sysexLength == WebMidiDualOscSettingsPayloadLength + 6u)
+            if (sysexLength == WebMidiDualOscSettingsPayloadLength + 6u ||
+                sysexLength == WebMidiRecipeBankSettingsPayloadLength + 6u)
                 wave2 = decodeWebMidiUint14(offset);
+            if (sysexLength == WebMidiRecipeBankSettingsPayloadLength + 6u)
+                recipeBank = recipeBankToControl(sysexBuffer[offset++] & 0x03u);
         }
         uint8_t channel = sysexBuffer[offset] & 0x0Fu;
         offset++;
@@ -1102,6 +1112,7 @@ private:
         setDetuneFromControl(detune);
         waveControl = clamp12(wave);
         wave2Control = clamp12(wave2);
+        recipeBankControl = clamp12(recipeBank);
         midiInChannel = channel;
 
         // Remote settings hold until each physical control reaches its new value.
@@ -1136,7 +1147,7 @@ private:
         if (sysexLength != 6u)
             return;
 
-        uint8_t frame[24] = {
+        uint8_t frame[25] = {
             0xF0u,
             WebMidiManufacturer,
             WebMidiId[0],
@@ -1152,6 +1163,7 @@ private:
         appendWebMidiUint14(frame, offset, clamp12(osc2Detune + 2048));
         appendWebMidiUint14(frame, offset, clamp12(waveControl));
         appendWebMidiUint14(frame, offset, clamp12(wave2Control));
+        frame[offset++] = controlToRecipeBank(recipeBankControl);
         frame[offset++] = midiInChannel & 0x0Fu;
         frame[offset++] = 0u;
         frame[offset++] = 0u;
@@ -1550,6 +1562,8 @@ private:
         state.turingRange = 0u;
         state.turingMidiEnabled = 0u;
         state.turingMidiChannel = 0u;
+        state.recipeBank = controlToRecipeBank(recipeBankControl);
+        state.reserved = 0u;
         return state;
     }
 
@@ -1569,6 +1583,8 @@ private:
         state.turingMidiEnabled = 0u;
         offset++;
         state.turingMidiChannel = 0u;
+        state.recipeBank = controlToRecipeBank(recipeBankControl);
+        state.reserved = 0u;
         return state;
     }
 
@@ -1586,7 +1602,7 @@ private:
         buffer[offset++] = state.midiInChannel & 0x0Fu;
         buffer[offset++] = 0u;
         buffer[offset++] = 0u;
-        buffer[offset++] = 0u;
+        buffer[offset++] = state.recipeBank & 0x03u;
     }
 
     void applySlotPerformanceState(const SavedSlotPerformanceState& state)
@@ -1598,6 +1614,7 @@ private:
         osc2Ring = clamp12(state.ring);
         osc2Noise = clamp12(state.noise);
         midiInChannel = state.midiInChannel & 0x0Fu;
+        recipeBankControl = recipeBankToControl(state.recipeBank);
         turingMidiOutputEnabled = false;
         turingMidiOutputChannel = 0u;
 
@@ -1895,6 +1912,17 @@ private:
         return a + (((b - a) * (int32_t)frac) >> 12);
     }
 
+    inline int32_t morphRecipeWave(uint32_t phase, int32_t wave, int32_t bankControl)
+    {
+        uint8_t bank = controlToRecipeBank(bankControl);
+        if (bank == 0u)
+            return morphWave(phase, wave);
+
+        uint32_t scaled = ((uint32_t)clamp12(wave) * 8u) >> 12;
+        uint8_t slot = (uint8_t)(scaled > 7u ? 7u : scaled);
+        return recipeWave(phase, bank, slot);
+    }
+
     uint32_t compressWaveTransition(uint32_t frac)
     {
         if (frac <= 1024u)
@@ -1912,6 +1940,37 @@ private:
         return pdWaveLUT[wave & 7u][p];
     }
 
+    inline int32_t blendRecipe(uint32_t phase, uint8_t primary, uint8_t secondary, uint16_t secondaryAmount)
+    {
+        int32_t a = czWave(phase, primary);
+        int32_t b = czWave(phase, secondary);
+        return a + (((b - a) * (int32_t)secondaryAmount) >> 12);
+    }
+
+    inline int32_t recipeWave(uint32_t phase, uint8_t bank, uint8_t slot)
+    {
+        if (bank == 1u)
+        {
+            static constexpr uint8_t primary[8] = {3, 3, 0, 1, 2, 4, 6, 7};
+            static constexpr uint8_t secondary[8] = {0, 1, 3, 3, 3, 3, 3, 3};
+            static constexpr uint16_t amount[8] = {768, 768, 1024, 1024, 1280, 1280, 1024, 1024};
+            return blendRecipe(phase, primary[slot], secondary[slot], amount[slot]);
+        }
+
+        if (bank == 2u)
+        {
+            static constexpr uint8_t primary[8] = {5, 6, 7, 5, 6, 7, 5, 7};
+            static constexpr uint8_t secondary[8] = {0, 1, 2, 4, 4, 4, 2, 1};
+            static constexpr uint16_t amount[8] = {1792, 1792, 1792, 2304, 2304, 2560, 2816, 2816};
+            return blendRecipe(phase, primary[slot], secondary[slot], amount[slot]);
+        }
+
+        static constexpr uint8_t primary[8] = {4, 6, 4, 7, 5, 2, 1, 6};
+        static constexpr uint8_t secondary[8] = {3, 3, 2, 3, 4, 7, 5, 2};
+        static constexpr uint16_t amount[8] = {2048, 2048, 2560, 2304, 2560, 2048, 2048, 2816};
+        return blendRecipe(phase, primary[slot], secondary[slot], amount[slot]);
+    }
+
     // =========================================================
     // GNARLY TURING COMPATIBILITY CLEANUP
     // =========================================================
@@ -1927,8 +1986,9 @@ private:
     {
         const bool osc2Page = mode == Switch::Up;
         const bool performancePage = mode == Switch::Down;
-        LedBrightness(0, performancePage ? 0 : osc2Page ? pd2 : pd1);
-        LedBrightness(1, performancePage ? 0 : osc2Page ? wave2 : wave1);
+        uint8_t bank = controlToRecipeBank(recipeBankControl);
+        LedBrightness(0, performancePage ? ((bank & 0x01u) ? 4095 : 0) : osc2Page ? pd2 : pd1);
+        LedBrightness(1, performancePage ? ((bank & 0x02u) ? 4095 : 0) : osc2Page ? wave2 : wave1);
         LedBrightness(2, bipolarControlBrightness(osc2IntervalControl));
         LedBrightness(3, osc2Ring);
         LedBrightness(4, osc2Noise);
@@ -2167,6 +2227,18 @@ private:
         return (uint8_t)(family > 7u ? 7u : family);
     }
 
+    uint8_t controlToRecipeBank(int32_t control)
+    {
+        uint32_t value = (uint32_t)clamp12(control);
+        if (value < 832u)
+            return 0u;
+        if (value < 1856u)
+            return 1u;
+        if (value < 2880u)
+            return 2u;
+        return 3u;
+    }
+
     int32_t waveFamilyToControl(uint8_t family)
     {
         if (family > 7u)
@@ -2174,12 +2246,23 @@ private:
         return ((int32_t)family * 4095) / 7;
     }
 
+    int32_t recipeBankToControl(uint8_t bank)
+    {
+        switch (bank)
+        {
+            case 0u: return 416;
+            case 1u: return 1344;
+            case 2u: return 2368;
+            default: return 3488;
+        }
+    }
+
     void updateAltControls(int32_t main, int32_t x, int32_t y)
     {
         if (altMainPickedUp ||
-            pickupAltControl(main, altMainEntry, osc2IntervalControl, altMainPickedUp))
+            pickupAltControl(main, altMainEntry, recipeBankControl, altMainPickedUp))
         {
-            osc2IntervalControl = main;
+            recipeBankControl = main;
         }
 
         if (altXPickedUp ||
@@ -2370,7 +2453,7 @@ private:
             envelopePreset < EnvelopePresetCount ?
             envelopePreset :
             (uint8_t)EnvelopePreset::Off;
-        state.reserved[0] = 0u;
+        state.reserved[0] = controlToRecipeBank(recipeBankControl);
         state.reserved[1] = midiInChannel;
         state.reserved[2] =
             0x80u |
@@ -2746,6 +2829,7 @@ private:
         pd2Control = clamp12(state.pd2Control);
         waveControl = clamp12(state.waveControl);
         wave2Control = waveFamilyToControl((state.reserved[2] >> 4) & 0x0Fu);
+        recipeBankControl = recipeBankToControl(state.reserved[0] & 0x03u);
         osc2Ring = clamp12(state.osc2Ring);
         osc2Noise = clamp12(state.osc2Noise);
         midiInChannel = state.reserved[1] & 0x0Fu;
@@ -3121,6 +3205,7 @@ private:
     int32_t pd2Control = 0;
     int32_t waveControl = 0;
     int32_t wave2Control = 0;
+    int32_t recipeBankControl = 0;
     int32_t smoothedFreq = 0;
     int32_t osc2Detune = 0;
     int32_t osc2IntervalControl = 2048;

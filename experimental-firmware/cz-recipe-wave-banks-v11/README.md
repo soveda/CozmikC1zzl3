@@ -23,14 +23,38 @@ The intended recipe-bank model is:
 - Resonant/windowed pairings.
 - Import-faithful pairings for decoded CZ patches.
 
-## Current Status
+## First-Pass Behaviour
 
-This is currently a clean v11 development fork, not a tested v11 release.
-The source starts from v10 Gnarly behaviour and the CMake target has been
-renamed so future builds are clearly labelled.
+This is a first recipe-bank test build, not a production replacement.
 
-Do not replace Rad, Gnarly v10, Core, or the Workshop release with this
-experiment until the recipe-bank behaviour has been implemented and tested.
+- Bank 1: original simple 8-wave family behaviour.
+- Bank 2: warmer/rounder compound pairings with double-sine support.
+- Bank 3: brighter, more exaggerated resonant/windowed pairings.
+- Bank 4: more odd/import-faithful CZ-style pairings intended to make line
+  translations easier to compare by ear.
+
+Switch down + Main now selects the active recipe bank. Switch middle + Y selects
+oscillator 1 recipe slot inside that bank. Switch up + Y selects oscillator 2
+recipe slot inside that bank. Switch up + Main still controls oscillator 2
+base interval/spread, so interval/spread remains available.
+
+The bank selector uses widened hardware-friendly zones so all four banks should
+be reachable even if the physical Main knob does not quite hit the mathematical
+end of its ADC range.
+
+On the switch-down page, LEDs 1 and 2 show the selected bank:
+
+- Bank 1: LEDs 1 and 2 off.
+- Bank 2: LED 1 on.
+- Bank 3: LED 2 on.
+- Bank 4: LEDs 1 and 2 on.
+
+The current Envelope Lab and Import Lab are unchanged. Web MIDI still sends the
+existing oscillator wave-family controls to older cards. For v11 recipe-bank
+firmware, the Full Dual Osc Lab can read, send, save, and restore the selected
+recipe bank alongside the oscillator wave families.
+
+Keep v10 Gnarly available as the fallback while this experiment is tested.
 
 ## Build
 

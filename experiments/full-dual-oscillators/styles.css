@@ -620,7 +620,8 @@ canvas {
 
 .stage-panel.is-hidden,
 .developer-panel.is-hidden,
-.stage-grid.is-hidden {
+.stage-grid.is-hidden,
+.recipe-bank-setting.is-hidden {
   display: none;
 }
 

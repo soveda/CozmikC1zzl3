@@ -115,6 +115,12 @@ const WAVE_FAMILIES = [
   "Resonant triangle window",
   "Resonant trapezoid window"
 ];
+const RECIPE_BANKS = [
+  "Simple",
+  "Warm compound",
+  "Bright resonant",
+  "CZ import"
+];
 
 window.addEventListener("message", (event) => {
   if (event.data?.type === "cz-import-handoff" && event.data?.payload) {
@@ -182,6 +188,8 @@ const el = {
   detuneControl: document.querySelector("#detuneControl"),
   performanceWaveSelect: document.querySelector("#performanceWaveSelect"),
   performanceWave2Select: document.querySelector("#performanceWave2Select"),
+  recipeBankSetting: document.querySelector("#recipeBankSetting"),
+  recipeBankSelect: document.querySelector("#recipeBankSelect"),
   midiOutput: document.querySelector("#midiOutput"),
   copyCpp: document.querySelector("#copyCpp"),
   copySysex: document.querySelector("#copySysex"),
@@ -376,6 +384,7 @@ function loadPerformanceSettings() {
         detune: clampInt(saved.detune ?? 2048, 0, MAX_LEVEL),
         waveform: clampInt(saved.waveform ?? 0, 0, 7),
         waveform2: clampInt(saved.waveform2 ?? saved.waveform ?? 0, 0, 7),
+        recipeBank: clampInt(saved.recipeBank ?? 0, 0, 3),
         ring: clampInt(saved.ring, 0, MAX_LEVEL),
         noise: clampInt(saved.noise, 0, MAX_LEVEL),
         midiInChannel: clampInt(saved.midiInChannel, 1, 16),
@@ -393,6 +402,7 @@ function loadPerformanceSettings() {
     detune: 2048,
     waveform: 0,
     waveform2: 0,
+    recipeBank: 0,
     ring: 0,
     noise: 0,
     midiInChannel: 1,
@@ -409,6 +419,7 @@ function normalizePerformanceSettings(settings = null) {
     detune: clampInt(settings.detune ?? 2048, 0, MAX_LEVEL),
     waveform: clampInt(settings.waveform ?? 0, 0, 7),
     waveform2: clampInt(settings.waveform2 ?? settings.waveform ?? 0, 0, 7),
+    recipeBank: clampInt(settings.recipeBank ?? 0, 0, 3),
     ring: clampInt(settings.ring ?? 0, 0, MAX_LEVEL),
     noise: clampInt(settings.noise ?? 0, 0, MAX_LEVEL),
     midiInChannel: clampInt(settings.midiInChannel ?? 1, 1, 16),
@@ -712,6 +723,8 @@ function renderPerformanceSettings() {
   el.detuneControl.value = performanceSettings.detune;
   el.performanceWaveSelect.value = performanceSettings.waveform;
   el.performanceWave2Select.value = performanceSettings.waveform2;
+  el.recipeBankSelect.value = performanceSettings.recipeBank;
+  el.recipeBankSetting.classList.toggle("is-hidden", !supportsRecipeBankSettings());
   el.ringControl.value = performanceSettings.ring;
   el.noiseControl.value = performanceSettings.noise;
   el.midiInChannel.value = performanceSettings.midiInChannel;
@@ -1335,6 +1348,7 @@ function describeSettingsProtocol() {
   if (settingsProtocol === "stable") return "Stable firmware";
   if (settingsProtocol === "extended") return "Extended firmware";
   if (settingsProtocol === "dual-oscillator") return "Full dual-oscillator firmware";
+  if (settingsProtocol === "recipe-bank") return "Recipe-bank firmware";
   return "Not detected yet";
 }
 
@@ -1349,6 +1363,9 @@ function describeEnvelopeReadback() {
 }
 
 function cardCapabilityLabel() {
+  if (settingsProtocol === "recipe-bank" || (settingsProtocol === "unknown" && detectedEnvelopeProtocol !== null && detectedEnvelopeProtocol >= 11)) {
+    return "Gnarly recipe-bank";
+  }
   if (settingsProtocol === "dual-oscillator" || (settingsProtocol === "unknown" && detectedEnvelopeProtocol !== null && detectedEnvelopeProtocol >= 9)) {
     return "Rad/Gnarly dual-oscillator";
   }
@@ -1358,11 +1375,15 @@ function cardCapabilityLabel() {
 }
 
 function supportsDualOscillatorEnvelopePayload() {
-  return settingsProtocol === "dual-oscillator" || (detectedEnvelopeProtocol !== null && detectedEnvelopeProtocol >= 5);
+  return settingsProtocol === "recipe-bank" || settingsProtocol === "dual-oscillator" || (detectedEnvelopeProtocol !== null && detectedEnvelopeProtocol >= 5);
 }
 
 function supportsSoundPresetPayload() {
-  return settingsProtocol === "dual-oscillator" || (settingsProtocol === "unknown" && detectedEnvelopeProtocol !== null && detectedEnvelopeProtocol >= 9);
+  return settingsProtocol === "recipe-bank" || settingsProtocol === "dual-oscillator" || (settingsProtocol === "unknown" && detectedEnvelopeProtocol !== null && detectedEnvelopeProtocol >= 9);
+}
+
+function supportsRecipeBankSettings() {
+  return settingsProtocol === "recipe-bank" || (settingsProtocol === "unknown" && detectedEnvelopeProtocol !== null && detectedEnvelopeProtocol >= 11);
 }
 
 function envelopePayloadMode() {
@@ -1867,6 +1888,9 @@ function temporaryLoadSaveHint(mode) {
 }
 
 function buildSettingsSysex(command) {
+  if (settingsProtocol === "recipe-bank") {
+    return buildRecipeBankSettingsSysex(command);
+  }
   if (settingsProtocol === "dual-oscillator") {
     return buildDualOscillatorSettingsSysex(command);
   }
@@ -1915,6 +1939,22 @@ function buildDualOscillatorSettingsSysex(command) {
   payload.push(performanceSettings.turingMidiOut ? 1 : 0);
   payload.push(clampInt(performanceSettings.turingMidiChannel, 1, 16) - 1);
   return [0xf0, SYSEX_MANUFACTURER, ...ensureArray(SYSEX_ID, "SYSEX_ID"), command, ...ensureArray(payload, "dual oscillator settings payload"), 0xf7];
+}
+
+function buildRecipeBankSettingsSysex(command) {
+  const payload = [];
+  payload.push(...ensureArray(packUint14(performanceSettings.ring), "packUint14(ring)"));
+  payload.push(...ensureArray(packUint14(performanceSettings.noise), "packUint14(noise)"));
+  payload.push(...ensureArray(packUint14(performanceSettings.pd), "packUint14(pd)"));
+  payload.push(...ensureArray(packUint14(performanceSettings.detune), "packUint14(detune)"));
+  payload.push(...ensureArray(packUint14(waveFamilyToControl(performanceSettings.waveform)), "packUint14(waveform)"));
+  payload.push(...ensureArray(packUint14(waveFamilyToControl(performanceSettings.waveform2)), "packUint14(waveform2)"));
+  payload.push(clampInt(performanceSettings.recipeBank, 0, 3));
+  payload.push(clampInt(performanceSettings.midiInChannel, 1, 16) - 1);
+  payload.push(clampInt(performanceSettings.turingRange, 1, 8));
+  payload.push(performanceSettings.turingMidiOut ? 1 : 0);
+  payload.push(clampInt(performanceSettings.turingMidiChannel, 1, 16) - 1);
+  return [0xf0, SYSEX_MANUFACTURER, ...ensureArray(SYSEX_ID, "SYSEX_ID"), command, ...ensureArray(payload, "recipe bank settings payload"), 0xf7];
 }
 
 function buildDeleteSlotSysex(slot) {
@@ -2020,7 +2060,9 @@ function encodePerformanceSettings(settings = performanceSettings) {
     clampInt(normalized.midiInChannel, 1, 16) - 1,
     clampInt(normalized.turingRange, 1, 8),
     normalized.turingMidiOut ? 1 : 0,
-    clampInt(normalized.turingMidiChannel, 1, 16) - 1
+    supportsRecipeBankSettings()
+      ? clampInt(normalized.recipeBank, 0, 3)
+      : clampInt(normalized.turingMidiChannel, 1, 16) - 1
   ];
 }
 
@@ -2035,7 +2077,8 @@ function decodePerformanceSettingsBytes(data, offset) {
     midiInChannel: (data[offset + 12] & 0x0f) + 1,
     turingRange: data[offset + 13],
     turingMidiOut: (data[offset + 14] & 0x01) !== 0,
-    turingMidiChannel: (data[offset + 15] & 0x0f) + 1
+    turingMidiChannel: (data[offset + 15] & 0x0f) + 1,
+    recipeBank: supportsRecipeBankSettings() ? (data[offset + 15] & 0x03) : performanceSettings.recipeBank
   });
 }
 
@@ -2836,8 +2879,10 @@ function handleSysexResponse(data) {
       turingMidiOut: (data[19] & 0x01) !== 0,
       turingMidiChannel: clampInt((data[20] & 0x0f) + 1, 1, 16)
     };
-  } else if (data.length === 24) {
+  } else if (data.length === 24 || data.length === 25) {
+    const hasRecipeBank = data.length === 25;
     settingsProtocol = "dual-oscillator";
+    if (hasRecipeBank) settingsProtocol = "recipe-bank";
     performanceSettings = {
       ...performanceSettings,
       ring: clampInt(unpackUint14(data, 7), 0, MAX_LEVEL),
@@ -2846,10 +2891,11 @@ function handleSysexResponse(data) {
       detune: clampInt(unpackUint14(data, 13), 0, MAX_LEVEL),
       waveform: waveControlToFamily(unpackUint14(data, 15)),
       waveform2: waveControlToFamily(unpackUint14(data, 17)),
-      midiInChannel: clampInt((data[19] & 0x0f) + 1, 1, 16),
-      turingRange: clampInt(data[20], 1, 8),
-      turingMidiOut: (data[21] & 0x01) !== 0,
-      turingMidiChannel: clampInt((data[22] & 0x0f) + 1, 1, 16)
+      recipeBank: hasRecipeBank ? clampInt(data[19] & 0x03, 0, 3) : performanceSettings.recipeBank,
+      midiInChannel: clampInt((data[hasRecipeBank ? 20 : 19] & 0x0f) + 1, 1, 16),
+      turingRange: clampInt(data[hasRecipeBank ? 21 : 20], 1, 8),
+      turingMidiOut: (data[hasRecipeBank ? 22 : 21] & 0x01) !== 0,
+      turingMidiChannel: clampInt((data[hasRecipeBank ? 23 : 22] & 0x0f) + 1, 1, 16)
     };
   } else {
     logDeveloper("Ignored unexpected settings response.", {
@@ -2865,7 +2911,7 @@ function handleSysexResponse(data) {
     settingsRequestResolver(true);
     settingsRequestResolver = null;
   }
-  setStatus(`Loaded settings from card: PD ${performanceSettings.pd}, detune ${performanceSettings.detune}, osc1 wave ${WAVE_FAMILIES[performanceSettings.waveform] || performanceSettings.waveform}, osc2 wave ${WAVE_FAMILIES[performanceSettings.waveform2] || performanceSettings.waveform2}, ring ${performanceSettings.ring}, noise ${performanceSettings.noise}, MIDI in ch ${performanceSettings.midiInChannel}, Turing ${performanceSettings.turingRange} oct, Turing MIDI ${performanceSettings.turingMidiOut ? "on" : "off"} ch ${performanceSettings.turingMidiChannel}.`);
+  setStatus(`Loaded settings from card: PD ${performanceSettings.pd}, detune ${performanceSettings.detune}, osc1 wave ${WAVE_FAMILIES[performanceSettings.waveform] || performanceSettings.waveform}, osc2 wave ${WAVE_FAMILIES[performanceSettings.waveform2] || performanceSettings.waveform2}${supportsRecipeBankSettings() ? `, recipe bank ${RECIPE_BANKS[performanceSettings.recipeBank] || performanceSettings.recipeBank}` : ""}, ring ${performanceSettings.ring}, noise ${performanceSettings.noise}, MIDI in ch ${performanceSettings.midiInChannel}, Turing ${performanceSettings.turingRange} oct, Turing MIDI ${performanceSettings.turingMidiOut ? "on" : "off"} ch ${performanceSettings.turingMidiChannel}.`);
 }
 
 function downloadJson() {
@@ -3050,6 +3096,8 @@ function updatePerformanceSetting(key, value) {
     performanceSettings.waveform = clampInt(value, 0, 7);
   } else if (key === "waveform2") {
     performanceSettings.waveform2 = clampInt(value, 0, 7);
+  } else if (key === "recipeBank") {
+    performanceSettings.recipeBank = clampInt(value, 0, 3);
   }
 
   if (selected >= FACTORY_PRESET_COUNT) {
@@ -3087,7 +3135,7 @@ async function sendPerformanceSettings(command = SYSEX_COMMAND_SETTINGS) {
   const action = command === SYSEX_COMMAND_SAVE_SETTINGS ? "Saved to card" : "Sent to card";
   const protocolLabel = settingsProtocol === "unknown" ? "Protocol not confirmed yet." : `Protocol: ${describeSettingsProtocol()}.`;
   pulseButton(command === SYSEX_COMMAND_SAVE_SETTINGS ? null : el.sendSettings, command === SYSEX_COMMAND_SAVE_SETTINGS ? "Saved" : "Sent");
-  setStatus(`${action}: PD ${performanceSettings.pd}, detune ${performanceSettings.detune}, osc1 wave ${WAVE_FAMILIES[performanceSettings.waveform] || performanceSettings.waveform}, osc2 wave ${WAVE_FAMILIES[performanceSettings.waveform2] || performanceSettings.waveform2}, ring ${performanceSettings.ring}, noise ${performanceSettings.noise}, MIDI in ch ${performanceSettings.midiInChannel}, Turing ${performanceSettings.turingRange} oct, Turing MIDI ${performanceSettings.turingMidiOut ? "on" : "off"} ch ${performanceSettings.turingMidiChannel} on ${output.name || "MIDI output"}. ${protocolLabel}`);
+  setStatus(`${action}: PD ${performanceSettings.pd}, detune ${performanceSettings.detune}, osc1 wave ${WAVE_FAMILIES[performanceSettings.waveform] || performanceSettings.waveform}, osc2 wave ${WAVE_FAMILIES[performanceSettings.waveform2] || performanceSettings.waveform2}${supportsRecipeBankSettings() ? `, recipe bank ${RECIPE_BANKS[performanceSettings.recipeBank] || performanceSettings.recipeBank}` : ""}, ring ${performanceSettings.ring}, noise ${performanceSettings.noise}, MIDI in ch ${performanceSettings.midiInChannel}, Turing ${performanceSettings.turingRange} oct, Turing MIDI ${performanceSettings.turingMidiOut ? "on" : "off"} ch ${performanceSettings.turingMidiChannel} on ${output.name || "MIDI output"}. ${protocolLabel}`);
 }
 
 function sendSettingsFrames(output, command, delayMs = 0) {
@@ -3097,7 +3145,9 @@ function sendSettingsFrames(output, command, delayMs = 0) {
     else output.send(frame);
   };
 
-  if (settingsProtocol === "dual-oscillator") {
+  if (settingsProtocol === "recipe-bank") {
+    sendAt(buildRecipeBankSettingsSysex(command));
+  } else if (settingsProtocol === "dual-oscillator") {
     sendAt(buildDualOscillatorSettingsSysex(command));
   } else if (settingsProtocol === "extended") {
     sendAt(buildExtendedSettingsSysex(command));
@@ -3108,6 +3158,7 @@ function sendSettingsFrames(output, command, delayMs = 0) {
     if (command === SYSEX_COMMAND_SETTINGS) {
       sendAt(buildExtendedSettingsSysex(command), 40);
       sendAt(buildDualOscillatorSettingsSysex(command), 90);
+      sendAt(buildRecipeBankSettingsSysex(command), 140);
     }
   }
 }
@@ -3318,6 +3369,7 @@ el.pdControl.addEventListener("input", () => updatePerformanceSetting("pd", el.p
 el.detuneControl.addEventListener("input", () => updatePerformanceSetting("detune", el.detuneControl.value));
 el.performanceWaveSelect.addEventListener("change", () => updatePerformanceSetting("waveform", el.performanceWaveSelect.value));
 el.performanceWave2Select.addEventListener("change", () => updatePerformanceSetting("waveform2", el.performanceWave2Select.value));
+el.recipeBankSelect.addEventListener("change", () => updatePerformanceSetting("recipeBank", el.recipeBankSelect.value));
 el.ringControl.addEventListener("input", () => updatePerformanceSetting("ring", el.ringControl.value));
 el.noiseControl.addEventListener("input", () => updatePerformanceSetting("noise", el.noiseControl.value));
 el.midiInChannel.addEventListener("input", () => updatePerformanceSetting("midiInChannel", el.midiInChannel.value));
