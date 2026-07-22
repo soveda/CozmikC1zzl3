@@ -47,6 +47,8 @@ stable full-dual workflow deliberately.
   - Rad/Gnarly-capable cards receive the full dual-oscillator payload.
   - Developer diagnostics show the detected settings protocol, envelope
     protocol, and current envelope send mode.
+- Protocol v11 recipe-bank firmware is also supported by this lab. It adds a
+  recipe-bank setting for CZ-style compound oscillator pairings.
 
 ## Matching Firmware
 
@@ -89,3 +91,19 @@ Protocol v9 saves performance settings with each custom envelope slot,
 including PD, detune, ring, noise, MIDI/Turing settings, and oscillator 1/2 wave
 families. The UI exposes both envelope-only and sound-preset save paths so the
 two behaviours remain clear.
+
+## Protocol v11 Behaviour
+
+Protocol v11 keeps the full dual-oscillator payload shape and adds the recipe
+bank to settings readback/save. Its firmware also exposes a controller-friendly
+`CC20` to `CC27` performance block:
+
+- `CC1`: oscillator 1 phase distortion, mod-wheel friendly.
+- `CC20`: oscillator 1 recipe slot.
+- `CC21`: oscillator 2 recipe slot.
+- `CC22`: ring modulation amount.
+- `CC23`: recipe bank.
+- `CC24`: oscillator 2 interval/spread.
+- `CC25`: oscillator 2 phase distortion.
+- `CC26`: noise/grit amount.
+- `CC27`: oscillator 1 phase distortion, for eight-knob controllers.

@@ -1,0 +1,140 @@
+id: c1zzl3_gnarly_v11
+title: C1ZZL3 Gnarly
+draft: true
+release: protocol v11 candidate
+date: 2026-07-22
+summary: >-
+  Dual-oscillator phase-distortion synth branch with no Turing mode, recipe wave
+  banks, named Web MIDI sound presets, separate oscillator envelopes, and CZ
+  patch import support.
+description: >-
+  C1ZZL3 Gnarly is a separate C1ZZL3 branch for the Workshop Computer. It trades
+  the Turing machine panel mode for direct dual-oscillator control, recipe wave
+  banks, ring/noise performance controls, Web MIDI sound presets, and
+  CZ-inspired SysEx import workflow.
+panel:
+  controls:
+    main:
+      label: Pitch / Interval / Bank
+      description: Shared pitch in switch-middle, oscillator 2 interval/spread in switch-up, recipe bank while holding switch-down
+      source: info.yaml
+    x:
+      label: |-
+        Phase
+        Distortion
+      description: Oscillator 1 phase distortion in switch-middle, oscillator 2 phase distortion in switch-up, ring modulation while holding switch-down
+      source: info.yaml
+    'y':
+      label: |-
+        Recipe
+        Slot
+      description: Oscillator 1 recipe slot in switch-middle, oscillator 2 recipe slot in switch-up, noise/grit while holding switch-down
+      source: info.yaml
+    z:
+      label: Oscillator Page
+      description: Switch middle edits oscillator 1, switch up edits oscillator 2, and switch down held edits performance/bank controls
+      source: info.yaml
+  inputs:
+    audio_l:
+      label: Pitch CV
+      description: 1V/oct pitch modulation in synth mode
+      source: info.yaml
+    cv_1:
+      label: |-
+        PD CV
+      description: Adds phase-distortion modulation to the active synth voice
+      source: info.yaml
+    cv_2:
+      label: |-
+        Wave CV
+      description: Adds recipe-slot/wave modulation to the active synth voice
+      source: info.yaml
+    pulse_1:
+      label: Unused
+      description: Held low/no Turing clock behaviour in this Gnarly branch
+      source: info.yaml
+    pulse_2:
+      label: |-
+        Envelope
+        Trig
+      description: Triggers selected envelopes; held gates sustain/loop supported envelopes and gate-off lets the envelope complete
+      source: info.yaml
+  outputs:
+    audio_out_l:
+      label: Oscillator 1
+      description: Phase-distortion oscillator 1 using Amp1, PD1, Pitch1, and oscillator 1 recipe settings
+      source: info.yaml
+    audio_out_r:
+      label: Oscillator 2
+      description: Phase-distortion oscillator 2 using Amp2, PD2, Pitch2, and oscillator 2 recipe settings
+      source: info.yaml
+    cv_out_1:
+      label: Off
+      description: Held low in this no-Turing Gnarly branch
+      source: info.yaml
+    cv_out_2:
+      label: Off
+      description: Held low in this no-Turing Gnarly branch
+      source: info.yaml
+    pulse_out_1:
+      label: Off
+      description: Held low in this no-Turing Gnarly branch
+      source: info.yaml
+    pulse_out_2:
+      label: Off
+      description: Held low in this no-Turing Gnarly branch
+      source: info.yaml
+switch_modes:
+  up: 'Z up: MAIN: Oscillator 2 interval/spread; X: Oscillator 2 phase distortion; Y: Oscillator 2 recipe slot.'
+  middle: 'Z middle: MAIN: Shared pitch; X: Oscillator 1 phase distortion; Y: Oscillator 1 recipe slot.'
+  down: 'Z down, hold: MAIN: Recipe bank; X: Ring modulation; Y: Noise/grit.'
+leds:
+  - "Switch-down page: LED 1 and LED 2 encode the recipe bank: both off = bank 1, LED 1 = bank 2, LED 2 = bank 3, both on = bank 4."
+  - "LED 3 shows oscillator 2 interval/spread as a bipolar brightness from centre."
+  - "LEDs 4 and 5 show ring modulation and noise/grit."
+  - "LED 6 shows the current edit page at off, medium, or full brightness."
+notes:
+  - >-
+    This branch intentionally removes Turing CV, pulse, and generated MIDI
+    output so the physical panel can focus on dual-oscillator tone controls.
+  - >-
+    Web MIDI: use the Full Dual Oscillator Lab for Amp1/Amp2, PD1/PD2,
+    Pitch1/Pitch2, recipe bank, named sound presets, and CZ Import Lab handoff.
+  - |
+    MIDI CC map: CC1 = oscillator 1 phase distortion; CC20 = oscillator 1 recipe slot;
+    CC21 = oscillator 2 recipe slot; CC22 = ring modulation; CC23 = recipe bank;
+    CC24 = oscillator 2 interval/spread; CC25 = oscillator 2 phase distortion;
+    CC26 = noise/grit; CC27 = oscillator 1 phase distortion for eight-knob controllers.
+source:
+  - experimental-firmware/cz-recipe-wave-banks-v11/info.yaml
+  - experimental-firmware/cz-recipe-wave-banks-v11/README.md
+slug: c1zzl3-gnarly-v11
+url: /workshopsystem/program-cards/c1zzl3-gnarly-v11/
+tags:
+  - synth
+  - midi
+  - web-midi
+  - phase-distortion
+  - dual-oscillator
+  - beta
+source_file: experimental-firmware/cz-recipe-wave-banks-v11/info.yaml
+source_url: https://github.com/soveda/CozmikC1zzl3/tree/main/experimental-firmware/cz-recipe-wave-banks-v11
+readme_url: >-
+  https://github.com/soveda/CozmikC1zzl3/blob/main/experimental-firmware/cz-recipe-wave-banks-v11/README.md
+download_url: >-
+  https://raw.githubusercontent.com/soveda/CozmikC1zzl3/main/experimental-firmware/active-uf2s/C1ZZL3_EXPERIMENT_CZ_RECIPE_WAVE_BANKS_PROTOCOL_V11.uf2
+metadata:
+  creator: Adrian Vos
+  language: C++ (Pico SDK)
+  version: protocol v11 candidate
+  status: Beta
+  license: MIT
+  editor_url: https://soveda.github.io/CozmikC1zzl3/experiments/full-dual-oscillators/
+  editor_note: Use the Full Dual Oscillator Lab and its Import Lab for recipe-bank sound presets.
+documentation:
+  intro: >
+    C1ZZL3 Gnarly is the no-Turing dual-oscillator branch of C1ZZL3. Switch
+    middle edits oscillator 1, switch up edits oscillator 2, and switch down
+    held edits recipe bank, ring modulation, and noise/grit. It uses the Full
+    Dual Oscillator Web MIDI Lab for named sound presets, separate oscillator
+    envelopes, recipe-bank settings, and CZ SysEx import handoff.

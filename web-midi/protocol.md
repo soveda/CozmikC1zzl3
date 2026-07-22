@@ -154,6 +154,22 @@ payload, not by MIDI CC. CC changes are live and update the same control values
 as the physical knobs; use the web editor `Set` button or the physical save
 gesture to persist them.
 
+### Protocol v11 Recipe-Bank CC Map
+
+The v11 recipe-bank experiment replaces the Rad/Gnarly legacy `CC20` to `CC24`
+layout with an eight-knob performance block. `CC1` is preserved as oscillator 1
+phase distortion so a mod wheel remains useful.
+
+- CC1: oscillator 1 phase-distortion amount.
+- CC20: oscillator 1 recipe slot.
+- CC21: oscillator 2 recipe slot.
+- CC22: ring modulation amount.
+- CC23: recipe bank.
+- CC24: oscillator 2 interval/spread.
+- CC25: oscillator 2 phase-distortion amount.
+- CC26: noise/grit amount.
+- CC27: oscillator 1 phase-distortion amount, for eight-knob controllers.
+
 ## Current Limitations
 
 - SysEx readback is limited to performance settings; custom envelope readback is

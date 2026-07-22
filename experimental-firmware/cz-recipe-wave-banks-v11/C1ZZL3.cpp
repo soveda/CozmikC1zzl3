@@ -315,12 +315,15 @@ private:
         EnvelopeStage pitch2[8];
     };
 
-    static constexpr uint8_t MidiCcDetune = 20;
-    static constexpr uint8_t MidiCcRingAmount = 21;
-    static constexpr uint8_t MidiCcNoiseAmount = 22;
-    static constexpr uint8_t MidiCcPdAmount = 1;
-    static constexpr uint8_t MidiCcWaveAmount = 23;
-    static constexpr uint8_t MidiCcTuringCvOctaveRange = 24;
+    static constexpr uint8_t MidiCcModWheelOsc1Pd = 1;
+    static constexpr uint8_t MidiCcOsc1Wave = 20;
+    static constexpr uint8_t MidiCcOsc2Wave = 21;
+    static constexpr uint8_t MidiCcRingAmount = 22;
+    static constexpr uint8_t MidiCcRecipeBank = 23;
+    static constexpr uint8_t MidiCcOsc2Interval = 24;
+    static constexpr uint8_t MidiCcOsc2Pd = 25;
+    static constexpr uint8_t MidiCcNoiseAmount = 26;
+    static constexpr uint8_t MidiCcOsc1Pd = 27;
     static constexpr int32_t PitchUnitsPerOctave = 4096;
     static constexpr int32_t MainPitchOctaves = 5;
     static constexpr int32_t PitchInputCountsPerVolt = 341;
@@ -909,29 +912,41 @@ private:
 
         if (type == 0xB0u)
         {
-            if (midiData[0] == MidiCcPdAmount)
+            if (midiData[0] == MidiCcModWheelOsc1Pd || midiData[0] == MidiCcOsc1Pd)
             {
                 pdControl = midiCcToControl(midiData[1]);
-                midiResetSynthXPickup = true;
+                midiResetTuringXPickup = true;
             }
-            else if (midiData[0] == MidiCcWaveAmount)
+            else if (midiData[0] == MidiCcOsc1Wave)
             {
                 waveControl = midiCcToControl(midiData[1]);
+                midiResetTuringYPickup = true;
+            }
+            else if (midiData[0] == MidiCcOsc2Wave)
+            {
+                wave2Control = midiCcToControl(midiData[1]);
                 midiResetSynthYPickup = true;
-            }
-            else if (midiData[0] == MidiCcTuringCvOctaveRange)
-            {
-                // Ignored in Gnarly; CC24 was Turing CV range in Rad.
-            }
-            else if (midiData[0] == MidiCcDetune)
-            {
-                setDetuneFromControl(midiCcToControl(midiData[1]));
-                midiResetAltMainPickup = true;
             }
             else if (midiData[0] == MidiCcRingAmount)
             {
                 osc2Ring = midiCcToControl(midiData[1]);
                 midiResetAltXPickup = true;
+            }
+            else if (midiData[0] == MidiCcRecipeBank)
+            {
+                uint8_t bank = (uint8_t)(((uint16_t)midiData[1] * 4u) >> 7);
+                recipeBankControl = recipeBankToControl(bank > 3u ? 3u : bank);
+                midiResetAltMainPickup = true;
+            }
+            else if (midiData[0] == MidiCcOsc2Interval)
+            {
+                osc2IntervalControl = midiCcToControl(midiData[1]);
+                midiResetSynthMainPickup = true;
+            }
+            else if (midiData[0] == MidiCcOsc2Pd)
+            {
+                pd2Control = midiCcToControl(midiData[1]);
+                midiResetSynthXPickup = true;
             }
             else if (midiData[0] == MidiCcNoiseAmount)
             {
@@ -2306,6 +2321,13 @@ private:
 
     void applyMidiControlPickupResets(int32_t main, int32_t x, int32_t y)
     {
+        if (midiResetSynthMainPickup)
+        {
+            synthMainPickedUp = false;
+            synthMainEntry = main;
+            midiResetSynthMainPickup = false;
+        }
+
         if (midiResetSynthXPickup)
         {
             synthXPickedUp = false;
@@ -2318,6 +2340,20 @@ private:
             synthYPickedUp = false;
             synthYEntry = y;
             midiResetSynthYPickup = false;
+        }
+
+        if (midiResetTuringXPickup)
+        {
+            turingXPickedUp = false;
+            turingXEntry = x;
+            midiResetTuringXPickup = false;
+        }
+
+        if (midiResetTuringYPickup)
+        {
+            turingYPickedUp = false;
+            turingYEntry = y;
+            midiResetTuringYPickup = false;
         }
 
         if (midiResetAltMainPickup)
@@ -3256,8 +3292,11 @@ private:
     bool midiNoteActive = false;
     bool midiNoteReleased = false;
     volatile uint8_t midiInChannel = 0;
+    volatile bool midiResetSynthMainPickup = false;
     volatile bool midiResetSynthXPickup = false;
     volatile bool midiResetSynthYPickup = false;
+    volatile bool midiResetTuringXPickup = false;
+    volatile bool midiResetTuringYPickup = false;
     volatile bool midiResetAltMainPickup = false;
     volatile bool midiResetAltXPickup = false;
     volatile bool midiResetAltYPickup = false;

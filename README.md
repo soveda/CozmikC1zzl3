@@ -223,6 +223,35 @@ Current scope:
   and oscillator wave settings.
 - Import Lab detects single-line CZ patches from the line mode byte and mirrors
   the active line into both C1ZZL3 oscillator lanes.
+
+## Current Gnarly Experiment: Recipe Wave Banks Protocol v11
+
+The active v11 experiment keeps the v10 no-Turing hardware UI and adds four
+recipe banks for more CZ-like compound oscillator pairings.
+
+Matching test UF2:
+
+```text
+experimental-firmware/active-uf2s/C1ZZL3_EXPERIMENT_CZ_RECIPE_WAVE_BANKS_PROTOCOL_V11.uf2
+```
+
+Use the Full Dual Oscillator Lab for this experiment:
+
+```text
+https://soveda.github.io/CozmikC1zzl3/experiments/full-dual-oscillators/
+```
+
+v11 MIDI CC performance block:
+
+- `CC1`: oscillator 1 phase distortion, useful from a mod wheel.
+- `CC20`: oscillator 1 recipe slot.
+- `CC21`: oscillator 2 recipe slot.
+- `CC22`: ring modulation amount.
+- `CC23`: recipe bank.
+- `CC24`: oscillator 2 interval/spread.
+- `CC25`: oscillator 2 phase distortion.
+- `CC26`: noise/grit amount.
+- `CC27`: oscillator 1 phase distortion, for eight-knob controllers.
 - The v9 lab can also talk to C1ZZL3 Core by collapsing the extra dual lanes
   into a Core-compatible Amp/PD/Pitch payload. Use `Read Settings from Card` and
   `Read Envelopes from Card` after connecting so the lab can detect the card
