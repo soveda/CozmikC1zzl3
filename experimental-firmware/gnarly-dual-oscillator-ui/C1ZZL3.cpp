@@ -1925,13 +1925,22 @@ private:
 
     void updateSynthLEDs(Switch mode, int32_t pd1, int32_t wave1, int32_t pd2, int32_t wave2)
     {
-        const bool osc2Page = mode == Switch::Middle;
-        LedBrightness(0, osc2Page ? pd2 : pd1);
-        LedBrightness(1, osc2Page ? wave2 : wave1);
-        LedBrightness(2, osc2IntervalControl);
+        const bool osc2Page = mode == Switch::Up;
+        const bool performancePage = mode == Switch::Down;
+        LedBrightness(0, performancePage ? 0 : osc2Page ? pd2 : pd1);
+        LedBrightness(1, performancePage ? 0 : osc2Page ? wave2 : wave1);
+        LedBrightness(2, bipolarControlBrightness(osc2IntervalControl));
         LedBrightness(3, osc2Ring);
         LedBrightness(4, osc2Noise);
-        LedBrightness(5, mode == Switch::Up ? 1365 : mode == Switch::Middle ? 2730 : 4095);
+        LedBrightness(5, mode == Switch::Up ? 0 : mode == Switch::Middle ? 2048 : 4095);
+    }
+
+    int32_t bipolarControlBrightness(int32_t control)
+    {
+        int32_t distance = clamp12(control) - 2048;
+        if (distance < 0)
+            distance = -distance;
+        return clamp12(distance << 1);
     }
 
     void updateStartupEnvelopeSelect(Switch mode)
@@ -2185,31 +2194,31 @@ private:
     void updateSynthModeControls(int32_t main, int32_t x, int32_t y)
     {
         if (synthMainPickedUp ||
-            pickupModeControl(main, synthMainEntry, pitchControl, synthMainPickedUp))
-            pitchControl = main;
+            pickupModeControl(main, synthMainEntry, osc2IntervalControl, synthMainPickedUp))
+            osc2IntervalControl = main;
 
         if (synthXPickedUp ||
-            pickupModeControl(x, synthXEntry, pdControl, synthXPickedUp))
-            pdControl = x;
+            pickupModeControl(x, synthXEntry, pd2Control, synthXPickedUp))
+            pd2Control = x;
 
         if (synthYPickedUp ||
-            pickupModeControl(y, synthYEntry, waveControl, synthYPickedUp))
-            waveControl = y;
+            pickupModeControl(y, synthYEntry, wave2Control, synthYPickedUp))
+            wave2Control = y;
     }
 
     void updateOsc2ModeControls(int32_t main, int32_t x, int32_t y)
     {
         if (turingMainPickedUp ||
-            pickupModeControl(main, turingMainEntry, clamp12(osc2Detune + 2048), turingMainPickedUp))
-            setDetuneFromControl(main);
+            pickupModeControl(main, turingMainEntry, pitchControl, turingMainPickedUp))
+            pitchControl = main;
 
         if (turingXPickedUp ||
-            pickupModeControl(x, turingXEntry, pd2Control, turingXPickedUp))
-            pd2Control = x;
+            pickupModeControl(x, turingXEntry, pdControl, turingXPickedUp))
+            pdControl = x;
 
         if (turingYPickedUp ||
-            pickupModeControl(y, turingYEntry, wave2Control, turingYPickedUp))
-            wave2Control = y;
+            pickupModeControl(y, turingYEntry, waveControl, turingYPickedUp))
+            waveControl = y;
     }
 
     void applyMidiControlPickupResets(int32_t main, int32_t x, int32_t y)

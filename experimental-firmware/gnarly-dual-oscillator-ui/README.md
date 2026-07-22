@@ -8,23 +8,24 @@ Core and Rad are not changed by this experiment.
 
 ## Hardware UI
 
-- Switch up: oscillator 1 edit page
+- Switch up: oscillator 2 relationship/edit page
+  - Main: oscillator 2 base interval/spread, centred at unison
+  - X: oscillator 2 baseline phase distortion
+  - Y: oscillator 2 wave family
+- Switch middle: oscillator 1 edit page
   - Main: shared pitch
   - X: oscillator 1 baseline phase distortion
   - Y: oscillator 1 wave family
-- Switch middle: oscillator 2 edit page
-  - Main: oscillator 2 detune
-  - X: oscillator 2 baseline phase distortion
-  - Y: oscillator 2 wave family
 - Switch down hold: performance and save page
   - Main: oscillator 2 base interval/spread, centred at unison
   - X: ring modulation
   - Y: noise/grit
 
-LED 1 shows the active page's PD amount, LED 2 shows the active page's wave
-position, LED 3 shows oscillator 2 base interval/spread, LEDs 4-5 retain
-ring/noise feedback, and LED 6 shows the current edit page brightness: low for
-oscillator 1, medium for oscillator 2, full for performance/save.
+LED 1 shows the active page's PD amount except on the performance page, LED 2
+shows the active page's wave position except on the performance page, LED 3
+shows oscillator 2 base interval/spread as a bipolar brightness from centre,
+LEDs 4-5 retain ring/noise feedback, and LED 6 shows the current edit page:
+off for oscillator 2, medium for oscillator 1, full for performance/save.
 
 ## Scope
 
