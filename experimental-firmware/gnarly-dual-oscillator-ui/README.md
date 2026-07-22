@@ -40,6 +40,28 @@ off for oscillator 2, medium for oscillator 1, full for performance/save.
 - Oscillator 2 base interval/spread is also saved as a Gnarly hardware
   performance setting.
 
+## Required Files
+
+This folder is intentionally kept production-package clean. The required files
+are:
+
+- `C1ZZL3.cpp`
+- `C1ZZL3_LUT.cpp`
+- `C1ZZL3_LUT.h`
+- `CMakeLists.txt`
+- `computercard.h`
+- `tusb_config.h`
+- `usb_descriptors.c`
+- `usb_midi_host.c`
+- `usb_midi_host.h`
+- `usb_midi_host_app_driver.c`
+- `C1ZZL3_GNARLY_DUAL_OSCILLATOR_UI_PROTOCOL_V10.uf2`
+- `SHA256SUMS.txt`
+- `README.md`
+
+Keep v10 here as the current Gnarly fallback while v11 recipe-bank work happens
+in `experimental-firmware/cz-recipe-wave-banks-v11/`.
+
 ## Build
 
 From the repository root:
