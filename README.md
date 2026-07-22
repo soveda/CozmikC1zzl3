@@ -338,3 +338,9 @@ FUTURE_NOTES.md
 - `archive/`: source snapshots and experiment notes
 - `CARD_README.md`: user-facing card guide
 - `info.yaml`: Workshop Computer site metadata
+
+## License Notes
+
+This project is released under the MIT License. The included `computercard.h`
+hardware helper is ComputerCard by Chris Johnson and is also MIT licensed; keep
+its MIT notice present when copying firmware files into releases or experiments.

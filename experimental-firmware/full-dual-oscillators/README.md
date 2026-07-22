@@ -94,3 +94,9 @@ the card slot should now read back envelope shape, slot name, and performance
 settings together. `Read Envelopes from Card` also restores the saved settings
 for each slot in the editor. Older v7/v8 full-dual UF2s are archived under
 `experimental-firmware/archive/superseded-20260721/`.
+
+## License Notes
+
+This firmware folder includes `computercard.h`, the ComputerCard hardware helper
+by Chris Johnson. It is MIT licensed; keep its MIT notice present when copying
+this folder into release packages.

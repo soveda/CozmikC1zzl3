@@ -47,3 +47,8 @@ The CMake build creates:
 experimental-firmware/cz-recipe-wave-banks-v11/build/C1ZZL3_CZ_RECIPE_WAVE_BANKS_V11.uf2
 ```
 
+## License Notes
+
+This firmware folder includes `computercard.h`, the ComputerCard hardware helper
+by Chris Johnson. It is MIT licensed; keep its MIT notice present when copying
+this folder into release packages.

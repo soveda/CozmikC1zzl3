@@ -55,3 +55,9 @@ experimental-firmware/archive/superseded-20260721/
 
 These are retained for rollback/reference, but are not the first choice for
 current testing.
+
+## License Notes
+
+Firmware folders include `computercard.h`, the ComputerCard hardware helper by
+Chris Johnson. It is MIT licensed; keep its MIT notice present when copying
+firmware folders into releases, active UF2 packages, or new experiments.
