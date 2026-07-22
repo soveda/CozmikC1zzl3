@@ -358,7 +358,8 @@ private:
     static constexpr uint32_t StartupSelectDelaySamples = 12000u;
     static constexpr uint32_t StartupSelectWindowSamples = 24000u;
     static constexpr uint32_t SaveMagic = 0x43315A33u; // C1Z3
-    static constexpr uint16_t SaveVersion = 3;
+    static constexpr uint16_t LegacyTuringMidiDefaultOnSaveVersion = 3;
+    static constexpr uint16_t SaveVersion = 4;
     static constexpr int32_t OutputLowpassAlphaQ12 = 2008; // ~5.2 kHz at 48 kHz.
     static constexpr int32_t OutputHighpassAlphaQ12 = 4075; // 40 Hz at 48 kHz.
     static constexpr int32_t PdCompensationFloorQ12 = 3000; // Keep high-PD tones present but less inflated.
@@ -2103,7 +2104,8 @@ private:
     {
         return
             state.magic == SaveMagic &&
-            state.version == SaveVersion &&
+            (state.version == SaveVersion ||
+             state.version == LegacyTuringMidiDefaultOnSaveVersion) &&
             state.size == sizeof(SavedPerformanceState) &&
             state.checksum == checksumState(state);
     }
@@ -2164,7 +2166,12 @@ private:
         osc2Noise = clamp12(state.osc2Noise);
         turingCvOctaveRange = clampTuringCvOctaveRange(state.reserved[0]);
         midiInChannel = state.reserved[1] & 0x0Fu;
-        turingMidiOutputEnabled = (state.reserved[2] & 0x80u) == 0;
+        // v3 defaulted generated Turing MIDI to on. Treat old saved states as
+        // a migration source, but start the maintenance baseline with it off.
+        turingMidiOutputEnabled =
+            state.version == LegacyTuringMidiDefaultOnSaveVersion
+                ? false
+                : (state.reserved[2] & 0x80u) == 0;
         turingMidiOutputChannel = state.reserved[2] & 0x0Fu;
         envelopePreset = state.envelopePreset < EnvelopePresetCount ?
             state.envelopePreset :
@@ -2518,7 +2525,7 @@ private:
     uint8_t turingMidiLastNote = 60;
     uint8_t turingMidiLastChannel = 0;
     bool turingMidiNoteActive = false;
-    volatile bool turingMidiOutputEnabled = true;
+    volatile bool turingMidiOutputEnabled = false;
     volatile uint8_t turingMidiOutputChannel = 0;
     uint8_t midiNote = 60;
     uint8_t midiVelocity = 100;

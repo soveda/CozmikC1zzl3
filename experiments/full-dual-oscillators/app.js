@@ -93,6 +93,7 @@ let developerLogLines = [];
 let settingsProtocol = "unknown";
 let settingsRequestPending = false;
 let settingsRequestTimer = null;
+let settingsRequestResolver = null;
 let envelopeReadSession = null;
 let envelopeReadTimer = null;
 let envelopeReadSupported = null;
@@ -1348,7 +1349,9 @@ function describeEnvelopeReadback() {
 }
 
 function cardCapabilityLabel() {
-  if (settingsProtocol === "dual-oscillator") return "Rad/Gnarly dual-oscillator";
+  if (settingsProtocol === "dual-oscillator" || (settingsProtocol === "unknown" && detectedEnvelopeProtocol !== null && detectedEnvelopeProtocol >= 9)) {
+    return "Rad/Gnarly dual-oscillator";
+  }
   if (settingsProtocol === "extended") return "Core extended";
   if (settingsProtocol === "stable") return "Core stable";
   return "undetected";
@@ -1359,7 +1362,7 @@ function supportsDualOscillatorEnvelopePayload() {
 }
 
 function supportsSoundPresetPayload() {
-  return settingsProtocol === "dual-oscillator" && (detectedEnvelopeProtocol === null || detectedEnvelopeProtocol >= 9);
+  return settingsProtocol === "dual-oscillator" || (settingsProtocol === "unknown" && detectedEnvelopeProtocol !== null && detectedEnvelopeProtocol >= 9);
 }
 
 function envelopePayloadMode() {
@@ -1547,6 +1550,10 @@ async function sendSysex(command = SYSEX_COMMAND_PREVIEW, options = {}) {
     return;
   }
 
+  if (settingsProtocol === "unknown" && includePerformance) {
+    await requestPerformanceSettings(true);
+  }
+
   let frame;
   try {
     frame = buildSysex(command, { includePerformance });
@@ -1597,11 +1604,14 @@ async function sendSysex(command = SYSEX_COMMAND_PREVIEW, options = {}) {
   }
   const slotLabel = `Custom ${slot + 1}`;
   const compatibilityNote = compatibilityStatusNote(payloadMode, includePerformance);
+  const soundPresetConfirmed = includePerformance && supportsSoundPresetPayload();
   const status = isFlash
-    ? includePerformance && supportsSoundPresetPayload()
+    ? soundPresetConfirmed
       ? `Saved sound preset ${slotLabel}; after reset it appears after the factory presets. Amp max ${summary.ampMax}, ${summary.seconds}s.`
       : includePerformance
-        ? `Saved envelope ${slotLabel}; this card does not expose v9 sound-preset settings, so settings were not stored in the slot. Amp max ${summary.ampMax}, ${summary.seconds}s.`
+        ? settingsProtocol === "unknown"
+          ? `Saved ${slotLabel}; card capability was not confirmed before this save, so the editor used the safe compatibility payload. Amp max ${summary.ampMax}, ${summary.seconds}s.`
+          : `Saved envelope ${slotLabel}; ${cardCapabilityLabel()} stores the envelope shape only in this compatibility mode, not full sound-preset settings. Amp max ${summary.ampMax}, ${summary.seconds}s.`
         : `Saved envelope only ${slotLabel}; saved settings for this slot were left unchanged when the card supports sound presets. Amp max ${summary.ampMax}, ${summary.seconds}s.`
     : `Loaded ${slotLabel} until reset. Amp max ${summary.ampMax}, ${summary.seconds}s.`;
   if (isFlash) {
@@ -1659,7 +1669,7 @@ async function loadEnvelopeAndSettings() {
     sendSettingsFrames(output, SYSEX_COMMAND_SETTINGS, 60);
     const slot = clampInt(el.customSlot.value, 0, CUSTOM_SLOT_COUNT - 1);
     pulseButton(el.loadEnvelopeAndSettings, "Loaded");
-    setStatus(`Loaded sound preset ${presets[selected].name} into RAM slot ${slot + 1} with a ${envelopePayloadModeLabel(payloadMode)} envelope payload and sent ${usedStoredSettings ? "its saved settings" : "the current settings"}. Both are temporary until saved.${compatibilityStatusNote(payloadMode, true)}`);
+    setStatus(`Loaded sound preset ${presets[selected].name} into RAM slot ${slot + 1} with a ${envelopePayloadModeLabel(payloadMode)} envelope payload and sent ${usedStoredSettings ? "its saved settings" : "the current settings"}. Nothing has been saved to card flash yet.${temporaryLoadSaveHint(payloadMode)}${compatibilityStatusNote(payloadMode, true)}`);
   } catch (error) {
     logDeveloper("Combined envelope and settings load failed.", {
       preset: presets[selected]?.name,
@@ -1838,9 +1848,16 @@ function compatibilityStatusNote(mode, includePerformance) {
     return ` Card capability: ${capability}.`;
   }
   if (includePerformance && !supportsSoundPresetPayload()) {
-    return ` Card capability: ${capability}; dual lanes/settings are collapsed for compatibility. Use Read Settings from Card with C1ZZL3 Rad/Gnarly firmware to unlock full-dual sound preset saves.`;
+    return ` Card capability: ${capability}; the editor could not confirm Rad/Gnarly before sending, so it used the safe compatibility format. Read Settings from Card or Read Envelopes from Card to refresh the capability display.`;
   }
   return ` Card capability: ${capability}; dual lanes are collapsed for compatibility.`;
+}
+
+function temporaryLoadSaveHint(mode) {
+  if (mode === "dual") {
+    return " This is temporary; use Save Sound Preset to write the envelope, name, and settings to card flash.";
+  }
+  return " This is temporary; use Save Envelope Only or Save Sound Preset to write the collapsed Core-compatible envelope to card flash. Core firmware does not store full-dual sound-preset settings in the slot.";
 }
 
 function buildSettingsSysex(command) {
@@ -2314,8 +2331,11 @@ function finishEnvelopeRead() {
   if (result.preservedChanges) notes.push(`${result.preservedChanges} changed local draft${result.preservedChanges === 1 ? " was" : "s were"} preserved`);
   if (result.replacedLocal) notes.push(`${result.replacedLocal} local draft${result.replacedLocal === 1 ? " was" : "s were"} replaced to show card data`);
   if (result.skipped) notes.push(`${result.skipped} card envelope${result.skipped === 1 ? " was" : "s were"} not added because the browser list is full`);
+  const browserDraftLabel = envelopePayloadMode() === "dual"
+    ? "full-dual-oscillator browser drafts"
+    : "local browser drafts for the current compatibility mode";
   const emptyNote = count === 0
-    ? " No saved card envelopes were reported; any remaining presets are full-dual-oscillator browser drafts."
+    ? ` No saved card envelopes were reported; any remaining presets are ${browserDraftLabel}.`
     : "";
   if (count === 0 && session.reason === "manual") {
     selected = Math.min(3, presets.length - 1);
@@ -2835,6 +2855,10 @@ function handleSysexResponse(data) {
   savePerformanceSettings();
   renderPerformanceSettings();
   renderDeveloperPorts();
+  if (settingsRequestResolver) {
+    settingsRequestResolver(true);
+    settingsRequestResolver = null;
+  }
   setStatus(`Loaded settings from card: PD ${performanceSettings.pd}, detune ${performanceSettings.detune}, osc1 wave ${WAVE_FAMILIES[performanceSettings.waveform] || performanceSettings.waveform}, osc2 wave ${WAVE_FAMILIES[performanceSettings.waveform2] || performanceSettings.waveform2}, ring ${performanceSettings.ring}, noise ${performanceSettings.noise}, MIDI in ch ${performanceSettings.midiInChannel}, Turing ${performanceSettings.turingRange} oct, Turing MIDI ${performanceSettings.turingMidiOut ? "on" : "off"} ch ${performanceSettings.turingMidiChannel}.`);
 }
 
@@ -3090,22 +3114,31 @@ async function requestPerformanceSettings(isProbe = false) {
 
   const output = selectedMidiOutput();
   if (!output) {
-    setStatus("No MIDI output found for settings request.");
-    return;
+    if (!isProbe) setStatus("No MIDI output found for settings request.");
+    return false;
   }
 
-  try {
+  const result = new Promise((resolve) => {
+    settingsRequestResolver = resolve;
     settingsRequestPending = true;
     if (settingsRequestTimer !== null) window.clearTimeout(settingsRequestTimer);
     settingsRequestTimer = window.setTimeout(() => {
       settingsRequestPending = false;
       settingsRequestTimer = null;
-      setStatus("The card did not reply to Read Settings from Card.");
+      if (settingsRequestResolver) {
+        settingsRequestResolver(false);
+        settingsRequestResolver = null;
+      }
+      if (!isProbe) setStatus("The card did not reply to Read Settings from Card.");
     }, SETTINGS_READ_TIMEOUT_MS);
+  });
+
+  try {
     const request = buildRequestSettingsSysex();
     output.send(request);
     logDeveloper("Settings request sent.", {
       output: output.name || output.id || "Unknown output",
+      probe: isProbe,
       bytes: request
     });
   } catch (error) {
@@ -3114,18 +3147,23 @@ async function requestPerformanceSettings(isProbe = false) {
       window.clearTimeout(settingsRequestTimer);
       settingsRequestTimer = null;
     }
+    if (settingsRequestResolver) {
+      settingsRequestResolver(false);
+      settingsRequestResolver = null;
+    }
     logDeveloper("Settings request failed.", {
       output: output.name || output.id || "Unknown output",
       message: error?.message || "Unknown error",
       stack: error?.stack || "No stack trace"
     });
-    setStatus("Settings request failed. Open Developer tools for details.");
-    return;
+    if (!isProbe) setStatus("Settings request failed. Open Developer tools for details.");
+    return false;
   }
   if (!isProbe) {
     pulseButton(el.requestSettings, "Read");
     setStatus(`Requested settings from ${output.name || "MIDI output"}.`);
   }
+  return result;
 }
 
 el.addPreset.addEventListener("click", () => {

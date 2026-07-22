@@ -6,6 +6,7 @@ Computer card.
 C1ZZL3 is a dual phase-distortion synthesiser with browser-editable amplitude,
 phase-distortion, and pitch envelopes, USB MIDI device/host support, optional
 Turing MIDI output, and a Turing machine mode with CV and pulse outputs.
+Turing MIDI output defaults to off and must be enabled deliberately.
 
 For the user-facing card guide, see:
 
@@ -24,7 +25,7 @@ uf2/C1ZZL3.uf2
 Checksum:
 
 ```text
-41c11af1b546cd3e1b459b166da8d6ecc9f972290e896e0cc088ceb4910d640a
+a9297f7d5d7fd7c2262d27ff6e8afa0ecd026ebe05aea205d9444b0985e8d7d6
 ```
 
 This is hardware-tested production release 1.4, promoted on 2026-07-18.
@@ -73,7 +74,8 @@ archive/
 - Turing CV and pulse outputs continue running in synth mode.
 - Settings readback from the card into the Web MIDI editor.
 - Saved envelope readback from the card, including pitch envelope data.
-- Ring, noise, MIDI channel, Turing range, and Turing MIDI settings persist.
+- Ring, noise, MIDI channel, Turing range, and Turing MIDI settings persist;
+  the baseline for Turing MIDI output is off.
 
 ## Controls
 
@@ -300,8 +302,8 @@ build/C1ZZL3.uf2
 The production source build currently reports:
 
 ```text
-FLASH: 146704 B
-RAM: 155612 B
+FLASH: 146736 B
+RAM: 155644 B
 ```
 
 ## Stability Notes
@@ -310,8 +312,10 @@ This build is close to the practical processing limit of this RP2040 card
 format, so future changes should be tested carefully at maximum settings.
 
 The stable version includes the lookup-table oscillator optimisation, 192 MHz
-clock, Turing MIDI output, settings readback, and full CC/knob pickup handoff.
-Tap tempo remains removed; Y is the Turing internal clock control.
+clock, optional Turing MIDI output, settings readback, and full CC/knob pickup
+handoff. Turing MIDI output defaults off across current builds with Turing MIDI
+support, and should be enabled deliberately when needed. Tap tempo remains
+removed; Y is the Turing internal clock control.
 
 Possible future optimisation notes are kept in:
 

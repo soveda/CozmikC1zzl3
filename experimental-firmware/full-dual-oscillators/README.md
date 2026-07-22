@@ -35,6 +35,8 @@ hardware panel and Turing machine behaviour.
 - Protocol v9 sound preset settings include:
   baseline PD, detune, oscillator 1 and 2 wave families, ring, noise, MIDI
   input channel, Turing CV range, and Turing MIDI output/channel.
+- Turing MIDI output is optional and defaults off. Older saved global
+  performance settings are migrated to the safer off baseline on first boot.
 - The matching Import Lab decodes separate CZ Line 1 and Line 2 waveform/window
   words and sends them as oscillator 1 and oscillator 2 wave-family settings.
 - Existing protocol v6-style settings remain accepted and copy oscillator 1

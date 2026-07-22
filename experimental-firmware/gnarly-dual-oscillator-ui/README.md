@@ -28,9 +28,10 @@ oscillator 1, medium for oscillator 2, full for performance/save.
 
 ## Scope
 
-- Turing mode is no longer exposed on switch up.
-- Turing internals are not removed yet; this first pass is a hardware UI test,
-  not a CPU/RAM cleanup.
+- Turing mode is removed from the live Gnarly behaviour.
+- Turing CV, pulse, and generated MIDI output are forced off in this build.
+- Incoming Web MIDI sound-preset/settings Turing fields are ignored and
+  settings readback reports Turing off for compatibility.
 - CV and pulse outputs are held low during the synth voice in this experiment.
 - The Web MIDI protocol remains compatible with the Rad/full-dual web UI.
 - The new oscillator 2 baseline PD control is saved in this Gnarly performance

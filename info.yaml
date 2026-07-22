@@ -1,6 +1,6 @@
 draft: false
 Name: Cosmik C1ZZL3
-Description: Stable phase-distortion synthesiser and Turing machine firmware with gate-held looping Web MIDI amplitude, phase-distortion, and pitch envelopes, CZ Import Lab handoff, PD, detune, eight waveform families, USB MIDI device/host operation, and optional Turing MIDI output.
+Description: Stable phase-distortion synthesiser and Turing machine firmware with gate-held looping Web MIDI amplitude, phase-distortion, and pitch envelopes, CZ Import Lab handoff, PD, detune, eight waveform families, USB MIDI device/host operation, and optional Turing MIDI output that defaults off.
 Language: C++ (Pico SDK)
 Creator: Adrian Vos
 Version: 1.4
@@ -22,6 +22,7 @@ manual: |
   Hold switch down from middle for performance edit (detune, ring modulation, noise/grit) and save.
   Switch up is Turing mode (Main = mutation, X = length, Y = clock speed).
   Turing CV and pulse outputs continue running in synth mode.
+  Turing MIDI output is optional and defaults off.
   Factory envelope presets are never overwritten; custom envelopes use separate browser-stored slots.
 
 panel:

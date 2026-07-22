@@ -139,10 +139,10 @@
           <button id="deleteSlot" type="button" title="Delete the selected custom slot from card flash">Delete Envelope Slot</button>
         </div>
         <div class="volatility-warning" role="note">
-          <strong>Temporary changes:</strong> Load RAM, Load Sound Preset, and Send Settings are lost when the card restarts. Save Envelope Only updates the slot shape/name without changing its saved settings; Save Sound Preset stores the envelope, slot name, and current settings together. Read Envelopes from Card also restores the saved settings for each sound preset. To make the global hardware startup baseline, move the switch from middle to down and hold it until the card confirms the save.
+          <strong>Temporary changes:</strong> Load RAM, Load Sound Preset, and Send Settings are lost when the card restarts. Save Envelope Only writes the envelope to the selected card slot. Save Sound Preset stores the envelope, slot name, and current settings together on Rad/Gnarly; on Core firmware it safely falls back to a collapsed Core-compatible envelope save. Read Envelopes from Card also restores the saved settings for each sound preset when the card supports them. To make the global hardware startup baseline, move the switch from middle to down and hold it until the card confirms the save.
         </div>
         <div class="volatility-warning" role="note">
-          <strong>Version compatibility:</strong> This lab can talk to C1ZZL3 Core, Rad, and future Gnarly-style firmware. Use Read Settings from Card and Read Envelopes from Card after connecting so the editor can detect the card. Older Core firmware receives a collapsed Amp/PD/Pitch payload; Rad/Gnarly firmware receives the full dual-oscillator lanes and sound-preset data.
+          <strong>Version compatibility:</strong> This lab can talk to C1ZZL3 Core, Rad, and future Gnarly-style firmware. The editor auto-checks capability before sound-preset saves when needed; Read Settings from Card and Read Envelopes from Card can also refresh the displayed capability. Older Core firmware receives a collapsed Amp/PD/Pitch payload; Rad/Gnarly firmware receives the full dual-oscillator lanes and sound-preset data.
         </div>
       </section>
 

@@ -104,56 +104,20 @@ public:
 
     void SendPendingUsbMidiOutput()
     {
-        if (!turingMidiOutputEnabled)
+        // Gnarly removes the generated Turing MIDI lane. This hook remains as
+        // cleanup only, so older saved states cannot leave a generated note on.
+        pendingTuringMidiNoteOn = false;
+        pendingTuringMidiNoteOff = false;
+        if (turingMidiNoteActive)
         {
-            pendingTuringMidiNoteOn = false;
-            pendingTuringMidiNoteOff = false;
-            if (turingMidiNoteActive)
-            {
-                uint8_t off[3] = {
-                    (uint8_t)(0x80u | (turingMidiLastChannel & 0x0Fu)),
-                    turingMidiLastNote,
-                    0
-                };
-                tud_midi_stream_write(0, off, sizeof(off));
-            }
-            turingMidiNoteActive = false;
-            return;
-        }
-
-        uint8_t channel = turingMidiOutputChannel & 0x0Fu;
-        if (pendingTuringMidiNoteOff && !turingMidiNoteActive)
-            pendingTuringMidiNoteOff = false;
-
-        if ((pendingTuringMidiNoteOff || pendingTuringMidiNoteOn) &&
-            turingMidiNoteActive)
-        {
-            pendingTuringMidiNoteOff = false;
             uint8_t off[3] = {
                 (uint8_t)(0x80u | (turingMidiLastChannel & 0x0Fu)),
                 turingMidiLastNote,
                 0
             };
             tud_midi_stream_write(0, off, sizeof(off));
-            turingMidiNoteActive = false;
         }
-
-        if (!pendingTuringMidiNoteOn)
-            return;
-
-        uint8_t note = pendingTuringMidiNote;
-        pendingTuringMidiNoteOn = false;
-
-        uint8_t on[3] = {
-            (uint8_t)(0x90u | channel),
-            note,
-            96
-        };
-        tud_midi_stream_write(0, on, sizeof(on));
-
-        turingMidiLastNote = note;
-        turingMidiLastChannel = channel;
-        turingMidiNoteActive = true;
+        turingMidiNoteActive = false;
     }
 
     // =========================================================
@@ -249,7 +213,7 @@ public:
             int32_t ring = clamp12(osc2Ring);
             int32_t noiseAmt = clamp12(osc2Noise);
 
-            updateTuringClockState(false);
+            clearTuringState();
 
             bool pulse2GateHigh = PulseIn2();
             bool pulse2Trigger = pulse2GateHigh && !pulse2GateWasHigh;
@@ -350,20 +314,12 @@ private:
         EnvelopeStage pitch2[8];
     };
 
-    static constexpr uint8_t DefaultTuringCvOctaveRange = 2;
-    static constexpr uint8_t MinTuringCvOctaveRange = 1;
-    static constexpr uint8_t MaxTuringCvOctaveRange = 8;
     static constexpr uint8_t MidiCcDetune = 20;
     static constexpr uint8_t MidiCcRingAmount = 21;
     static constexpr uint8_t MidiCcNoiseAmount = 22;
     static constexpr uint8_t MidiCcPdAmount = 1;
     static constexpr uint8_t MidiCcWaveAmount = 23;
     static constexpr uint8_t MidiCcTuringCvOctaveRange = 24;
-    static constexpr int32_t TuringAudioPitchDepth = 2048;
-    static constexpr uint32_t TuringClockLedSamples = 1200u;
-    static constexpr int32_t TuringToneMin = 256;
-    static constexpr int32_t TuringToneMax = 3840;
-    static constexpr int32_t TuringCvInputLimit = 1024;
     static constexpr int32_t PitchUnitsPerOctave = 4096;
     static constexpr int32_t MainPitchOctaves = 5;
     static constexpr int32_t PitchInputCountsPerVolt = 341;
@@ -582,19 +538,6 @@ private:
         outputSynthVoice(freq, pd, pd2Control, wave1, wave2, osc2Ring, osc2Noise);
     }
 
-    void outputTuringSynthVoice(int32_t cv1, int32_t cv2)
-    {
-        int32_t pitchOffset =
-            (turingCv * TuringAudioPitchDepth * MainPitchOctaves) >> 12;
-        int32_t freq = smoothPitch(
-            pitchFrequency(pitchUnits(pitchControl, 0) + pitchOffset));
-        int32_t pd = clampTuringTone(pdControl + turingCvToneOffset(cv1));
-        int32_t wave1 = clampTuringTone(waveControl + turingCvToneOffset(cv2));
-        int32_t wave2 = clampTuringTone(wave2Control + turingCvToneOffset(cv2));
-
-        outputSynthVoice(freq, pd, pd, wave1, wave2, osc2Ring, osc2Noise);
-    }
-
     void outputSynthVoice(
         int32_t freq,
         int32_t pd1Base,
@@ -751,12 +694,6 @@ private:
         envelopeHeld = held;
         envelopeReleaseRequested = !held;
         pulse2EnvelopeHolding = heldByPulse;
-    }
-
-    void triggerTuringEnvelope()
-    {
-        if (turingPulse)
-            triggerEnvelope();
     }
 
     int32_t updateEnvelope()
@@ -980,8 +917,7 @@ private:
             }
             else if (midiData[0] == MidiCcTuringCvOctaveRange)
             {
-                turingCvOctaveRange =
-                    1u + (uint8_t)(((uint32_t)midiData[1] * 7u) / 127u);
+                // Ignored in Gnarly; CC24 was Turing CV range in Rad.
             }
             else if (midiData[0] == MidiCcDetune)
             {
@@ -1180,15 +1116,15 @@ private:
 
         if (sysexLength >= WebMidiRangeSettingsPayloadLength + 6u)
         {
-            turingCvOctaveRange = clampTuringCvOctaveRange(sysexBuffer[offset]);
+            // Compatibility padding only in Gnarly: no Turing CV/MIDI output.
             offset++;
         }
 
         if (extendedSettings)
         {
-            turingMidiOutputEnabled = (sysexBuffer[offset] & 0x01u) != 0;
+            turingMidiOutputEnabled = false;
             offset++;
-            turingMidiOutputChannel = sysexBuffer[offset] & 0x0Fu;
+            turingMidiOutputChannel = 0u;
         }
 
         if (persist)
@@ -1217,9 +1153,9 @@ private:
         appendWebMidiUint14(frame, offset, clamp12(waveControl));
         appendWebMidiUint14(frame, offset, clamp12(wave2Control));
         frame[offset++] = midiInChannel & 0x0Fu;
-        frame[offset++] = clampTuringCvOctaveRange(turingCvOctaveRange);
-        frame[offset++] = turingMidiOutputEnabled ? 1u : 0u;
-        frame[offset++] = turingMidiOutputChannel & 0x0Fu;
+        frame[offset++] = 0u;
+        frame[offset++] = 0u;
+        frame[offset++] = 0u;
         frame[offset++] = 0xF7u;
 
         tud_midi_stream_write(0, frame, offset);
@@ -1611,9 +1547,9 @@ private:
         state.ring = (uint16_t)clamp12(osc2Ring);
         state.noise = (uint16_t)clamp12(osc2Noise);
         state.midiInChannel = midiInChannel & 0x0Fu;
-        state.turingRange = clampTuringCvOctaveRange(turingCvOctaveRange);
-        state.turingMidiEnabled = turingMidiOutputEnabled ? 1u : 0u;
-        state.turingMidiChannel = turingMidiOutputChannel & 0x0Fu;
+        state.turingRange = 0u;
+        state.turingMidiEnabled = 0u;
+        state.turingMidiChannel = 0u;
         return state;
     }
 
@@ -1627,9 +1563,12 @@ private:
         state.ring = (uint16_t)decodeWebMidiUint14(offset);
         state.noise = (uint16_t)decodeWebMidiUint14(offset);
         state.midiInChannel = sysexBuffer[offset++] & 0x0Fu;
-        state.turingRange = clampTuringCvOctaveRange(sysexBuffer[offset++]);
-        state.turingMidiEnabled = (sysexBuffer[offset++] & 0x01u) != 0 ? 1u : 0u;
-        state.turingMidiChannel = sysexBuffer[offset++] & 0x0Fu;
+        offset++;
+        state.turingRange = 0u;
+        offset++;
+        state.turingMidiEnabled = 0u;
+        offset++;
+        state.turingMidiChannel = 0u;
         return state;
     }
 
@@ -1645,9 +1584,9 @@ private:
         appendWebMidiUint14(buffer, offset, state.ring);
         appendWebMidiUint14(buffer, offset, state.noise);
         buffer[offset++] = state.midiInChannel & 0x0Fu;
-        buffer[offset++] = clampTuringCvOctaveRange(state.turingRange);
-        buffer[offset++] = state.turingMidiEnabled ? 1u : 0u;
-        buffer[offset++] = state.turingMidiChannel & 0x0Fu;
+        buffer[offset++] = 0u;
+        buffer[offset++] = 0u;
+        buffer[offset++] = 0u;
     }
 
     void applySlotPerformanceState(const SavedSlotPerformanceState& state)
@@ -1659,9 +1598,8 @@ private:
         osc2Ring = clamp12(state.ring);
         osc2Noise = clamp12(state.noise);
         midiInChannel = state.midiInChannel & 0x0Fu;
-        turingCvOctaveRange = clampTuringCvOctaveRange(state.turingRange);
-        turingMidiOutputEnabled = state.turingMidiEnabled != 0u;
-        turingMidiOutputChannel = state.turingMidiChannel & 0x0Fu;
+        turingMidiOutputEnabled = false;
+        turingMidiOutputChannel = 0u;
 
         midiResetSynthXPickup = true;
         midiResetSynthYPickup = true;
@@ -1975,131 +1913,14 @@ private:
     }
 
     // =========================================================
-    // TURING MACHINE
+    // GNARLY TURING COMPATIBILITY CLEANUP
     // =========================================================
-    void updateTuringClockState(bool triggerAudioEnvelope)
+    void clearTuringState()
     {
-        turingLength = 2 + ((turingLengthControl * 14) >> 12);
-        if (turingLength > 16) turingLength = 16;
-
-        bool externalClock = PulseIn1RisingEdge();
-        bool clocked = false;
-
-        if (externalClock)
-        {
-            externalClockAge = 0;
-            clocked = true;
-        }
-        else
-        {
-            if (externalClockAge < 96000u)
-                externalClockAge++;
-            else
-                clocked = internalTuringClock(turingClockControl);
-        }
-
-        if (clocked)
-        {
-            stepTuring(turingMutationControl);
-            if (triggerAudioEnvelope)
-                triggerTuringEnvelope();
-        }
-
-        updateTuringPulseAge();
-    }
-
-    void stepTuring(int32_t knob)
-    {
-        uint32_t mask = (1u << turingLength) - 1u;
-        uint8_t chance = turingMutationChance(knob);
-
-        bool bit = turing & 1;
-        if (fastNoise() < chance) bit ^= 1;
-
-        turing = ((turing >> 1) | ((uint32_t)bit << (turingLength - 1))) & mask;
-
-        turingPulse = bit;
-        turingAltPulse = (turing >> 1) & 1u;
-        turingPulseAge = 0;
-        turingClockLedAge = 0;
-
-        int32_t unipolar = (int32_t)((turing * 4095u) / mask);
-        int32_t scale =
-            (int32_t)turingCvOctaveRange * PitchInputCountsPerVolt;
-        turingCv = clip((unipolar * scale) / 4095);
-        turingModCv = smooth(turingCv);
-        queueTuringMidiNote();
-    }
-
-    void queueTuringMidiNote()
-    {
-        int32_t note = 36 + ((turingCv * 12) / PitchInputCountsPerVolt);
-        if (note < 0)
-            note = 0;
-        else if (note > 127)
-            note = 127;
-
-        pendingTuringMidiNote = (uint8_t)note;
-        pendingTuringMidiNoteOn = true;
-    }
-
-    uint8_t turingMutationChance(int32_t knob)
-    {
-        int32_t distance = knob - 2048;
-        if (distance < 0) distance = -distance;
-
-        int32_t chance = 255 - (distance >> 3);
-        if (chance < 0) chance = 0;
-        if (chance > 255) chance = 255;
-
-        return (uint8_t)chance;
-    }
-
-    bool internalTuringClock(int32_t speed)
-    {
-        uint32_t inverseSpeed = 4095u - (uint32_t)clamp12(speed);
-        uint32_t period =
-            3000u +
-            (((inverseSpeed * inverseSpeed) >> 12) * 57000u >> 12);
-        if (period < 3000u) period = 3000u;
-        turingClockPeriod = period;
-
-        if (++turingClock >= turingClockPeriod)
-        {
-            turingClock = 0;
-            return true;
-        }
-
-        return false;
-    }
-
-    void updateTuringPulseAge()
-    {
-        if (turingClockLedAge < TuringClockLedSamples)
-            turingClockLedAge++;
-
-        if ((turingPulse || turingAltPulse) && ++turingPulseAge > 1200)
-        {
-            turingPulse = false;
-            turingAltPulse = false;
-            pendingTuringMidiNoteOff = true;
-        }
-    }
-
-    int32_t smooth(int32_t x)
-    {
-        turingSmooth = (turingSmooth * 15 + x) >> 4;
-        return turingSmooth;
-    }
-
-    void updateTuringLEDs()
-    {
-        LedBrightness(0, turing & 1 ? 4095 : 0);
-        LedBrightness(1, turing & 2 ? 4095 : 0);
-        LedBrightness(2, turing & 4 ? 4095 : 0);
-        LedBrightness(3, PulseIn1());
-        LedBrightness(4, (turingLength * 4095) >> 4);
-        LedBrightness(5, turingClockLedAge < TuringClockLedSamples ? 4095 : 0);
+        pendingTuringMidiNoteOn = false;
+        pendingTuringMidiNoteOff = false;
+        turingMidiOutputEnabled = false;
+        turingMidiOutputChannel = 0u;
     }
 
     void updateSynthLEDs(Switch mode, int32_t pd1, int32_t wave1, int32_t pd2, int32_t wave2)
@@ -2344,23 +2165,6 @@ private:
         return ((int32_t)family * 4095) / 7;
     }
 
-    int32_t clampTuringTone(int32_t x)
-    {
-        if (x < TuringToneMin) return TuringToneMin;
-        if (x > TuringToneMax) return TuringToneMax;
-        return x;
-    }
-
-    int32_t turingCvToneOffset(int32_t cv)
-    {
-        if (cv < -TuringCvInputLimit)
-            cv = -TuringCvInputLimit;
-        else if (cv > TuringCvInputLimit)
-            cv = TuringCvInputLimit;
-
-        return cv << 1;
-    }
-
     void updateAltControls(int32_t main, int32_t x, int32_t y)
     {
         if (altMainPickedUp ||
@@ -2451,21 +2255,6 @@ private:
         osc2Detune = clamp12(control) - 2048;
         if (osc2Detune > -32 && osc2Detune < 32)
             osc2Detune = 0;
-    }
-
-    void updateTuringModeControls(int32_t main, int32_t x, int32_t y)
-    {
-        if (turingMainPickedUp ||
-            pickupModeControl(main, turingMainEntry, turingMutationControl, turingMainPickedUp))
-            turingMutationControl = main;
-
-        if (turingXPickedUp ||
-            pickupModeControl(x, turingXEntry, turingLengthControl, turingXPickedUp))
-            turingLengthControl = x;
-
-        if (turingYPickedUp ||
-            pickupModeControl(y, turingYEntry, turingClockControl, turingYPickedUp))
-            turingClockControl = y;
     }
 
     void resetModePickup(Switch mode, Switch previousMode, int32_t main, int32_t x, int32_t y)
@@ -2572,11 +2361,10 @@ private:
             envelopePreset < EnvelopePresetCount ?
             envelopePreset :
             (uint8_t)EnvelopePreset::Off;
-        state.reserved[0] = turingCvOctaveRange;
+        state.reserved[0] = 0u;
         state.reserved[1] = midiInChannel;
         state.reserved[2] =
-            (turingMidiOutputEnabled ? 0u : 0x80u) |
-            (turingMidiOutputChannel & 0x0Fu) |
+            0x80u |
             ((uint8_t)controlToWaveFamily(wave2Control) << 4);
         state.checksum = 0;
         state.checksum = checksumState(state);
@@ -2951,22 +2739,12 @@ private:
         wave2Control = waveFamilyToControl((state.reserved[2] >> 4) & 0x0Fu);
         osc2Ring = clamp12(state.osc2Ring);
         osc2Noise = clamp12(state.osc2Noise);
-        turingCvOctaveRange = clampTuringCvOctaveRange(state.reserved[0]);
         midiInChannel = state.reserved[1] & 0x0Fu;
-        turingMidiOutputEnabled = (state.reserved[2] & 0x80u) == 0;
-        turingMidiOutputChannel = state.reserved[2] & 0x0Fu;
+        turingMidiOutputEnabled = false;
+        turingMidiOutputChannel = 0u;
         envelopePreset = state.envelopePreset < EnvelopePresetCount ?
             state.envelopePreset :
             (uint8_t)EnvelopePreset::Off;
-    }
-
-    uint8_t clampTuringCvOctaveRange(uint8_t range)
-    {
-        if (range < MinTuringCvOctaveRange)
-            return DefaultTuringCvOctaveRange;
-        if (range > MaxTuringCvOctaveRange)
-            return MaxTuringCvOctaveRange;
-        return range;
     }
 
     void loadCustomEnvelopeState()
@@ -3287,19 +3065,6 @@ private:
     OutputFilterState outputFilterLeft = {};
     OutputFilterState outputFilterRight = {};
 
-    uint32_t turing = 0xACE1u;
-    int32_t turingSmooth = 0;
-    int32_t turingCv = 0;
-    int32_t turingModCv = 0;
-    uint32_t turingClock = 0;
-    uint32_t turingClockPeriod = 12000;
-    uint32_t turingPulseAge = 0;
-    uint32_t turingClockLedAge = TuringClockLedSamples;
-    uint32_t turingLength = 16;
-    uint32_t externalClockAge = 96000u;
-    bool turingPulse = false;
-    bool turingAltPulse = false;
-
     uint32_t noise = 1;
     uint32_t noiseHoldCounter = 0;
     int32_t heldPdNoise = 0;
@@ -3347,10 +3112,6 @@ private:
     int32_t pd2Control = 0;
     int32_t waveControl = 0;
     int32_t wave2Control = 0;
-    int32_t turingMutationControl = 2048;
-    int32_t turingLengthControl = 4095;
-    int32_t turingClockControl = 2048;
-    uint8_t turingCvOctaveRange = DefaultTuringCvOctaveRange;
     int32_t smoothedFreq = 0;
     int32_t osc2Detune = 0;
     int32_t osc2IntervalControl = 2048;
@@ -3388,13 +3149,12 @@ private:
     volatile uint8_t pendingMidiNote = 60;
     volatile uint8_t pendingMidiVelocity = 100;
     volatile bool pendingMidiNoteOn = false;
-    volatile uint8_t pendingTuringMidiNote = 60;
     volatile bool pendingTuringMidiNoteOn = false;
     volatile bool pendingTuringMidiNoteOff = false;
     uint8_t turingMidiLastNote = 60;
     uint8_t turingMidiLastChannel = 0;
     bool turingMidiNoteActive = false;
-    volatile bool turingMidiOutputEnabled = true;
+    volatile bool turingMidiOutputEnabled = false;
     volatile uint8_t turingMidiOutputChannel = 0;
     uint8_t midiNote = 60;
     uint8_t midiVelocity = 100;
