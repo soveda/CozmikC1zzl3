@@ -1366,8 +1366,11 @@ function supportsSoundPresetPayload() {
 }
 
 function envelopePayloadMode() {
+  if (settingsProtocol === "extended") return "core";
   if (supportsDualOscillatorEnvelopePayload()) return "dual";
-  if (detectedEnvelopeProtocol === 1) return "legacy";
+  if (settingsProtocol === "stable" || (settingsProtocol === "unknown" && detectedEnvelopeProtocol === 1)) {
+    return "legacy";
+  }
   return "core";
 }
 
@@ -1846,6 +1849,9 @@ function compatibilityStatusNote(mode, includePerformance) {
   const capability = cardCapabilityLabel();
   if (mode === "dual") {
     return ` Card capability: ${capability}.`;
+  }
+  if (mode === "core") {
+    return ` Card capability: ${capability}; dual lanes/settings are collapsed to the Core Amp/PD/Pitch format.`;
   }
   if (includePerformance && !supportsSoundPresetPayload()) {
     return ` Card capability: ${capability}; the editor could not confirm Rad/Gnarly before sending, so it used the safe compatibility format. Read Settings from Card or Read Envelopes from Card to refresh the capability display.`;
