@@ -96,6 +96,10 @@ also kept as oscillator 1 phase distortion so a mod wheel remains useful.
 - `CC26`: noise/grit amount.
 - `CC27`: oscillator 1 phase distortion, for eight-knob controllers.
 
+The Full Dual Oscillator Lab has a hidden Developer-mode MIDI CC Test Suite for
+checking these messages without a hardware controller. It sends individual CC
+values, a neutral reset, and sweep tests through the selected Web MIDI output.
+
 ## Web MIDI Editor
 
 Use the Full Dual Oscillator Lab:
