@@ -272,6 +272,31 @@
           </div>
           <div class="developer-log-panel">
             <div class="developer-log-head">
+              <h3>Gnarly MIDI CC Test Suite</h3>
+            </div>
+            <p class="developer-help">
+              Sends standard MIDI CC messages to the selected output on the editor MIDI channel. Use this to test CC1 and CC20-27 without a controller.
+              Example channel 1 messages: CC1 value 96 = <code>B0 01 60</code>, CC23 value 96 = <code>B0 17 60</code>, decimal <code>[176, 23, 96]</code>.
+            </p>
+            <div class="cc-test-grid" id="ccTestGrid">
+              <button type="button" data-cc="1" data-value="96">CC1 Osc 1 PD</button>
+              <button type="button" data-cc="20" data-value="96">CC20 Osc 1 recipe</button>
+              <button type="button" data-cc="21" data-value="96">CC21 Osc 2 recipe</button>
+              <button type="button" data-cc="22" data-value="96">CC22 Ring</button>
+              <button type="button" data-cc="23" data-value="96">CC23 Recipe bank</button>
+              <button type="button" data-cc="24" data-value="96">CC24 Osc 2 interval</button>
+              <button type="button" data-cc="25" data-value="96">CC25 Osc 2 PD</button>
+              <button type="button" data-cc="26" data-value="96">CC26 Noise</button>
+              <button type="button" data-cc="27" data-value="96">CC27 Osc 1 PD</button>
+            </div>
+            <div class="cc-test-actions">
+              <button id="ccTestNeutral" type="button">Send neutral CCs</button>
+              <button id="ccTestSweep" type="button">Run CC20-27 sweep</button>
+              <button id="ccTestModWheel" type="button">Run CC1 sweep</button>
+            </div>
+          </div>
+          <div class="developer-log-panel">
+            <div class="developer-log-head">
               <h3>Event Log</h3>
               <div class="developer-log-actions">
                 <button id="resetBrowserState" type="button">Reset browser state</button>
@@ -286,6 +311,6 @@
     </section>
   </main>
 
-  <script src="app.js?v=20260719-sustain-v6"></script>
+  <script src="app.js?v=20260724-cc-test"></script>
 </body>
 </html>
