@@ -14,12 +14,9 @@ This is not the same card experience as C1ZZL3 Core or C1ZZL3 Rad:
 
 ## Current Status
 
-This folder contains the current protocol v11 Gnarly release candidate.
-
-Keep the v10 Gnarly fallback and Rad/Core builds available while this branch is
-tested. If Gnarly becomes a public release, it should use its own release README,
-`info.yaml`, UF2, and matching web editor notes rather than replacing the Core
-C1ZZL3 package.
+This folder contains the stable protocol v11 Gnarly firmware. It has passed the
+current hardware test set and now sits alongside Core and Rad rather than
+replacing either of them.
 
 ## What It Does
 
@@ -120,16 +117,16 @@ https://soveda.github.io/CozmikC1zzl3/experiments/full-dual-oscillators/import-l
 
 ## UF2
 
-Current labelled test UF2:
+Current labelled stable UF2:
 
 ```text
 experimental-firmware/cz-recipe-wave-banks-v11/C1ZZL3_CZ_RECIPE_WAVE_BANKS_PROTOCOL_V11.uf2
 ```
 
-Active testing copy:
+Active stable copy:
 
 ```text
-experimental-firmware/active-uf2s/C1ZZL3_EXPERIMENT_CZ_RECIPE_WAVE_BANKS_PROTOCOL_V11.uf2
+experimental-firmware/active-uf2s/C1ZZL3_GNARLY.uf2
 ```
 
 ## Build

@@ -1,10 +1,9 @@
 # C1ZZL3 Full Dual Oscillator Firmware
 
-This folder contains the latest stable beta protocol v9 full-dual-oscillator
-firmware.
+This folder contains the Rad stable protocol v9 full-dual-oscillator firmware.
 
 It starts from the tested protocol v6 dual-amplitude rollback and keeps the
-same oscillator lookup tables. This stable beta adds independent oscillator
+same oscillator lookup tables. Rad adds independent oscillator
 wave-family controls through Web MIDI settings while preserving the existing
 hardware panel and Turing machine behaviour.
 
@@ -59,7 +58,7 @@ The CMake build creates:
 experimental-firmware/full-dual-oscillators/build/C1ZZL3_FULL_DUAL_OSCILLATORS.uf2
 ```
 
-The current stable beta full-dual build is:
+The current Rad stable full-dual build is:
 
 ```text
 experimental-firmware/full-dual-oscillators/C1ZZL3_FULL_DUAL_OSCILLATORS_PROTOCOL_V9.uf2
@@ -73,11 +72,12 @@ Use:
 experiments/full-dual-oscillators/
 ```
 
-The matching Web UI includes compatibility send paths for Core, Rad, and future
-Gnarly-style firmware. Older/Core cards receive a collapsed Amp/PD/Pitch
-payload, while Rad/Gnarly-capable cards receive the full dual-oscillator payload.
-Use `Read Settings from Card` and `Read Envelopes from Card` after connecting
-so the editor can choose the best send mode.
+The matching Web UI includes compatibility send paths for Core, Rad, and
+Gnarly. Older/Core cards receive a collapsed Amp/PD/Pitch payload, while
+Rad/Gnarly-capable cards receive the full dual-oscillator payload.
+On MIDI connection, the editor automatically checks settings and saved envelope
+slots so it can choose the best send mode. Use `Read Settings from Card` and
+`Read Envelopes from Card` as manual refresh/retry buttons.
 
 ## Hardware-Control Note
 

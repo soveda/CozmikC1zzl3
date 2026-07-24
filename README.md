@@ -25,10 +25,11 @@ uf2/C1ZZL3.uf2
 Checksum:
 
 ```text
-a9297f7d5d7fd7c2262d27ff6e8afa0ecd026ebe05aea205d9444b0985e8d7d6
+47f7d71ba1049149bd17fb0de495351da27f91fbfeb8b5fefebb5adb95b52645
 ```
 
-This is hardware-tested production release 1.4, promoted on 2026-07-18.
+This is hardware-tested production release 1.4, promoted on 2026-07-18 and
+refreshed on 2026-07-24 with the consistent held-note stock-envelope behaviour.
 
 The previous production release 1.3 is archived as a fallback at:
 
@@ -200,10 +201,10 @@ Use the shared Import Lab:
 https://soveda.github.io/CozmikC1zzl3/experiments/cz-import/
 ```
 
-Matching stable beta UF2:
+Matching stable Rad UF2:
 
 ```text
-experimental-firmware/active-uf2s/C1ZZL3_STABLE_FULL_DUAL_OSCILLATORS_PROTOCOL_V9.uf2
+experimental-firmware/active-uf2s/C1ZZL3_RAD.uf2
 ```
 
 This firmware lives alongside Core rather than replacing it. The Web UI is now
@@ -212,7 +213,7 @@ the safest send/read mode.
 
 Current scope:
 
-- Requires the matching protocol v9 stable beta firmware for full Rad behaviour.
+- Requires the matching protocol v9 Rad firmware for full Rad behaviour.
 - Uses the same shared Envelope Lab as Core and Gnarly.
 - Sends and reads Amp1/Amp2, PD1/PD2, Pitch1/Pitch2, CZ hold/end markers, slot
   names, saved performance settings, and separate oscillator wave-family
@@ -225,18 +226,19 @@ Current scope:
 - Import Lab detects single-line CZ patches from the line mode byte and mirrors
   the active line into both C1ZZL3 oscillator lanes.
 
-## Current Gnarly Experiment: Recipe Wave Banks Protocol v11
+## Stable Gnarly: Recipe Wave Banks Protocol v11
 
-The active v11 experiment keeps the v10 no-Turing hardware UI and adds four
-recipe banks for more CZ-like compound oscillator pairings.
+Gnarly is now the stable no-Turing dual-oscillator version. It keeps the v10
+hardware UI direction and adds four recipe banks for more CZ-like compound
+oscillator pairings.
 
-Matching test UF2:
+Matching stable Gnarly UF2:
 
 ```text
-experimental-firmware/active-uf2s/C1ZZL3_EXPERIMENT_CZ_RECIPE_WAVE_BANKS_PROTOCOL_V11.uf2
+experimental-firmware/active-uf2s/C1ZZL3_GNARLY.uf2
 ```
 
-Use the shared Envelope Lab for this experiment:
+Use the shared Envelope Lab for Gnarly:
 
 ```text
 https://soveda.github.io/CozmikC1zzl3/web-midi/editor/
@@ -254,12 +256,16 @@ v11 MIDI CC performance block:
 - `CC26`: noise/grit amount.
 - `CC27`: oscillator 1 phase distortion, for eight-knob controllers.
 - The shared lab can also talk to C1ZZL3 Core by collapsing the extra dual lanes
-  into a Core-compatible Amp/PD/Pitch payload. Use `Read Settings from Card` and
-  `Read Envelopes from Card` after connecting so the lab can detect the card
-  version and choose the best send mode.
+  into a Core-compatible Amp/PD/Pitch payload. On MIDI connection, the lab now
+  automatically checks card settings and envelope readback so it can detect the
+  card version and choose the best send mode. Use `Read Settings from Card` and
+  `Read Envelopes from Card` as manual refresh/retry buttons.
 - The shared Envelope Lab includes a hidden Developer-mode MIDI CC test
   suite for Gnarly. Use it to send `CC1` and `CC20`-`CC27` test messages, a
   neutral reset, and CC sweeps without needing a hardware MIDI controller.
+- Hardware testing has passed for Web MIDI, MIDI CC control, stock envelope
+  sustain on held notes/gates, save/readback, power-cycle stability, recipe
+  banks, and audio regression.
 
 Older beta web apps and UF2s are archived under
 `experiments/archive/superseded-20260721/` and
@@ -273,7 +279,9 @@ Older beta web apps and UF2s are archived under
 4. Drag points on the graphs to change both level and timing.
 5. Watch the point numbers. When stages stack, only the highest number is shown.
 6. Use the tables below the graphs for exact values when you want precise edits.
-7. Use the action buttons on the right when you want to send, save, read, or reset.
+7. Connect Web MIDI. The editor automatically checks the card firmware type and
+   saved envelope slots.
+8. Use the action buttons on the right when you want to send, save, refresh, or reset.
 
 Button quick reference:
 
@@ -304,6 +312,9 @@ local drafts. Factory presets are not overwritten.
 Custom presets are labelled `Local only`, `Saved - slot N`, or `Changed - slot N`.
 Envelope readback confirms which custom slots are occupied and verifies saves and
 deletions when supported by the card firmware.
+The editor also runs a quiet settings/envelope check automatically when MIDI
+connects or ports change, so the firmware type is visible without first pressing
+the read buttons.
 
 Envelope behaviour:
 
@@ -366,8 +377,8 @@ FUTURE_NOTES.md
 - `experiments/full-dual-oscillators/`: development mirror for the shared advanced Web MIDI lab
 - `uf2/C1ZZL3.uf2`: current stable firmware
 - `uf2/archive/`: older UF2s and rollbacks
-- `experimental-firmware/active-uf2s/`: visible production, Workshop release,
-  and stable beta UF2 copies
+- `experimental-firmware/active-uf2s/`: visible Core, Rad, and Gnarly UF2
+  copies
 - `archive/`: source snapshots and experiment notes
 - `CARD_README.md`: user-facing card guide
 - `info.yaml`: Workshop Computer site metadata

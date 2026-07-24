@@ -57,6 +57,9 @@ Import Lab decodes Casio CZ `.syx` patches into C1ZZL3 draft presets, shows a
 summary of the translation, and opens the result in Envelope Lab for final
 editing and sending. The shared Envelope Lab detects the connected card and
 collapses or expands the payload for Core, Rad, or Gnarly firmware.
+When Web MIDI connects, the editor automatically checks card settings and saved
+envelope slots so the detected firmware type is shown without requiring a manual
+read first.
 
 Current Import Lab features:
 

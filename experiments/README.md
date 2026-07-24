@@ -7,9 +7,9 @@ Envelope Lab.
 
 - `cz-import/`: current production C1ZZL3 Import Lab for translating Casio CZ
   `.syx` patches into the main Envelope Lab.
-- `full-dual-oscillators/`: latest stable beta web app for protocol v9 full
-  dual oscillator firmware, including sound presets, envelope-only saves, and
-  separate oscillator wave-family settings.
+- `full-dual-oscillators/`: shared advanced web app for Rad and Gnarly, with
+  Core compatibility, sound presets, envelope-only saves, separate oscillator
+  wave-family settings, and recipe-bank controls where supported.
 
 ## Archived Web Experiments
 

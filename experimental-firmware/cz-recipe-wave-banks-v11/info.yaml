@@ -1,7 +1,7 @@
 id: c1zzl3_gnarly_v11
 title: C1ZZL3 Gnarly
-draft: true
-release: protocol v11 candidate
+draft: false
+release: protocol v11 stable
 date: 2026-07-22
 summary: >-
   Dual-oscillator phase-distortion synth branch with no Turing mode, recipe wave
@@ -116,18 +116,18 @@ tags:
   - web-midi
   - phase-distortion
   - dual-oscillator
-  - beta
+  - stable
 source_file: experimental-firmware/cz-recipe-wave-banks-v11/info.yaml
 source_url: https://github.com/soveda/CozmikC1zzl3/tree/main/experimental-firmware/cz-recipe-wave-banks-v11
 readme_url: >-
   https://github.com/soveda/CozmikC1zzl3/blob/main/experimental-firmware/cz-recipe-wave-banks-v11/README.md
 download_url: >-
-  https://raw.githubusercontent.com/soveda/CozmikC1zzl3/main/experimental-firmware/active-uf2s/C1ZZL3_EXPERIMENT_CZ_RECIPE_WAVE_BANKS_PROTOCOL_V11.uf2
+  https://raw.githubusercontent.com/soveda/CozmikC1zzl3/main/experimental-firmware/active-uf2s/C1ZZL3_GNARLY.uf2
 metadata:
   creator: Adrian Vos
   language: C++ (Pico SDK)
-  version: protocol v11 candidate
-  status: Beta
+  version: protocol v11 stable
+  status: Stable
   license: MIT
   editor_url: https://soveda.github.io/CozmikC1zzl3/experiments/full-dual-oscillators/
   editor_note: Use the Full Dual Oscillator Lab and its Import Lab for recipe-bank sound presets.

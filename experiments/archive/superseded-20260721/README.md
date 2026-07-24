@@ -1,7 +1,7 @@
 # Superseded Web Experiments - 2026-07-21
 
-This archive keeps older web experiments after the protocol v9 full-dual
-oscillator workflow became the latest stable beta.
+This archive keeps older web experiments after the full-dual oscillator workflow
+became the shared advanced editor for Core, Rad, and Gnarly.
 
 Archived folders:
 
@@ -13,4 +13,4 @@ Archived folders:
 Current visible web apps are:
 
 - `experiments/cz-import/` for the production C1ZZL3 Import Lab.
-- `experiments/full-dual-oscillators/` for the protocol v9 stable beta.
+- `experiments/full-dual-oscillators/` for the shared advanced Core/Rad/Gnarly lab.

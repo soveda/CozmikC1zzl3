@@ -14,12 +14,9 @@ Current visible choices:
 
 | UF2 | Use when |
 | --- | --- |
-| `C1ZZL3_WORKSHOP_RELEASE_84_V1.3.uf2` | You want the Workshop Computer release 84 / version 1.3 exactly as published. |
-| `C1ZZL3_PRODUCTION_1.4.uf2` | You want `C1ZZL3 Core`, the current stable production build, mirrored here for convenience. |
-| `C1ZZL3_STABLE_FULL_DUAL_OSCILLATORS_PROTOCOL_V9.uf2` | You want `C1ZZL3 Rad`, the latest stable beta / advanced-with-Turing version with sound presets, envelope-only save, separate Amp/PD/Pitch lanes, separate oscillator wave families, and Turing MIDI defaulting off. |
-| `C1ZZL3_GNARLY_DUAL_OSCILLATOR_UI_PROTOCOL_V10.uf2` | You want the first `C1ZZL3 Gnarly` hardware-UI experiment with switch-up for oscillator 2 PD/wave plus interval/spread, switch-middle for oscillator 1 PD/wave plus pitch, switch-down interval/ring/noise, and no Turing CV/pulse/MIDI output. |
-| `C1ZZL3_CURRENT_FALLBACK_GNARLY_V10.uf2` | You want the explicit fallback copy of the passing v10 Gnarly build before testing later Gnarly/v11 work. |
-| `C1ZZL3_EXPERIMENT_CZ_RECIPE_WAVE_BANKS_PROTOCOL_V11.uf2` | You want the first v11 recipe-bank test build. Keep the v10 fallback nearby while testing. |
+| `C1ZZL3_CORE.uf2` | You want `C1ZZL3 Core`, the current stable production build with the simpler interface and Turing mode. |
+| `C1ZZL3_RAD.uf2` | You want `C1ZZL3 Rad`, the stable advanced-with-Turing version with sound presets, envelope-only save, separate Amp/PD/Pitch lanes, separate oscillator wave families, and Turing MIDI defaulting off. |
+| `C1ZZL3_GNARLY.uf2` | You want `C1ZZL3 Gnarly`, the stable no-Turing dual-oscillator version with recipe banks and expanded MIDI CC performance control. |
 
 Production remains authoritative at:
 
@@ -32,17 +29,16 @@ one place.
 
 ## Visible Firmware Folders
 
-- `full-dual-oscillators/`: latest stable beta, protocol v9 full-dual oscillator build with
+- `full-dual-oscillators/`: Rad stable protocol v9 full-dual oscillator build with
   separate envelope-only and sound-preset save paths, on top of the passing
   protocol v8 slot-name test and protocol v7 full-dual-oscillator baseline.
-- `gnarly-dual-oscillator-ui/`: first v10/Gnarly hardware-UI experiment. It
+- `gnarly-dual-oscillator-ui/`: archived v10/Gnarly hardware-UI experiment. It
   keeps the Rad dual-oscillator engine/protocol but remaps the hardware switch
   to oscillator 1, oscillator 2, and performance pages, with generated Turing
   CV, pulse, and MIDI output removed from the live behaviour.
-- `cz-recipe-wave-banks-v11/`: new v11/Gnarly development fork for CZ-style
-  compound recipe banks. It starts from the passing v10 Gnarly code and does
-  not change the current Envelope Lab or Import Lab. Its test UF2 is mirrored
-  into `active-uf2s/` for convenience.
+- `cz-recipe-wave-banks-v11/`: stable Gnarly v11 firmware with CZ-style
+  compound recipe banks. Its stable UF2 is mirrored into `active-uf2s/` as
+  `C1ZZL3_GNARLY.uf2`.
 - `workshop-release-84-v1.3/`: preserved public Workshop Computer release 84
   / version 1.3.
 

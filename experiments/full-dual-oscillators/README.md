@@ -38,6 +38,8 @@ advanced full-dual behaviour before syncing it into the hosted release copies.
   settings together on firmware that supports sound presets. On older cards it
   falls back to the collapsed compatible envelope save because those slots do not store
   full-dual sound-preset settings.
+- On MIDI connection, the lab automatically checks settings and saved envelope
+  slots so the detected firmware type is visible straight away.
 - `Read Envelopes from Card` also restores saved settings for card slots.
 - Compatibility send paths support older and newer C1ZZL3 firmware:
   - older cards receive a collapsed Amp/PD/Pitch payload.
@@ -69,9 +71,9 @@ Then open:
 http://localhost:5177/
 ```
 
-After connecting MIDI, the editor auto-checks capability before sound-preset
-saves when needed. Use `Read Settings from Card` and `Read Envelopes from Card`
-if you want to manually refresh the displayed card capability state.
+After connecting MIDI, the editor automatically checks card settings and saved
+envelope slots. Use `Read Settings from Card` and `Read Envelopes from Card` if
+you want to manually refresh the displayed card capability state.
 
 ## Hardware-Control Note
 
