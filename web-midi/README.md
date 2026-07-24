@@ -1,7 +1,7 @@
 # C1ZZL3 Web MIDI Editor
 
-This folder contains the browser editor for the production C1ZZL3 Web MIDI
-firmware.
+This folder contains the shared browser editor for C1ZZL3 Core, Rad, and
+Gnarly-compatible Web MIDI firmware.
 
 ## Hosted Editor
 
@@ -55,7 +55,8 @@ http://localhost:5174
 
 Import Lab decodes Casio CZ `.syx` patches into C1ZZL3 draft presets, shows a
 summary of the translation, and opens the result in Envelope Lab for final
-editing and sending.
+editing and sending. The shared Envelope Lab detects the connected card and
+collapses or expands the payload for Core, Rad, or Gnarly firmware.
 
 Current Import Lab features:
 
@@ -64,7 +65,9 @@ Current Import Lab features:
 - Drag-and-drop or file-picker import for Casio CZ `.syx` files.
 - CZ frame awareness for common patch-send SysEx files.
 - CZ envelope assignment: CZ DCW maps to C1ZZL3 phase distortion, CZ DCA maps
-  to C1ZZL3 amplitude, and CZ DCO pitch envelopes map to the pitch lane.
+  to C1ZZL3 amplitude, and CZ DCO pitch envelopes map to pitch lanes. Where
+  supported, separate CZ lines remain separate; Core cards receive a compatible
+  collapsed version.
 - `Open In Envelope Lab` handoff in a new tab for final editing and card send.
 
 ## How To Use The Editor

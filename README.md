@@ -188,16 +188,16 @@ Import Lab flow:
 
 ## Latest Stable Beta: Full Dual Oscillator Protocol v9
 
-Hosted stable beta lab:
+Use the shared Envelope Lab:
 
 ```text
-https://soveda.github.io/CozmikC1zzl3/experiments/full-dual-oscillators/
+https://soveda.github.io/CozmikC1zzl3/web-midi/editor/
 ```
 
-Hosted stable beta Import Lab:
+Use the shared Import Lab:
 
 ```text
-https://soveda.github.io/CozmikC1zzl3/experiments/full-dual-oscillators/import-lab/
+https://soveda.github.io/CozmikC1zzl3/experiments/cz-import/
 ```
 
 Matching stable beta UF2:
@@ -206,13 +206,14 @@ Matching stable beta UF2:
 experimental-firmware/active-uf2s/C1ZZL3_STABLE_FULL_DUAL_OSCILLATORS_PROTOCOL_V9.uf2
 ```
 
-This version lives alongside production rather than replacing it. It is the
-latest stable beta for the full-dual oscillator workflow.
+This firmware lives alongside Core rather than replacing it. The Web UI is now
+shared across Core, Rad, and Gnarly: it detects the connected card and chooses
+the safest send/read mode.
 
 Current scope:
 
-- Requires the matching protocol v9 stable beta firmware.
-- Preserves the production editor and production UF2 unchanged.
+- Requires the matching protocol v9 stable beta firmware for full Rad behaviour.
+- Uses the same shared Envelope Lab as Core and Gnarly.
 - Sends and reads Amp1/Amp2, PD1/PD2, Pitch1/Pitch2, CZ hold/end markers, slot
   names, saved performance settings, and separate oscillator wave-family
   settings.
@@ -235,10 +236,10 @@ Matching test UF2:
 experimental-firmware/active-uf2s/C1ZZL3_EXPERIMENT_CZ_RECIPE_WAVE_BANKS_PROTOCOL_V11.uf2
 ```
 
-Use the Full Dual Oscillator Lab for this experiment:
+Use the shared Envelope Lab for this experiment:
 
 ```text
-https://soveda.github.io/CozmikC1zzl3/experiments/full-dual-oscillators/
+https://soveda.github.io/CozmikC1zzl3/web-midi/editor/
 ```
 
 v11 MIDI CC performance block:
@@ -252,11 +253,11 @@ v11 MIDI CC performance block:
 - `CC25`: oscillator 2 phase distortion.
 - `CC26`: noise/grit amount.
 - `CC27`: oscillator 1 phase distortion, for eight-knob controllers.
-- The v9 lab can also talk to C1ZZL3 Core by collapsing the extra dual lanes
+- The shared lab can also talk to C1ZZL3 Core by collapsing the extra dual lanes
   into a Core-compatible Amp/PD/Pitch payload. Use `Read Settings from Card` and
   `Read Envelopes from Card` after connecting so the lab can detect the card
   version and choose the best send mode.
-- The Full Dual Oscillator Lab includes a hidden Developer-mode MIDI CC test
+- The shared Envelope Lab includes a hidden Developer-mode MIDI CC test
   suite for Gnarly. Use it to send `CC1` and `CC20`-`CC27` test messages, a
   neutral reset, and CC sweeps without needing a hardware MIDI controller.
 
@@ -360,9 +361,9 @@ FUTURE_NOTES.md
 - `C1ZZL3.cpp`: main firmware
 - `C1ZZL3_LUT.cpp` / `C1ZZL3_LUT.h`: phase-distortion lookup tables
 - `FUTURE_NOTES.md`: deferred optimisation and cleanup notes
-- `web-midi/editor/`: browser editor
-- `experiments/cz-import/`: production C1ZZL3 Import Lab
-- `experiments/full-dual-oscillators/`: latest stable beta Web MIDI lab
+- `web-midi/editor/`: shared Core/Rad/Gnarly browser editor
+- `experiments/cz-import/`: shared Core/Rad/Gnarly C1ZZL3 Import Lab
+- `experiments/full-dual-oscillators/`: development mirror for the shared advanced Web MIDI lab
 - `uf2/C1ZZL3.uf2`: current stable firmware
 - `uf2/archive/`: older UF2s and rollbacks
 - `experimental-firmware/active-uf2s/`: visible production, Workshop release,

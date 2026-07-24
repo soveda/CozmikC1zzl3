@@ -1,11 +1,9 @@
-# C1ZZL3 Full Dual Oscillator Stable Beta
+# C1ZZL3 Shared Advanced Envelope Lab
 
-This folder contains the Web MIDI UI for the stable protocol v9
-full-dual-oscillator firmware. It starts from the tested dual-amplitude v6
-rollback, then adds separate oscillator wave-family settings.
-
-This remains separate from the production Envelope Lab so users can choose the
-stable full-dual workflow deliberately.
+This folder is the development mirror for the shared C1ZZL3 Web MIDI UI. The
+public editor path is
+`web-midi/editor/`; this folder remains useful for developing and validating
+advanced full-dual behaviour before syncing it into the hosted release copies.
 
 ## Current Scope
 
@@ -37,14 +35,13 @@ stable full-dual workflow deliberately.
 - `Save Envelope Only` updates the slot envelope/name while leaving that slot's
   saved settings unchanged.
 - `Save Sound Preset` stores the selected envelope/name and the current
-  settings together on Rad/Gnarly. On Core/older cards it falls back to the
-  collapsed Core-compatible envelope save because those slots do not store
+  settings together on firmware that supports sound presets. On older cards it
+  falls back to the collapsed compatible envelope save because those slots do not store
   full-dual sound-preset settings.
 - `Read Envelopes from Card` also restores saved settings for card slots.
-- Compatibility send paths support `C1ZZL3 Core`, `C1ZZL3 Rad`, and future
-  `C1ZZL3 Gnarly`-style firmware:
-  - Core/older cards receive a collapsed Amp/PD/Pitch payload.
-  - Rad/Gnarly-capable cards receive the full dual-oscillator payload.
+- Compatibility send paths support older and newer C1ZZL3 firmware:
+  - older cards receive a collapsed Amp/PD/Pitch payload.
+  - dual-lane-capable cards receive the full oscillator payload.
   - Developer diagnostics show the detected settings protocol, envelope
     protocol, and current envelope send mode.
 - Protocol v11 recipe-bank firmware is also supported by this lab. It adds a
@@ -74,7 +71,7 @@ http://localhost:5177/
 
 After connecting MIDI, the editor auto-checks capability before sound-preset
 saves when needed. Use `Read Settings from Card` and `Read Envelopes from Card`
-if you want to manually refresh the displayed Core/Rad/Gnarly capability state.
+if you want to manually refresh the displayed card capability state.
 
 ## Hardware-Control Note
 
@@ -108,6 +105,6 @@ bank to settings readback/save. Its firmware also exposes a controller-friendly
 - `CC26`: noise/grit amount.
 - `CC27`: oscillator 1 phase distortion, for eight-knob controllers.
 
-Open Developer tools in the lab to reveal the hidden Gnarly MIDI CC Test Suite.
+Open Developer tools in the lab to reveal the hidden MIDI CC Test Suite.
 It can send individual `CC1` and `CC20`-`CC27` messages, a neutral reset, and
 low/mid/high sweeps through the selected Web MIDI output.

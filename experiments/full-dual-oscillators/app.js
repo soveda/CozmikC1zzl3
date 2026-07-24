@@ -807,8 +807,8 @@ function renderPerformanceSettings() {
   el.pd2Control.disabled = !separatePd2;
   el.pd2Setting.classList.toggle("is-disabled", !separatePd2);
   el.pd2SettingHint.textContent = separatePd2
-    ? "Gnarly v11 stores and sends PD2 separately."
-    : "PD2 is linked to PD1 on Core/Rad compatibility modes.";
+    ? "This firmware stores and sends PD2 separately."
+    : "PD2 is linked to PD1 in compatibility mode.";
   el.detuneControl.value = performanceSettings.detune;
   el.performanceWaveSelect.value = performanceSettings.waveform;
   el.performanceWave2Select.value = performanceSettings.waveform2;
@@ -1477,13 +1477,13 @@ function describeEnvelopeReadback() {
 
 function cardCapabilityLabel() {
   if (settingsProtocol === "recipe-bank" || (settingsProtocol === "unknown" && detectedEnvelopeProtocol !== null && detectedEnvelopeProtocol >= 11)) {
-    return "Gnarly recipe-bank";
+    return "recipe-bank firmware";
   }
   if (settingsProtocol === "dual-oscillator" || (settingsProtocol === "unknown" && detectedEnvelopeProtocol !== null && detectedEnvelopeProtocol >= 9)) {
-    return "Rad/Gnarly dual-oscillator";
+    return "dual-lane firmware";
   }
-  if (settingsProtocol === "extended") return "Core extended";
-  if (settingsProtocol === "stable") return "Core stable";
+  if (settingsProtocol === "extended") return "extended firmware";
+  if (settingsProtocol === "stable") return "stable firmware";
   return "undetected";
 }
 
@@ -1513,7 +1513,7 @@ function envelopePayloadMode() {
 }
 
 function envelopePayloadModeLabel(mode = envelopePayloadMode()) {
-  if (mode === "dual") return "full-dual";
+  if (mode === "dual") return "dual-lane";
   if (mode === "legacy") return "legacy Amp/PD";
   return "Core Amp/PD/Pitch";
 }
@@ -2060,10 +2060,10 @@ function compatibilityStatusNote(mode, includePerformance) {
     return ` Card capability: ${capability}.`;
   }
   if (mode === "core") {
-    return ` Card capability: ${capability}; dual lanes/settings are collapsed to the Core Amp/PD/Pitch format.`;
+    return ` Card capability: ${capability}; dual lanes/settings are collapsed to the compatible Amp/PD/Pitch format.`;
   }
   if (includePerformance && !supportsSoundPresetPayload()) {
-    return ` Card capability: ${capability}; the editor could not confirm Rad/Gnarly before sending, so it used the safe compatibility format. Read Settings from Card or Read Envelopes from Card to refresh the capability display.`;
+    return ` Card capability: ${capability}; the editor could not confirm dual-lane support before sending, so it used the safe compatibility format. Read Settings from Card or Read Envelopes from Card to refresh the capability display.`;
   }
   return ` Card capability: ${capability}; dual lanes are collapsed for compatibility.`;
 }
@@ -2072,7 +2072,7 @@ function temporaryLoadSaveHint(mode) {
   if (mode === "dual") {
     return " This is temporary; use Save Sound Preset to write the envelope, name, and settings to card flash.";
   }
-  return " This is temporary; use Save Envelope Only or Save Sound Preset to write the collapsed Core-compatible envelope to card flash. Core firmware does not store full-dual sound-preset settings in the slot.";
+  return " This is temporary; use Save Envelope Only or Save Sound Preset to write the compatible envelope to card flash. Older firmware does not store full sound-preset settings in the slot.";
 }
 
 function buildSettingsSysex(command) {
@@ -2574,7 +2574,7 @@ function finishEnvelopeRead() {
   if (session.reason === "delete") {
     const deleted = (session.mask & (1 << session.slot)) === 0;
     setStatus(deleted
-      ? `Verified card slot ${session.slot + 1} is empty. Any matching full-dual-oscillator card-slot draft was removed.`
+      ? `Verified card slot ${session.slot + 1} is empty. Any matching card-slot draft was removed.`
       : `Card slot ${session.slot + 1} still reports a saved envelope.`);
     return;
   }
@@ -2584,7 +2584,7 @@ function finishEnvelopeRead() {
   if (result.replacedLocal) notes.push(`${result.replacedLocal} local draft${result.replacedLocal === 1 ? " was" : "s were"} replaced to show card data`);
   if (result.skipped) notes.push(`${result.skipped} card envelope${result.skipped === 1 ? " was" : "s were"} not added because the browser list is full`);
   const browserDraftLabel = envelopePayloadMode() === "dual"
-    ? "full-dual-oscillator browser drafts"
+    ? "dual-lane browser drafts"
     : "local browser drafts for the current compatibility mode";
   const emptyNote = count === 0
     ? ` No saved card envelopes were reported; any remaining presets are ${browserDraftLabel}.`
@@ -3128,7 +3128,7 @@ function downloadJson() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "c1zzl3-full-dual-oscillators-presets.json";
+  link.download = "c1zzl3-envelope-presets.json";
   link.click();
   URL.revokeObjectURL(url);
 }
