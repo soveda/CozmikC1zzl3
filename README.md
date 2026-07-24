@@ -256,6 +256,9 @@ v11 MIDI CC performance block:
   into a Core-compatible Amp/PD/Pitch payload. Use `Read Settings from Card` and
   `Read Envelopes from Card` after connecting so the lab can detect the card
   version and choose the best send mode.
+- The Full Dual Oscillator Lab includes a hidden Developer-mode MIDI CC test
+  suite for Gnarly. Use it to send `CC1` and `CC20`-`CC27` test messages, a
+  neutral reset, and CC sweeps without needing a hardware MIDI controller.
 
 Older beta web apps and UF2s are archived under
 `experiments/archive/superseded-20260721/` and

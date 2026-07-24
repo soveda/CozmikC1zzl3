@@ -107,3 +107,7 @@ bank to settings readback/save. Its firmware also exposes a controller-friendly
 - `CC25`: oscillator 2 phase distortion.
 - `CC26`: noise/grit amount.
 - `CC27`: oscillator 1 phase distortion, for eight-knob controllers.
+
+Open Developer tools in the lab to reveal the hidden Gnarly MIDI CC Test Suite.
+It can send individual `CC1` and `CC20`-`CC27` messages, a neutral reset, and
+low/mid/high sweeps through the selected Web MIDI output.
