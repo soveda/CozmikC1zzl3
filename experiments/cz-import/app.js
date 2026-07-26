@@ -79,6 +79,7 @@ const WAVE_FAMILIES = [
 ];
 const STAGES = 8;
 const CZ_IMPORT_TIME_SCALE = 0.8;
+const CZ_IMPORT_PD_DEPTH_SCALE = 0.78;
 const CZ_IMPORT_PITCH_DEPTH_SCALE = 0.25;
 const CZ_IMPORT_SHORT_FINAL_PITCH_SAMPLES = 3000;
 const CZ_IMPORT_FINAL_PITCH_JUMP_LEVELS = 300;
@@ -565,9 +566,9 @@ function selectAmpEnvelopePair(czPatch, mode) {
   return { amp1: selected, amp2: cloneCzEnvelopeStages(selected) };
 }
 
-function czEnvelopeToC1Stages(stages, timeMin = 240, timeMax = 48000, neutralLevel = 0) {
+function czEnvelopeToC1Stages(stages, timeMin = 240, timeMax = 48000, neutralLevel = 0, levelScale = 1) {
   return stages.map((stage) => roundStage(
-    stage.inactive ? neutralLevel : (stage.level / 99) * 4095,
+    stage.inactive ? neutralLevel : clamp(Math.round(((stage.level / 99) * 4095) * levelScale), 0, 4095),
     stage.inactive ? 1 : Math.max(1, Math.round(czRateToTime(stage.rate, timeMin, timeMax) * CZ_IMPORT_TIME_SCALE))
   ));
 }
@@ -728,8 +729,8 @@ function buildDraftPreset(
   const ampMergedEnvelope = czEnvelopeToC1Stages(mergeCzEnvelopes(czPatch.dca1, czPatch.dca2), 140, 24000);
   const amp1Envelope = czEnvelopeToC1Stages(ampPair.amp1, 140, 24000);
   const amp2Envelope = czEnvelopeToC1Stages(ampPair.amp2, 140, 24000);
-  const dcwEnvelope = czEnvelopeToC1Stages(pdPair.pd1, 120, 30000);
-  const dcw2Envelope = czEnvelopeToC1Stages(pdPair.pd2, 120, 30000);
+  const dcwEnvelope = czEnvelopeToC1Stages(pdPair.pd1, 120, 30000, 0, CZ_IMPORT_PD_DEPTH_SCALE);
+  const dcw2Envelope = czEnvelopeToC1Stages(pdPair.pd2, 120, 30000, 0, CZ_IMPORT_PD_DEPTH_SCALE);
   const pitchPair = selectPitchEnvelopePair(czPatch, pitchMode);
   const dco1PitchEnvelope = czPitchEnvelopeToC1Stages(cloneCzEnvelopeStages(czPatch.dco1Pitch), 240, 48000);
   const dco2PitchEnvelope = czPitchEnvelopeToC1Stages(cloneCzEnvelopeStages(czPatch.dco2Pitch), 240, 48000);
@@ -753,6 +754,7 @@ function buildDraftPreset(
   const ring = clamp(Math.round((decodedBytes[49] ?? 0) / 255 * 1200), 0, 4095);
   const noise = clamp(Math.round((decodedBytes[50] ?? 0) / 255 * 700), 0, 4095);
   const pd = clamp(Math.max(...dcwEnvelope.map((stage) => stage.level)), 0, 4095);
+  const pd2 = clamp(Math.max(...dcw2Envelope.map((stage) => stage.level)), 0, 4095);
 
   return {
     name: `${baseName} draft`,
@@ -789,7 +791,7 @@ function buildDraftPreset(
       sustain,
       cz: czPatch
     },
-    performance: { pd, pd2: pd, detune, waveform: wave.value, waveform2: wave2.value, ring, noise },
+    performance: { pd, pd2, detune, waveform: wave.value, waveform2: wave2.value, ring, noise },
     confidence: "medium"
   };
 }
