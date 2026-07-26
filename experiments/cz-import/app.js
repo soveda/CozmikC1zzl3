@@ -127,6 +127,12 @@ const CZ_WINDOW_NAMES = [
   "Double-saw window",
   "Double-saw window"
 ];
+const CZ_LINE_SELECT = {
+  line1: 0,
+  line2: 1,
+  line1Plus1Prime: 2,
+  line1Plus2Prime: 3
+};
 
 function loadThemeMode() {
   try {
@@ -438,6 +444,42 @@ function parseCzEnvelope(bytes, endOffset, envelopeOffset, rateMapper, levelMapp
   return { endStep, stages };
 }
 
+function parseCzLineModeByte(value) {
+  const lineSelect = value & 0x03;
+  return {
+    raw: value,
+    octaveRange: (value >> 2) & 0x03,
+    lineSelect,
+    line1Enabled: lineSelect === CZ_LINE_SELECT.line1 ||
+      lineSelect === CZ_LINE_SELECT.line1Plus1Prime ||
+      lineSelect === CZ_LINE_SELECT.line1Plus2Prime,
+    line2Enabled: lineSelect === CZ_LINE_SELECT.line2 ||
+      lineSelect === CZ_LINE_SELECT.line1Plus2Prime,
+    mirroredLine1: lineSelect === CZ_LINE_SELECT.line1Plus1Prime
+  };
+}
+
+function decodeCzFineDetune(raw) {
+  const value = raw & 0x3f;
+  return (value & 0x0f) + ((value >> 4) * 15);
+}
+
+function decodeCzCoarseDetune(raw) {
+  return raw & 0x3f;
+}
+
+function decodeCzDetuneToC1Value(bytes, lineModeInfo) {
+  if (!lineModeInfo || (!lineModeInfo.line2Enabled && !lineModeInfo.mirroredLine1)) return 2048;
+
+  const sign = ((bytes[1] ?? 0) & 0x01) !== 0 ? -1 : 1;
+  const fine = decodeCzFineDetune(bytes[2] ?? 0);
+  const coarse = decodeCzCoarseDetune(bytes[3] ?? 0);
+  const maxSemitones = 36 + (60 / 61);
+  const semitones = coarse + (fine / 61);
+  const normalized = clamp(semitones / maxSemitones, 0, 1);
+  return clamp(Math.round(2048 + (sign * normalized * 2047)), 0, 4095);
+}
+
 function mergeCzEnvelopes(a, b) {
   const merged = a.stages.map((stage, index) => {
     const other = b.stages[index] ?? stage;
@@ -612,6 +654,7 @@ function czSustainStage(stages) {
 
 function parseCzPatch(decodedBytes) {
   const lineMode = decodedBytes[0] ?? 0;
+  const lineModeInfo = parseCzLineModeByte(lineMode);
   const line1Wave = parseCzWaveSpec(decodedBytes, CZ_SECTIONS.line1Wave);
   const line2Wave = parseCzWaveSpec(decodedBytes, CZ_SECTIONS.line2Wave);
   const dca1 = parseCzEnvelope(decodedBytes, CZ_SECTIONS.dca1End, CZ_SECTIONS.dca1, dcaRate, dcaLevel);
@@ -631,8 +674,10 @@ function parseCzPatch(decodedBytes) {
     line1Wave,
     line2Wave,
     lineMode,
-    line1Enabled: (lineMode & 0x02) !== 0,
-    line2Enabled: (lineMode & 0x01) !== 0,
+    lineModeInfo,
+    line1Enabled: lineModeInfo.line1Enabled,
+    line2Enabled: lineModeInfo.line2Enabled,
+    mirroredLine1: lineModeInfo.mirroredLine1,
     ampStages: mergeCzEnvelopes(dca1, dca2),
     pdStages: mergeCzEnvelopes(dcw1, dcw2),
     pitchStages: mergeCzEnvelopes(dco1Pitch, dco2Pitch),
@@ -750,9 +795,9 @@ function buildDraftPreset(
     dco2: dco2PitchEnvelope,
     difference: czPitchEnvelopeToC1Stages(differenceCzPitchStages(czPatch.dco1Pitch, czPatch.dco2Pitch), 240, 48000)
   };
-  const detune = clamp(Math.round((decodedBytes[48] ?? 128) / 255 * 4095), 0, 4095);
-  const ring = clamp(Math.round((decodedBytes[49] ?? 0) / 255 * 1200), 0, 4095);
-  const noise = clamp(Math.round((decodedBytes[50] ?? 0) / 255 * 700), 0, 4095);
+  const detune = decodeCzDetuneToC1Value(decodedBytes, czPatch.lineModeInfo);
+  const ring = 0;
+  const noise = 0;
   const pd = clamp(Math.max(...dcwEnvelope.map((stage) => stage.level)), 0, 4095);
   const pd2 = clamp(Math.max(...dcw2Envelope.map((stage) => stage.level)), 0, 4095);
 
@@ -847,7 +892,12 @@ function formatCzWaveSpec(label, spec) {
 }
 
 function formatLineMode(cz) {
-  if (cz.line1Enabled && cz.line2Enabled) return `CZ line mode 0x${cz.lineMode.toString(16)}: lines 1 and 2 active.`;
+  if (cz.lineModeInfo?.lineSelect === CZ_LINE_SELECT.line1Plus2Prime) {
+    return `CZ line mode 0x${cz.lineMode.toString(16)}: lines 1 and 2 active with detune-capable dual-line mode.`;
+  }
+  if (cz.lineModeInfo?.lineSelect === CZ_LINE_SELECT.line1Plus1Prime) {
+    return `CZ line mode 0x${cz.lineMode.toString(16)}: line 1 plus detuned line 1' active; C1ZZL3 mirrors line 1 across both oscillators.`;
+  }
   if (cz.line1Enabled) return `CZ line mode 0x${cz.lineMode.toString(16)}: line 1 active; C1ZZL3 oscillator 2 mirrors oscillator 1.`;
   if (cz.line2Enabled) return `CZ line mode 0x${cz.lineMode.toString(16)}: line 2 active; C1ZZL3 oscillator 1 mirrors oscillator 2.`;
   return `CZ line mode 0x${cz.lineMode.toString(16)}: active line unclear; decoded lanes are preserved.`;
