@@ -232,6 +232,20 @@ Gnarly is now the stable no-Turing dual-oscillator version. It keeps the v10
 hardware UI direction and adds four recipe banks for more CZ-like compound
 oscillator pairings.
 
+Gnarly recipe-bank overview:
+
+- Bank 1 `Simple`: the eight plain wave families, one per slot.
+- Bank 2 `Warm compound`: double-sine based pairings such as `Double sine + Saw`,
+  `Double sine + Square`, and `Saw pulse + Double sine`.
+- Bank 3 `Bright resonant`: windowed and resonant pairings such as
+  `Resonant saw window + Saw`, `Resonant triangle window + Square`, and
+  `Resonant trapezoid window + Saw pulse`.
+- Bank 4 `CZ import`: stranger CZ-leaning pairings such as `Saw pulse + Double sine`,
+  `Resonant trapezoid window + Double sine`, and `Square + Resonant saw window`.
+
+The full slot-by-slot list lives in
+`experimental-firmware/cz-recipe-wave-banks-v11/README.md`.
+
 Matching stable Gnarly UF2:
 
 ```text
