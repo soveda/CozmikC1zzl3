@@ -78,12 +78,19 @@ const WAVE_FAMILIES = [
   { label: "Resonant trapezoid window", value: 7, hint: "upper CC23 range" },
 ];
 const STAGES = 8;
-const CZ_IMPORT_TIME_SCALE = 0.8;
+const CZ_IMPORT_TIME_SCALE = 0.68;
+const CZ_IMPORT_RATE_CURVE = 1.7;
 const CZ_IMPORT_PD_DEPTH_SCALE = 0.78;
 const CZ_IMPORT_PITCH_DEPTH_SCALE = 0.25;
 const CZ_IMPORT_SHORT_FINAL_PITCH_SAMPLES = 3000;
 const CZ_IMPORT_FINAL_PITCH_JUMP_LEVELS = 300;
 const C1_PITCH_CENTER = 2048;
+const CZ_IMPORT_AMP_TIME_MIN = 120;
+const CZ_IMPORT_AMP_TIME_MAX = 14000;
+const CZ_IMPORT_PD_TIME_MIN = 100;
+const CZ_IMPORT_PD_TIME_MAX = 16000;
+const CZ_IMPORT_PITCH_TIME_MIN = 160;
+const CZ_IMPORT_PITCH_TIME_MAX = 18000;
 const MIN_DECODED_PATCH_BYTES = 48;
 const MAX_DECODED_PATCH_BYTES = 512;
 const CZ_FULL_PATCH_BYTES = 128;
@@ -387,7 +394,7 @@ function buildStagesFromBytes(bytes, startIndex, levelBias = 0, timeMin = 120, t
 
 function czRateToTime(rate, minTime = 240, maxTime = 48000) {
   const normalized = clamp(rate, 0, 99) / 99;
-  const eased = 1 - (normalized * normalized);
+  const eased = Math.pow(1 - normalized, CZ_IMPORT_RATE_CURVE);
   return clamp(Math.round(minTime + (maxTime - minTime) * eased), 1, 192000);
 }
 
@@ -771,16 +778,56 @@ function buildDraftPreset(
   const wave2 = activeLine ? wave : line2Wave;
   const ampPair = selectAmpEnvelopePair(czPatch, ampMode);
   const pdPair = selectPdEnvelopePair(czPatch, pdMode);
-  const ampMergedEnvelope = czEnvelopeToC1Stages(mergeCzEnvelopes(czPatch.dca1, czPatch.dca2), 140, 24000);
-  const amp1Envelope = czEnvelopeToC1Stages(ampPair.amp1, 140, 24000);
-  const amp2Envelope = czEnvelopeToC1Stages(ampPair.amp2, 140, 24000);
-  const dcwEnvelope = czEnvelopeToC1Stages(pdPair.pd1, 120, 30000, 0, CZ_IMPORT_PD_DEPTH_SCALE);
-  const dcw2Envelope = czEnvelopeToC1Stages(pdPair.pd2, 120, 30000, 0, CZ_IMPORT_PD_DEPTH_SCALE);
+  const ampMergedEnvelope = czEnvelopeToC1Stages(
+    mergeCzEnvelopes(czPatch.dca1, czPatch.dca2),
+    CZ_IMPORT_AMP_TIME_MIN,
+    CZ_IMPORT_AMP_TIME_MAX
+  );
+  const amp1Envelope = czEnvelopeToC1Stages(
+    ampPair.amp1,
+    CZ_IMPORT_AMP_TIME_MIN,
+    CZ_IMPORT_AMP_TIME_MAX
+  );
+  const amp2Envelope = czEnvelopeToC1Stages(
+    ampPair.amp2,
+    CZ_IMPORT_AMP_TIME_MIN,
+    CZ_IMPORT_AMP_TIME_MAX
+  );
+  const dcwEnvelope = czEnvelopeToC1Stages(
+    pdPair.pd1,
+    CZ_IMPORT_PD_TIME_MIN,
+    CZ_IMPORT_PD_TIME_MAX,
+    0,
+    CZ_IMPORT_PD_DEPTH_SCALE
+  );
+  const dcw2Envelope = czEnvelopeToC1Stages(
+    pdPair.pd2,
+    CZ_IMPORT_PD_TIME_MIN,
+    CZ_IMPORT_PD_TIME_MAX,
+    0,
+    CZ_IMPORT_PD_DEPTH_SCALE
+  );
   const pitchPair = selectPitchEnvelopePair(czPatch, pitchMode);
-  const dco1PitchEnvelope = czPitchEnvelopeToC1Stages(cloneCzEnvelopeStages(czPatch.dco1Pitch), 240, 48000);
-  const dco2PitchEnvelope = czPitchEnvelopeToC1Stages(cloneCzEnvelopeStages(czPatch.dco2Pitch), 240, 48000);
-  const pitch1Envelope = czPitchEnvelopeToC1Stages(pitchPair.pitch1, 240, 48000);
-  const pitch2Envelope = czPitchEnvelopeToC1Stages(pitchPair.pitch2, 240, 48000);
+  const dco1PitchEnvelope = czPitchEnvelopeToC1Stages(
+    cloneCzEnvelopeStages(czPatch.dco1Pitch),
+    CZ_IMPORT_PITCH_TIME_MIN,
+    CZ_IMPORT_PITCH_TIME_MAX
+  );
+  const dco2PitchEnvelope = czPitchEnvelopeToC1Stages(
+    cloneCzEnvelopeStages(czPatch.dco2Pitch),
+    CZ_IMPORT_PITCH_TIME_MIN,
+    CZ_IMPORT_PITCH_TIME_MAX
+  );
+  const pitch1Envelope = czPitchEnvelopeToC1Stages(
+    pitchPair.pitch1,
+    CZ_IMPORT_PITCH_TIME_MIN,
+    CZ_IMPORT_PITCH_TIME_MAX
+  );
+  const pitch2Envelope = czPitchEnvelopeToC1Stages(
+    pitchPair.pitch2,
+    CZ_IMPORT_PITCH_TIME_MIN,
+    CZ_IMPORT_PITCH_TIME_MAX
+  );
   const sustain = [
     czSustainStage(ampPair.amp1),
     czSustainStage(pdPair.pd1),
