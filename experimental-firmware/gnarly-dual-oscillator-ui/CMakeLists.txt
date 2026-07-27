@@ -5,8 +5,14 @@ cmake_minimum_required(VERSION 3.13)
 # ============================================================
 
 set(PICO_SDK_PATH "/Users/adrianvos/pico-sdk")
+set(PICO_SDK_IMPORT "${PICO_SDK_PATH}/external/pico_sdk_import.cmake")
+if(NOT EXISTS "${PICO_SDK_IMPORT}")
+  set(PICO_SDK_IMPORT "/Users/adrianvos/coding/GitHub/Workshop_Computer/releases/66_stretchcore/pico_sdk_import.cmake")
+  set(PICO_SDK_PATH "")
+  set(PICO_SDK_FETCH_FROM_GIT ON)
+endif()
 
-include(${PICO_SDK_PATH}/external/pico_sdk_import.cmake)
+include(${PICO_SDK_IMPORT})
 
 # ============================================================
 # Project
