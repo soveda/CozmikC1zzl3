@@ -80,7 +80,7 @@ const WAVE_FAMILIES = [
 const STAGES = 8;
 const CZ_IMPORT_TIME_SCALE = 0.68;
 const CZ_IMPORT_RATE_CURVE = 1.7;
-const CZ_IMPORT_PD_DEPTH_SCALE = 0.78;
+const CZ_IMPORT_PD_DEPTH_SCALE = 0.68;
 const CZ_IMPORT_PITCH_DEPTH_SCALE = 0.25;
 const CZ_IMPORT_SHORT_FINAL_PITCH_SAMPLES = 3000;
 const CZ_IMPORT_FINAL_PITCH_JUMP_LEVELS = 300;
@@ -756,6 +756,30 @@ function classifyWave(bytes, fallbackLine = null) {
   return WAVE_FAMILIES[0];
 }
 
+function waveSpecSuggestsWarmCompound(spec) {
+  if (!spec?.hasSecondWave) return false;
+  return spec.primaryWave === 4 || spec.primaryWave === 6 ||
+    spec.secondaryWave === 4 || spec.secondaryWave === 6;
+}
+
+function waveSpecSuggestsImportFaithfulCompound(spec) {
+  if (!spec?.hasSecondWave) return false;
+  return spec.primaryWave === 5 || spec.secondaryWave === 5 ||
+    spec.primaryWave === 2 || spec.secondaryWave === 2 ||
+    spec.primaryWave === 7 || spec.secondaryWave === 7;
+}
+
+function inferRecipeBank(czPatch) {
+  const specs = [czPatch.line1Wave, czPatch.line2Wave].filter(Boolean);
+  if (!specs.length) return 0;
+
+  if (specs.some((spec) => spec.window > 0)) return 2;
+  if (specs.some(waveSpecSuggestsImportFaithfulCompound)) return 3;
+  if (specs.some(waveSpecSuggestsWarmCompound)) return 1;
+  if (specs.some((spec) => spec.hasSecondWave)) return 3;
+  return 0;
+}
+
 function buildDraftPreset(
   decodedBytes,
   patchName,
@@ -774,6 +798,7 @@ function buildDraftPreset(
   const activeLine = singleActiveLine(czPatch);
   const line1Wave = classifyWave(decodedBytes, czPatch.line1Wave);
   const line2Wave = classifyWave(decodedBytes, czPatch.line2Wave);
+  const recipeBank = inferRecipeBank(czPatch);
   const wave = activeLine === "line2" ? line2Wave : line1Wave;
   const wave2 = activeLine ? wave : line2Wave;
   const ampPair = selectAmpEnvelopePair(czPatch, ampMode);
@@ -883,7 +908,7 @@ function buildDraftPreset(
       sustain,
       cz: czPatch
     },
-    performance: { pd, pd2, detune, waveform: wave.value, waveform2: wave2.value, ring, noise },
+    performance: { pd, pd2, detune, waveform: wave.value, waveform2: wave2.value, recipeBank, ring, noise },
     confidence: "medium"
   };
 }
@@ -971,7 +996,7 @@ function renderDraft(draft) {
   }
 
   el.decodedPatchBox.textContent = `${draft.name} decoded and unpacked into a draft preset.`;
-  el.mappedDraftBox.textContent = `Line 1 wave -> ${draft.wave.label}, Line 2 wave -> ${draft.wave2.label}, DCA1/DCA2 -> C1ZZL3 Amp1/Amp2, ${draft.sourceEnvelopes.pdMapping.label} -> C1ZZL3 phase distortion, and ${draft.sourceEnvelopes.pitchMapping.label} -> C1ZZL3 pitch.`;
+  el.mappedDraftBox.textContent = `Line 1 wave -> ${draft.wave.label}, Line 2 wave -> ${draft.wave2.label}, recipe bank -> ${draft.performance.recipeBank + 1}, DCA1/DCA2 -> C1ZZL3 Amp1/Amp2, ${draft.sourceEnvelopes.pdMapping.label} -> C1ZZL3 phase distortion, and ${draft.sourceEnvelopes.pitchMapping.label} -> C1ZZL3 pitch.`;
   el.confidenceBox.textContent = draft.confidence;
   el.supportedOutputBox.textContent = "Envelope Lab draft handoff";
   el.draftNameBox.textContent = `${draft.name} (${draft.confidence} confidence)`;
@@ -980,7 +1005,7 @@ function renderDraft(draft) {
     formatCzWaveSpec("Line 1 / Osc 1", draft.sourceEnvelopes.cz.line1Wave),
     formatCzWaveSpec("Line 2 / Osc 2", draft.sourceEnvelopes.cz.line2Wave)
   ].join("\n");
-  el.perfBox.textContent = `PD1 ${draft.performance.pd}, PD2 ${draft.performance.pd2}, osc1 wave ${draft.wave.label}, osc2 wave ${draft.wave2.label}, detune ${draft.performance.detune}, ring ${draft.performance.ring}, noise ${draft.performance.noise}`;
+  el.perfBox.textContent = `PD1 ${draft.performance.pd}, PD2 ${draft.performance.pd2}, osc1 wave ${draft.wave.label}, osc2 wave ${draft.wave2.label}, recipe bank ${draft.performance.recipeBank + 1}, detune ${draft.performance.detune}, ring ${draft.performance.ring}, noise ${draft.performance.noise}`;
   el.czEnvelopeSummaryBox.textContent = formatCzEnvelopeSummary(draft.sourceEnvelopes.cz);
   el.ampDraftBox.textContent = formatStages(draft.amp);
   el.amp2DraftBox.textContent = formatStages(draft.amp2 || draft.sourceEnvelopes.amp2 || draft.amp);
